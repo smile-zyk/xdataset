@@ -1,0 +1,7 @@
+{
+    "dependencies": [
+        "gtest",
+        "eigen3",
+        "llnl-units"
+    ]
+}
