@@ -20,8 +20,6 @@ using Index = Eigen::Index;
 enum class CellKind { kScalar, kVector, kMatrix };
 enum class DTypeTag { kReal, kInteger, kComplex, kString };
 
-// ---------- Type traits ----------
-
 template <typename T>
 struct IsSupported : std::false_type {};
 
@@ -60,34 +58,21 @@ struct DTypeOf<std::string> {
     static const DTypeTag tag = DTypeTag::kString;
 };
 
-// Vector cell row type: numeric -> Eigen::VectorX<T>; string -> Eigen::Tensor<string,1>
 template <typename T>
-struct VectorRowType {
-    typedef Eigen::VectorX<T> type;
-};
-template <>
-struct VectorRowType<std::string> {
-    typedef Eigen::Tensor<std::string, 1> type;
+struct NumericVectorTypes {
+    typedef Eigen::Matrix<T, Eigen::Dynamic, 1> OwnedType;
+    typedef Eigen::Map<OwnedType> MapType;
+    typedef Eigen::Map<const OwnedType> ConstMapType;
 };
 
-// Matrix cell row type: numeric -> Eigen::MatrixX<T>; string -> Eigen::Tensor<string,2>
 template <typename T>
-struct MatrixRowType {
-    typedef Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> type;
-};
-template <>
-struct MatrixRowType<std::string> {
-    typedef Eigen::Tensor<std::string, 2> type;
+struct NumericMatrixTypes {
+    typedef Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> OwnedType;
+    typedef Eigen::Map<OwnedType> MapType;
+    typedef Eigen::Map<const OwnedType> ConstMapType;
 };
 
-// Forward declaration: CellSeries can append a standalone Cell.
 class CellSeries;
-
-// ============================================================================
-// CellStorage -- abstract multi-row column storage.
-// A standalone Cell owns a storage with exactly one row; a CellSeries owns a
-// storage with many rows. The same block type therefore serves both.
-// ============================================================================
 
 class CellStorage {
 public:
@@ -97,43 +82,94 @@ public:
     virtual std::unique_ptr<CellStorage> clone() const = 0;
 };
 
-template <typename T, CellKind Kind>
-class CellStorageImpl : public CellStorage {
-    static_assert(Kind == CellKind::kScalar || Kind == CellKind::kVector || Kind == CellKind::kMatrix,
-                  "unsupported CellKind for CellStorageImpl");
-};
-
 template <typename T>
-class CellStorageImpl<T, CellKind::kScalar> : public CellStorage {
-    static_assert(IsSupported<T>::value, "T must be one of double, int, std::complex<double>, std::string");
-
+class ScalarStorage : public CellStorage {
 public:
-    CellStorageImpl() {}
-
     std::size_t size() const override { return values_.size(); }
-    void resize(std::size_t rows) override { values_.resize(rows, T()); }
+
+    void resize(std::size_t rows) override {
+        values_.resize(rows, T());
+    }
+
     std::unique_ptr<CellStorage> clone() const override {
-        return std::unique_ptr<CellStorage>(new CellStorageImpl<T, CellKind::kScalar>(*this));
+        return std::unique_ptr<CellStorage>(new ScalarStorage<T>(*this));
     }
 
     T& value(std::size_t row) { return values_[row]; }
     const T& value(std::size_t row) const { return values_[row]; }
-    void append(const T& value) { values_.push_back(value); }
+
+    void append(const T& v) { values_.push_back(v); }
+
+    T* data() { return values_.empty() ? nullptr : &values_[0]; }
+    const T* data() const { return values_.empty() ? nullptr : &values_[0]; }
 
 private:
     std::vector<T> values_;
 };
 
 template <typename T>
-class CellStorageImpl<T, CellKind::kVector> : public CellStorage {
-    static_assert(IsSupported<T>::value, "T must be one of double, int, std::complex<double>, std::string");
-
+class VectorStorageNumeric : public CellStorage {
 public:
-    typedef typename VectorRowType<T>::type RowType;
+    typedef typename NumericVectorTypes<T>::OwnedType OwnedType;
+    typedef typename NumericVectorTypes<T>::MapType MapType;
+    typedef typename NumericVectorTypes<T>::ConstMapType ConstMapType;
 
-    explicit CellStorageImpl(Index width) : width_(width) {}
+    explicit VectorStorageNumeric(Index width) : width_(width), rows_(0) {}
+
+    std::size_t size() const override { return rows_; }
+
+    void resize(std::size_t rows) override {
+        rows_ = rows;
+        values_.resize(static_cast<std::size_t>(width_) * rows_, T());
+    }
+
+    std::unique_ptr<CellStorage> clone() const override {
+        return std::unique_ptr<CellStorage>(new VectorStorageNumeric<T>(*this));
+    }
+
+    MapType value(std::size_t row) {
+        return MapType(ptr_for_row(row), width_);
+    }
+
+    ConstMapType value(std::size_t row) const {
+        return ConstMapType(ptr_for_row(row), width_);
+    }
+
+    void set(std::size_t row, const OwnedType& v) {
+        if (v.size() != width_) throw std::bad_cast();
+        value(row) = v;
+    }
+
+    void append(const OwnedType& v) {
+        if (v.size() != width_) throw std::bad_cast();
+        values_.reserve(values_.size() + static_cast<std::size_t>(width_));
+        for (Index i = 0; i < width_; ++i) values_.push_back(v(i));
+        ++rows_;
+    }
+
+    T* data() { return values_.empty() ? nullptr : &values_[0]; }
+    const T* data() const { return values_.empty() ? nullptr : &values_[0]; }
+
+private:
+    T* ptr_for_row(std::size_t row) {
+        return data() + static_cast<std::size_t>(width_) * row;
+    }
+
+    const T* ptr_for_row(std::size_t row) const {
+        return data() + static_cast<std::size_t>(width_) * row;
+    }
+
+    Index width_;
+    std::size_t rows_;
+    std::vector<T> values_;
+};
+
+class VectorStorageString : public CellStorage {
+public:
+    explicit VectorStorageString(Index width) : width_(width) {}
 
     std::size_t size() const override { return rows_.size(); }
+
     void resize(std::size_t rows) override {
         if (rows <= rows_.size()) {
             rows_.resize(rows);
@@ -141,101 +177,123 @@ public:
         }
         rows_.resize(rows, default_row());
     }
+
     std::unique_ptr<CellStorage> clone() const override {
-        return std::unique_ptr<CellStorage>(new CellStorageImpl<T, CellKind::kVector>(*this));
+        return std::unique_ptr<CellStorage>(new VectorStorageString(*this));
     }
 
-    RowType& value(std::size_t row) { return rows_[row]; }
-    const RowType& value(std::size_t row) const { return rows_[row]; }
-    void append(const RowType& row) { rows_.push_back(row); }
+    Eigen::Tensor<std::string, 1>& value(std::size_t row) { return rows_[row]; }
+    const Eigen::Tensor<std::string, 1>& value(std::size_t row) const { return rows_[row]; }
+
+    void append(const Eigen::Tensor<std::string, 1>& row) { rows_.push_back(row); }
 
 private:
-    RowType default_row() const { return default_row(std::is_same<T, std::string>()); }
-    RowType default_row(std::true_type) const {
-        RowType r(width_);
-        return r;
+    Eigen::Tensor<std::string, 1> default_row() const {
+        Eigen::Tensor<std::string, 1> out(width_);
+        return out;
     }
-    RowType default_row(std::false_type) const { return RowType::Zero(width_); }
 
     Index width_;
-    std::vector<RowType> rows_;
+    std::vector<Eigen::Tensor<std::string, 1> > rows_;
 };
 
 template <typename T>
-class CellStorageImpl<T, CellKind::kMatrix> : public CellStorage {
-    static_assert(IsSupported<T>::value, "T must be one of double, int, std::complex<double>, std::string");
-
+class MatrixStorageNumeric : public CellStorage {
 public:
-    typedef typename MatrixRowType<T>::type RowType;
+    typedef typename NumericMatrixTypes<T>::OwnedType OwnedType;
+    typedef typename NumericMatrixTypes<T>::MapType MapType;
+    typedef typename NumericMatrixTypes<T>::ConstMapType ConstMapType;
 
-    CellStorageImpl(Index rows, Index cols) : cell_rows_(rows), cell_cols_(cols) {}
+    MatrixStorageNumeric(Index rows, Index cols)
+        : cell_rows_(rows), cell_cols_(cols), row_count_(0) {}
 
-    std::size_t size() const override { return rows_.size(); }
+    std::size_t size() const override { return row_count_; }
+
     void resize(std::size_t rows) override {
-        if (rows <= rows_.size()) {
-            rows_.resize(rows);
-            return;
-        }
-        rows_.resize(rows, default_row());
-    }
-    std::unique_ptr<CellStorage> clone() const override {
-        return std::unique_ptr<CellStorage>(new CellStorageImpl<T, CellKind::kMatrix>(*this));
+        row_count_ = rows;
+        values_.resize(static_cast<std::size_t>(cell_rows_ * cell_cols_) * row_count_, T());
     }
 
-    RowType& value(std::size_t row) { return rows_[row]; }
-    const RowType& value(std::size_t row) const { return rows_[row]; }
-    void append(const RowType& row) { rows_.push_back(row); }
+    std::unique_ptr<CellStorage> clone() const override {
+        return std::unique_ptr<CellStorage>(new MatrixStorageNumeric<T>(*this));
+    }
+
+    MapType value(std::size_t row) {
+        return MapType(ptr_for_row(row), cell_rows_, cell_cols_);
+    }
+
+    ConstMapType value(std::size_t row) const {
+        return ConstMapType(ptr_for_row(row), cell_rows_, cell_cols_);
+    }
+
+    void set(std::size_t row, const OwnedType& m) {
+        if (m.rows() != cell_rows_ || m.cols() != cell_cols_) throw std::bad_cast();
+        value(row) = m;
+    }
+
+    void append(const OwnedType& m) {
+        if (m.rows() != cell_rows_ || m.cols() != cell_cols_) throw std::bad_cast();
+        const std::size_t elems = static_cast<std::size_t>(cell_rows_ * cell_cols_);
+        values_.reserve(values_.size() + elems);
+        for (Index r = 0; r < cell_rows_; ++r) {
+            for (Index c = 0; c < cell_cols_; ++c) {
+                values_.push_back(m(r, c));
+            }
+        }
+        ++row_count_;
+    }
+
+    T* data() { return values_.empty() ? nullptr : &values_[0]; }
+    const T* data() const { return values_.empty() ? nullptr : &values_[0]; }
 
 private:
-    RowType default_row() const { return default_row(std::is_same<T, std::string>()); }
-    RowType default_row(std::true_type) const {
-        RowType r(cell_rows_, cell_cols_);
-        return r;
+    T* ptr_for_row(std::size_t row) {
+        return data() + static_cast<std::size_t>(cell_rows_ * cell_cols_) * row;
     }
-    RowType default_row(std::false_type) const { return RowType::Zero(cell_rows_, cell_cols_); }
+
+    const T* ptr_for_row(std::size_t row) const {
+        return data() + static_cast<std::size_t>(cell_rows_ * cell_cols_) * row;
+    }
 
     Index cell_rows_;
     Index cell_cols_;
-    std::vector<RowType> rows_;
+    std::size_t row_count_;
+    std::vector<T> values_;
 };
 
-template <typename T, CellKind Kind>
-struct CellValueTraits {
-    static const bool kValid = false;
-};
+class MatrixStorageString : public CellStorage {
+public:
+    MatrixStorageString(Index rows, Index cols) : cell_rows_(rows), cell_cols_(cols) {}
 
-template <typename T>
-struct CellValueTraits<T, CellKind::kScalar> {
-    static const bool kValid = IsSupported<T>::value;
-    static const CellKind kKind = CellKind::kScalar;
-    static const DTypeTag kDType = DTypeOf<T>::tag;
-    typedef T ValueType;
-    typedef CellStorageImpl<T, CellKind::kScalar> StorageType;
-};
+    std::size_t size() const override { return rows_.size(); }
 
-template <typename T>
-struct CellValueTraits<T, CellKind::kVector> {
-    static const bool kValid = IsSupported<T>::value;
-    static const CellKind kKind = CellKind::kVector;
-    static const DTypeTag kDType = DTypeOf<T>::tag;
-    typedef typename VectorRowType<T>::type ValueType;
-    typedef CellStorageImpl<T, CellKind::kVector> StorageType;
-};
+    void resize(std::size_t rows) override {
+        if (rows <= rows_.size()) {
+            rows_.resize(rows);
+            return;
+        }
+        rows_.resize(rows, default_row());
+    }
 
-template <typename T>
-struct CellValueTraits<T, CellKind::kMatrix> {
-    static const bool kValid = IsSupported<T>::value;
-    static const CellKind kKind = CellKind::kMatrix;
-    static const DTypeTag kDType = DTypeOf<T>::tag;
-    typedef typename MatrixRowType<T>::type ValueType;
-    typedef CellStorageImpl<T, CellKind::kMatrix> StorageType;
-};
+    std::unique_ptr<CellStorage> clone() const override {
+        return std::unique_ptr<CellStorage>(new MatrixStorageString(*this));
+    }
 
-// ============================================================================
-// Cell -- an independent, type-erased single value (scalar / vector / matrix
-// of one of the supported dtypes). It owns its own storage and can be held and
-// used on its own, or appended into a CellSeries.
-// ============================================================================
+    Eigen::Tensor<std::string, 2>& value(std::size_t row) { return rows_[row]; }
+    const Eigen::Tensor<std::string, 2>& value(std::size_t row) const { return rows_[row]; }
+
+    void append(const Eigen::Tensor<std::string, 2>& row) { rows_.push_back(row); }
+
+private:
+    Eigen::Tensor<std::string, 2> default_row() const {
+        Eigen::Tensor<std::string, 2> out(cell_rows_, cell_cols_);
+        return out;
+    }
+
+    Index cell_rows_;
+    Index cell_cols_;
+    std::vector<Eigen::Tensor<std::string, 2> > rows_;
+};
 
 class Cell {
 public:
@@ -243,8 +301,8 @@ public:
         : kind_(CellKind::kScalar),
           dtype_(DTypeTag::kReal),
           shape_(),
-          storage_(new CellStorageImpl<double, CellKind::kScalar>()) {
-        static_cast<CellStorageImpl<double, CellKind::kScalar>*>(storage_.get())->resize(1);
+          storage_(new ScalarStorage<double>()) {
+        scalar_storage<double>()->resize(1);
     }
 
     Cell(const Cell& other)
@@ -277,18 +335,16 @@ public:
         return *this;
     }
 
-    // ---- Factories (build a standalone Cell) ----
-
     template <typename T>
     static Cell Scalar(const T& value) {
         static_assert(IsSupported<T>::value, "unsupported type");
         Cell c;
         c.kind_ = CellKind::kScalar;
         c.dtype_ = DTypeOf<T>::tag;
-        CellStorageImpl<T, CellKind::kScalar>* impl = new CellStorageImpl<T, CellKind::kScalar>();
-        c.storage_.reset(impl);
-        impl->resize(1);
-        impl->value(0) = value;
+        c.shape_.clear();
+        c.storage_.reset(new ScalarStorage<T>());
+        c.scalar_storage<T>()->resize(1);
+        c.scalar_storage<T>()->value(0) = value;
         return c;
     }
 
@@ -298,17 +354,27 @@ public:
     }
 
     template <typename T>
-    static Cell Vector(const typename VectorRowType<T>::type& row) {
+    static typename std::enable_if<!std::is_same<T, std::string>::value, Cell>::type Vector(
+        const typename NumericVectorTypes<T>::OwnedType& row) {
         static_assert(IsSupported<T>::value, "unsupported type");
         Cell c;
         c.kind_ = CellKind::kVector;
         c.dtype_ = DTypeOf<T>::tag;
         c.shape_ = std::vector<Index>(1, static_cast<Index>(row.size()));
-        CellStorageImpl<T, CellKind::kVector>* impl =
-            new CellStorageImpl<T, CellKind::kVector>(static_cast<Index>(row.size()));
-        c.storage_.reset(impl);
-        impl->resize(1);
-        impl->value(0) = row;
+        c.storage_.reset(new VectorStorageNumeric<T>(static_cast<Index>(row.size())));
+        c.vector_storage_numeric<T>()->resize(1);
+        c.vector_storage_numeric<T>()->set(0, row);
+        return c;
+    }
+
+    static Cell Vector(const Eigen::Tensor<std::string, 1>& row) {
+        Cell c;
+        c.kind_ = CellKind::kVector;
+        c.dtype_ = DTypeTag::kString;
+        c.shape_ = std::vector<Index>(1, static_cast<Index>(row.size()));
+        c.storage_.reset(new VectorStorageString(static_cast<Index>(row.size())));
+        c.vector_storage_string()->resize(1);
+        c.vector_storage_string()->value(0) = row;
         return c;
     }
 
@@ -319,26 +385,40 @@ public:
         c.kind_ = CellKind::kVector;
         c.dtype_ = DTypeOf<T>::tag;
         c.shape_ = std::vector<Index>(1, width);
-        CellStorageImpl<T, CellKind::kVector>* impl = new CellStorageImpl<T, CellKind::kVector>(width);
-        c.storage_.reset(impl);
-        impl->resize(1);
+        if (std::is_same<T, std::string>::value) {
+            c.storage_.reset(new VectorStorageString(width));
+            c.vector_storage_string()->resize(1);
+        } else {
+            c.storage_.reset(new VectorStorageNumeric<T>(width));
+            c.vector_storage_numeric<T>()->resize(1);
+        }
         return c;
     }
 
     template <typename T>
-    static Cell Matrix(const typename MatrixRowType<T>::type& row) {
+    static typename std::enable_if<!std::is_same<T, std::string>::value, Cell>::type Matrix(
+        const typename NumericMatrixTypes<T>::OwnedType& row) {
         static_assert(IsSupported<T>::value, "unsupported type");
-        Index r = mat_rows(row);
-        Index cc = mat_cols(row);
         Cell c;
         c.kind_ = CellKind::kMatrix;
         c.dtype_ = DTypeOf<T>::tag;
-        c.shape_.push_back(r);
-        c.shape_.push_back(cc);
-        CellStorageImpl<T, CellKind::kMatrix>* impl = new CellStorageImpl<T, CellKind::kMatrix>(r, cc);
-        c.storage_.reset(impl);
-        impl->resize(1);
-        impl->value(0) = row;
+        c.shape_.push_back(static_cast<Index>(row.rows()));
+        c.shape_.push_back(static_cast<Index>(row.cols()));
+        c.storage_.reset(new MatrixStorageNumeric<T>(static_cast<Index>(row.rows()), static_cast<Index>(row.cols())));
+        c.matrix_storage_numeric<T>()->resize(1);
+        c.matrix_storage_numeric<T>()->set(0, row);
+        return c;
+    }
+
+    static Cell Matrix(const Eigen::Tensor<std::string, 2>& row) {
+        Cell c;
+        c.kind_ = CellKind::kMatrix;
+        c.dtype_ = DTypeTag::kString;
+        c.shape_.push_back(row.dimension(0));
+        c.shape_.push_back(row.dimension(1));
+        c.storage_.reset(new MatrixStorageString(row.dimension(0), row.dimension(1)));
+        c.matrix_storage_string()->resize(1);
+        c.matrix_storage_string()->value(0) = row;
         return c;
     }
 
@@ -350,125 +430,23 @@ public:
         c.dtype_ = DTypeOf<T>::tag;
         c.shape_.push_back(rows);
         c.shape_.push_back(cols);
-        CellStorageImpl<T, CellKind::kMatrix>* impl = new CellStorageImpl<T, CellKind::kMatrix>(rows, cols);
-        c.storage_.reset(impl);
-        impl->resize(1);
+        if (std::is_same<T, std::string>::value) {
+            c.storage_.reset(new MatrixStorageString(rows, cols));
+            c.matrix_storage_string()->resize(1);
+        } else {
+            c.storage_.reset(new MatrixStorageNumeric<T>(rows, cols));
+            c.matrix_storage_numeric<T>()->resize(1);
+        }
         return c;
     }
-
-    // ---- Properties ----
 
     bool has_value() const { return storage_.get() != nullptr; }
     CellKind kind() const { return kind_; }
     DTypeTag dtype() const { return dtype_; }
-    std::string dtype_name() const { return dtype_name_of(dtype_); }
     std::vector<Index> cell_shape() const { return shape_; }
 
-    // ---- Typed value access ----
-
-    template <typename T, CellKind Kind>
-    typename std::enable_if<CellValueTraits<T, Kind>::kValid,
-                            typename CellValueTraits<T, Kind>::ValueType&>::type
-    value() {
-        return access<T, Kind>()->value(0);
-    }
-    template <typename T, CellKind Kind>
-    typename std::enable_if<CellValueTraits<T, Kind>::kValid,
-                            const typename CellValueTraits<T, Kind>::ValueType&>::type
-    value() const {
-        return access<T, Kind>()->value(0);
-    }
-
-    template <typename T>
-    T& scalar() {
-        return value<T, CellKind::kScalar>();
-    }
-    template <typename T>
-    const T& scalar() const {
-        return value<T, CellKind::kScalar>();
-    }
-
-    template <typename T>
-    typename VectorRowType<T>::type& vector() {
-        return value<T, CellKind::kVector>();
-    }
-    template <typename T>
-    const typename VectorRowType<T>::type& vector() const {
-        return value<T, CellKind::kVector>();
-    }
-
-    template <typename T>
-    typename MatrixRowType<T>::type& matrix() {
-        return value<T, CellKind::kMatrix>();
-    }
-    template <typename T>
-    const typename MatrixRowType<T>::type& matrix() const {
-        return value<T, CellKind::kMatrix>();
-    }
-
-    template <typename T>
-    typename VectorRowType<T>::type::Scalar& vector_at(Index i) {
-        typename VectorRowType<T>::type& v = vector<T>();
-        if (i < 0 || i >= static_cast<Index>(v.size())) throw std::out_of_range("vector index out of range");
-        return v(i);
-    }
-    template <typename T>
-    const typename VectorRowType<T>::type::Scalar& vector_at(Index i) const {
-        const typename VectorRowType<T>::type& v = vector<T>();
-        if (i < 0 || i >= static_cast<Index>(v.size())) throw std::out_of_range("vector index out of range");
-        return v(i);
-    }
-
-    template <typename T>
-    typename MatrixRowType<T>::type::Scalar& matrix_at(Index r, Index c) {
-        typename MatrixRowType<T>::type& m = matrix<T>();
-        if (r < 0 || c < 0 || r >= mat_rows(m) || c >= mat_cols(m)) {
-            throw std::out_of_range("matrix index out of range");
-        }
-        return m(r, c);
-    }
-    template <typename T>
-    const typename MatrixRowType<T>::type::Scalar& matrix_at(Index r, Index c) const {
-        const typename MatrixRowType<T>::type& m = matrix<T>();
-        if (r < 0 || c < 0 || r >= mat_rows(m) || c >= mat_cols(m)) {
-            throw std::out_of_range("matrix index out of range");
-        }
-        return m(r, c);
-    }
-
-    // ---- Set ----
-
-    template <typename T, CellKind Kind>
-    typename std::enable_if<CellValueTraits<T, Kind>::kValid, void>::type set_value(
-        const typename CellValueTraits<T, Kind>::ValueType& v) {
-        value<T, Kind>() = v;
-    }
-
-    template <typename T>
-    void set_scalar(const T& v) {
-        value<T, CellKind::kScalar>() = v;
-    }
-    template <typename T>
-    void set_vector(const typename VectorRowType<T>::type& v) {
-        value<T, CellKind::kVector>() = v;
-    }
-    template <typename T>
-    void set_matrix(const typename MatrixRowType<T>::type& v) {
-        value<T, CellKind::kMatrix>() = v;
-    }
-    template <typename T>
-    void set_vector_at(Index i, const typename VectorRowType<T>::type::Scalar& v) {
-        vector_at<T>(i) = v;
-    }
-    template <typename T>
-    void set_matrix_at(Index r, Index c, const typename MatrixRowType<T>::type::Scalar& v) {
-        matrix_at<T>(r, c) = v;
-    }
-
-    // ---- Small shared helpers (no free functions) ----
-
-    static std::string dtype_name_of(DTypeTag tag) {
-        switch (tag) {
+    std::string dtype_name() const {
+        switch (dtype_) {
             case DTypeTag::kReal: return "Real";
             case DTypeTag::kInteger: return "Integer";
             case DTypeTag::kComplex: return "Complex";
@@ -477,31 +455,156 @@ public:
         return "Unknown";
     }
 
-    static Index mat_rows(const Eigen::Tensor<std::string, 2>& m) { return m.dimension(0); }
-    static Index mat_cols(const Eigen::Tensor<std::string, 2>& m) { return m.dimension(1); }
-    template <typename M>
-    static Index mat_rows(const M& m) {
-        return static_cast<Index>(m.rows());
+    template <typename T>
+    T& scalar() {
+        return scalar_storage<T>()->value(0);
     }
-    template <typename M>
-    static Index mat_cols(const M& m) {
-        return static_cast<Index>(m.cols());
+
+    template <typename T>
+    const T& scalar() const {
+        return scalar_storage<T>()->value(0);
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::is_same<T, std::string>::value,
+                            typename NumericVectorTypes<T>::MapType>::type
+    vector() {
+        return vector_storage_numeric<T>()->value(0);
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::is_same<T, std::string>::value,
+                            typename NumericVectorTypes<T>::ConstMapType>::type
+    vector() const {
+        return vector_storage_numeric<T>()->value(0);
+    }
+
+    template <typename T>
+    typename std::enable_if<std::is_same<T, std::string>::value, Eigen::Tensor<std::string, 1>&>::type
+    vector() {
+        return vector_storage_string()->value(0);
+    }
+
+    template <typename T>
+    typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 1>&>::type
+    vector() const {
+        return vector_storage_string()->value(0);
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::is_same<T, std::string>::value,
+                            typename NumericMatrixTypes<T>::MapType>::type
+    matrix() {
+        return matrix_storage_numeric<T>()->value(0);
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::is_same<T, std::string>::value,
+                            typename NumericMatrixTypes<T>::ConstMapType>::type
+    matrix() const {
+        return matrix_storage_numeric<T>()->value(0);
+    }
+
+    template <typename T>
+    typename std::enable_if<std::is_same<T, std::string>::value, Eigen::Tensor<std::string, 2>&>::type
+    matrix() {
+        return matrix_storage_string()->value(0);
+    }
+
+    template <typename T>
+    typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 2>&>::type
+    matrix() const {
+        return matrix_storage_string()->value(0);
+    }
+
+    template <typename T>
+    void set_scalar(const T& v) {
+        scalar<T>() = v;
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::is_same<T, std::string>::value, void>::type
+    set_vector(const typename NumericVectorTypes<T>::OwnedType& v) {
+        vector_storage_numeric<T>()->set(0, v);
+    }
+
+    void set_vector(const Eigen::Tensor<std::string, 1>& v) {
+        vector_storage_string()->value(0) = v;
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::is_same<T, std::string>::value, void>::type
+    set_matrix(const typename NumericMatrixTypes<T>::OwnedType& m) {
+        matrix_storage_numeric<T>()->set(0, m);
+    }
+
+    void set_matrix(const Eigen::Tensor<std::string, 2>& m) {
+        matrix_storage_string()->value(0) = m;
     }
 
 private:
-    template <typename T, CellKind Kind>
-    typename CellValueTraits<T, Kind>::StorageType* access() {
-        if (!storage_) throw std::runtime_error("Cell has no value");
-        typedef CellValueTraits<T, Kind> Traits;
-        if (kind_ != Kind || dtype_ != Traits::kDType) throw std::bad_cast();
-        return static_cast<typename Traits::StorageType*>(storage_.get());
+    template <typename T>
+    ScalarStorage<T>* scalar_storage() {
+        if (!storage_ || kind_ != CellKind::kScalar || dtype_ != DTypeOf<T>::tag) throw std::bad_cast();
+        return static_cast<ScalarStorage<T>*>(storage_.get());
     }
-    template <typename T, CellKind Kind>
-    const typename CellValueTraits<T, Kind>::StorageType* access() const {
-        if (!storage_) throw std::runtime_error("Cell has no value");
-        typedef CellValueTraits<T, Kind> Traits;
-        if (kind_ != Kind || dtype_ != Traits::kDType) throw std::bad_cast();
-        return static_cast<const typename Traits::StorageType*>(storage_.get());
+
+    template <typename T>
+    const ScalarStorage<T>* scalar_storage() const {
+        if (!storage_ || kind_ != CellKind::kScalar || dtype_ != DTypeOf<T>::tag) throw std::bad_cast();
+        return static_cast<const ScalarStorage<T>*>(storage_.get());
+    }
+
+    template <typename T>
+    VectorStorageNumeric<T>* vector_storage_numeric() {
+        if (!storage_ || kind_ != CellKind::kVector || dtype_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) {
+            throw std::bad_cast();
+        }
+        return static_cast<VectorStorageNumeric<T>*>(storage_.get());
+    }
+
+    template <typename T>
+    const VectorStorageNumeric<T>* vector_storage_numeric() const {
+        if (!storage_ || kind_ != CellKind::kVector || dtype_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) {
+            throw std::bad_cast();
+        }
+        return static_cast<const VectorStorageNumeric<T>*>(storage_.get());
+    }
+
+    VectorStorageString* vector_storage_string() {
+        if (!storage_ || kind_ != CellKind::kVector || dtype_ != DTypeTag::kString) throw std::bad_cast();
+        return static_cast<VectorStorageString*>(storage_.get());
+    }
+
+    const VectorStorageString* vector_storage_string() const {
+        if (!storage_ || kind_ != CellKind::kVector || dtype_ != DTypeTag::kString) throw std::bad_cast();
+        return static_cast<const VectorStorageString*>(storage_.get());
+    }
+
+    template <typename T>
+    MatrixStorageNumeric<T>* matrix_storage_numeric() {
+        if (!storage_ || kind_ != CellKind::kMatrix || dtype_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) {
+            throw std::bad_cast();
+        }
+        return static_cast<MatrixStorageNumeric<T>*>(storage_.get());
+    }
+
+    template <typename T>
+    const MatrixStorageNumeric<T>* matrix_storage_numeric() const {
+        if (!storage_ || kind_ != CellKind::kMatrix || dtype_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) {
+            throw std::bad_cast();
+        }
+        return static_cast<const MatrixStorageNumeric<T>*>(storage_.get());
+    }
+
+    MatrixStorageString* matrix_storage_string() {
+        if (!storage_ || kind_ != CellKind::kMatrix || dtype_ != DTypeTag::kString) throw std::bad_cast();
+        return static_cast<MatrixStorageString*>(storage_.get());
+    }
+
+    const MatrixStorageString* matrix_storage_string() const {
+        if (!storage_ || kind_ != CellKind::kMatrix || dtype_ != DTypeTag::kString) throw std::bad_cast();
+        return static_cast<const MatrixStorageString*>(storage_.get());
     }
 
     CellKind kind_;
@@ -510,14 +613,21 @@ private:
     std::unique_ptr<CellStorage> storage_;
 };
 
-// ============================================================================
-// CellSeries -- owns a whole column storage block and all row logic.
-// Row slices / iteration are exposed through the nested RowView.
-// ============================================================================
-
 class CellSeries {
 public:
-    class RowView;  // slice/view over a single row (defined after Cell)
+    struct ContiguousBlockView {
+        const void* data;
+        std::size_t elements;
+        std::size_t bytes;
+        std::size_t element_size;
+        std::size_t rows;
+        CellKind kind;
+        DTypeTag dtype;
+        std::vector<Index> cell_shape;
+        bool memcpy_compatible;
+    };
+
+    class RowView;
     class ConstRowView;
 
     class iterator {
@@ -531,12 +641,13 @@ public:
         iterator() : owner_(nullptr), idx_(0) {}
         iterator(CellSeries* owner, std::size_t idx) : owner_(owner), idx_(idx) {}
 
-        reference operator*() const;  // defined out-of-line (needs RowView complete)
+        reference operator*() const;
 
         iterator& operator++() {
             ++idx_;
             return *this;
         }
+
         iterator operator++(int) {
             iterator tmp(*this);
             ++(*this);
@@ -546,6 +657,7 @@ public:
         bool operator==(const iterator& rhs) const {
             return owner_ == rhs.owner_ && idx_ == rhs.idx_;
         }
+
         bool operator!=(const iterator& rhs) const { return !(*this == rhs); }
 
     private:
@@ -564,12 +676,13 @@ public:
         const_iterator() : owner_(nullptr), idx_(0) {}
         const_iterator(const CellSeries* owner, std::size_t idx) : owner_(owner), idx_(idx) {}
 
-        reference operator*() const;  // defined out-of-line (needs RowView complete)
+        reference operator*() const;
 
         const_iterator& operator++() {
             ++idx_;
             return *this;
         }
+
         const_iterator operator++(int) {
             const_iterator tmp(*this);
             ++(*this);
@@ -579,6 +692,7 @@ public:
         bool operator==(const const_iterator& rhs) const {
             return owner_ == rhs.owner_ && idx_ == rhs.idx_;
         }
+
         bool operator!=(const const_iterator& rhs) const { return !(*this == rhs); }
 
     private:
@@ -596,10 +710,7 @@ public:
         : kind_(kind), dtype_(dtype), shape_(shape), storage_(make_storage(kind, dtype, shape)) {}
 
     CellSeries(const CellSeries& other)
-        : kind_(other.kind_),
-          dtype_(other.dtype_),
-          shape_(other.shape_),
-          storage_(other.storage_->clone()) {}
+        : kind_(other.kind_), dtype_(other.dtype_), shape_(other.shape_), storage_(other.storage_->clone()) {}
 
     CellSeries& operator=(const CellSeries& other) {
         if (this != &other) {
@@ -612,10 +723,7 @@ public:
     }
 
     CellSeries(CellSeries&& other) noexcept
-        : kind_(other.kind_),
-          dtype_(other.dtype_),
-          shape_(std::move(other.shape_)),
-          storage_(std::move(other.storage_)) {}
+        : kind_(other.kind_), dtype_(other.dtype_), shape_(std::move(other.shape_)), storage_(std::move(other.storage_)) {}
 
     CellSeries& operator=(CellSeries&& other) noexcept {
         kind_ = other.kind_;
@@ -624,8 +732,6 @@ public:
         storage_ = std::move(other.storage_);
         return *this;
     }
-
-    // ---- Factory functions ----
 
     template <typename T>
     static CellSeries Scalars(std::size_t rows, const T& fill_val = T()) {
@@ -655,8 +761,7 @@ public:
     }
 
     template <typename T>
-    static CellSeries Matrices(std::size_t rows, Index cell_rows, Index cell_cols,
-                               const T& fill_val = T()) {
+    static CellSeries Matrices(std::size_t rows, Index cell_rows, Index cell_cols, const T& fill_val = T()) {
         static_assert(IsSupported<T>::value, "unsupported type");
         std::vector<Index> shape;
         shape.push_back(cell_rows);
@@ -667,13 +772,12 @@ public:
         return s;
     }
 
-    // ---- Properties ----
-
     bool has_value() const { return storage_->size() != 0; }
     std::size_t size() const { return storage_->size(); }
     bool empty() const { return size() == 0; }
 
     CellKind cell_kind() const { return kind_; }
+    DTypeTag dtype() const { return dtype_; }
     std::vector<Index> cell_shape() const { return shape_; }
 
     Index values_per_row() const {
@@ -682,15 +786,18 @@ public:
         return shape_[0] * shape_[1];
     }
 
-    std::string dtype_name() const { return Cell::dtype_name_of(dtype_); }
-    DTypeTag dtype() const { return dtype_; }
-
-    // ---- Resize / clear ----
+    std::string dtype_name() const {
+        switch (dtype_) {
+            case DTypeTag::kReal: return "Real";
+            case DTypeTag::kInteger: return "Integer";
+            case DTypeTag::kComplex: return "Complex";
+            case DTypeTag::kString: return "String";
+        }
+        return "Unknown";
+    }
 
     void resize(std::size_t n) { storage_->resize(n); }
     void clear() { storage_->resize(0); }
-
-    // ---- Slicing ----
 
     CellSeries head(std::size_t n) const { return iloc(0, n); }
 
@@ -706,11 +813,6 @@ public:
         return out;
     }
 
-    // Independent, owning copy of one row.
-    Cell cell_at(std::size_t i) const;  // defined out-of-line
-
-    // ---- Iterators ----
-
     iterator begin() { return iterator(this, 0); }
     iterator end() { return iterator(this, size()); }
     const_iterator begin() const { return const_iterator(this, 0); }
@@ -718,122 +820,213 @@ public:
     const_iterator cbegin() const { return const_iterator(this, 0); }
     const_iterator cend() const { return const_iterator(this, size()); }
 
-    RowView row(std::size_t i);              // defined out-of-line
-    ConstRowView row(std::size_t i) const;   // defined out-of-line
-
-    // ---- Typed value access (with row parameter) ----
-
-    template <typename T, CellKind Kind>
-    typename std::enable_if<CellValueTraits<T, Kind>::kValid,
-                            typename CellValueTraits<T, Kind>::ValueType&>::type
-    value(std::size_t row) {
-        if (row >= size()) throw std::out_of_range("row index out of range");
-        return typed_storage<T, Kind>()->value(row);
-    }
-
-    template <typename T, CellKind Kind>
-    typename std::enable_if<CellValueTraits<T, Kind>::kValid,
-                            const typename CellValueTraits<T, Kind>::ValueType&>::type
-    value(std::size_t row) const {
-        if (row >= size()) throw std::out_of_range("row index out of range");
-        return typed_storage<T, Kind>()->value(row);
-    }
+    RowView row(std::size_t i);
+    ConstRowView row(std::size_t i) const;
 
     template <typename T>
     T& scalar_at(std::size_t i) {
-        return value<T, CellKind::kScalar>(i);
+        if (i >= size()) throw std::out_of_range("row index out of range");
+        return scalar_storage<T>()->value(i);
     }
+
     template <typename T>
     const T& scalar_at(std::size_t i) const {
-        return value<T, CellKind::kScalar>(i);
+        if (i >= size()) throw std::out_of_range("row index out of range");
+        return scalar_storage<T>()->value(i);
     }
 
     template <typename T>
-    typename VectorRowType<T>::type& vector_at(std::size_t i) {
-        return value<T, CellKind::kVector>(i);
+    typename std::enable_if<!std::is_same<T, std::string>::value,
+                            typename NumericVectorTypes<T>::MapType>::type
+    vector_at(std::size_t i) {
+        if (i >= size()) throw std::out_of_range("row index out of range");
+        return vector_storage_numeric<T>()->value(i);
     }
+
     template <typename T>
-    const typename VectorRowType<T>::type& vector_at(std::size_t i) const {
-        return value<T, CellKind::kVector>(i);
+    typename std::enable_if<!std::is_same<T, std::string>::value,
+                            typename NumericVectorTypes<T>::ConstMapType>::type
+    vector_at(std::size_t i) const {
+        if (i >= size()) throw std::out_of_range("row index out of range");
+        return vector_storage_numeric<T>()->value(i);
     }
 
     template <typename T>
-    typename MatrixRowType<T>::type& matrix_at(std::size_t i) {
-        return value<T, CellKind::kMatrix>(i);
-    }
-    template <typename T>
-    const typename MatrixRowType<T>::type& matrix_at(std::size_t i) const {
-        return value<T, CellKind::kMatrix>(i);
+    typename std::enable_if<std::is_same<T, std::string>::value, Eigen::Tensor<std::string, 1>&>::type
+    vector_at(std::size_t i) {
+        if (i >= size()) throw std::out_of_range("row index out of range");
+        return vector_storage_string()->value(i);
     }
 
-    // ---- Element access (with row parameter) ----
+    template <typename T>
+    typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 1>&>::type
+    vector_at(std::size_t i) const {
+        if (i >= size()) throw std::out_of_range("row index out of range");
+        return vector_storage_string()->value(i);
+    }
 
     template <typename T>
-    typename VectorRowType<T>::type::Scalar& vector_elem(std::size_t row, Index i) {
-        typename VectorRowType<T>::type& v = vector_at<T>(row);
-        if (i < 0 || i >= static_cast<Index>(v.size())) throw std::out_of_range("vector index out of range");
+    typename std::enable_if<!std::is_same<T, std::string>::value,
+                            typename NumericMatrixTypes<T>::MapType>::type
+    matrix_at(std::size_t i) {
+        if (i >= size()) throw std::out_of_range("row index out of range");
+        return matrix_storage_numeric<T>()->value(i);
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::is_same<T, std::string>::value,
+                            typename NumericMatrixTypes<T>::ConstMapType>::type
+    matrix_at(std::size_t i) const {
+        if (i >= size()) throw std::out_of_range("row index out of range");
+        return matrix_storage_numeric<T>()->value(i);
+    }
+
+    template <typename T>
+    typename std::enable_if<std::is_same<T, std::string>::value, Eigen::Tensor<std::string, 2>&>::type
+    matrix_at(std::size_t i) {
+        if (i >= size()) throw std::out_of_range("row index out of range");
+        return matrix_storage_string()->value(i);
+    }
+
+    template <typename T>
+    typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 2>&>::type
+    matrix_at(std::size_t i) const {
+        if (i >= size()) throw std::out_of_range("row index out of range");
+        return matrix_storage_string()->value(i);
+    }
+
+    template <typename T>
+    T& vector_elem(std::size_t row, Index i) {
+        typename NumericVectorTypes<T>::MapType v = vector_at<T>(row);
+        if (i < 0 || i >= v.size()) throw std::out_of_range("vector index out of range");
         return v(i);
     }
+
     template <typename T>
-    const typename VectorRowType<T>::type::Scalar& vector_elem(std::size_t row, Index i) const {
-        const typename VectorRowType<T>::type& v = vector_at<T>(row);
-        if (i < 0 || i >= static_cast<Index>(v.size())) throw std::out_of_range("vector index out of range");
+    const T vector_elem(std::size_t row, Index i) const {
+        typename NumericVectorTypes<T>::ConstMapType v = vector_at<T>(row);
+        if (i < 0 || i >= v.size()) throw std::out_of_range("vector index out of range");
+        return v(i);
+    }
+
+    std::string& vector_elem_string(std::size_t row, Index i) {
+        Eigen::Tensor<std::string, 1>& v = vector_at<std::string>(row);
+        if (i < 0 || i >= v.dimension(0)) throw std::out_of_range("vector index out of range");
+        return v(i);
+    }
+
+    const std::string& vector_elem_string(std::size_t row, Index i) const {
+        const Eigen::Tensor<std::string, 1>& v = vector_at<std::string>(row);
+        if (i < 0 || i >= v.dimension(0)) throw std::out_of_range("vector index out of range");
         return v(i);
     }
 
     template <typename T>
-    typename MatrixRowType<T>::type::Scalar& matrix_elem(std::size_t row, Index r, Index c) {
-        typename MatrixRowType<T>::type& m = matrix_at<T>(row);
-        if (r < 0 || c < 0 || r >= Cell::mat_rows(m) || c >= Cell::mat_cols(m)) {
-            throw std::out_of_range("matrix index out of range");
-        }
+    T& matrix_elem(std::size_t row, Index r, Index c) {
+        typename NumericMatrixTypes<T>::MapType m = matrix_at<T>(row);
+        if (r < 0 || c < 0 || r >= m.rows() || c >= m.cols()) throw std::out_of_range("matrix index out of range");
         return m(r, c);
     }
+
     template <typename T>
-    const typename MatrixRowType<T>::type::Scalar& matrix_elem(std::size_t row, Index r, Index c) const {
-        const typename MatrixRowType<T>::type& m = matrix_at<T>(row);
-        if (r < 0 || c < 0 || r >= Cell::mat_rows(m) || c >= Cell::mat_cols(m)) {
-            throw std::out_of_range("matrix index out of range");
-        }
+    const T matrix_elem(std::size_t row, Index r, Index c) const {
+        typename NumericMatrixTypes<T>::ConstMapType m = matrix_at<T>(row);
+        if (r < 0 || c < 0 || r >= m.rows() || c >= m.cols()) throw std::out_of_range("matrix index out of range");
         return m(r, c);
     }
 
-    // ---- Set (with row parameter) ----
-
-    template <typename T, CellKind Kind>
-    typename std::enable_if<CellValueTraits<T, Kind>::kValid, void>::type
-    set_value(std::size_t row, const typename CellValueTraits<T, Kind>::ValueType& v) {
-        value<T, Kind>(row) = v;
+    std::string& matrix_elem_string(std::size_t row, Index r, Index c) {
+        Eigen::Tensor<std::string, 2>& m = matrix_at<std::string>(row);
+        if (r < 0 || c < 0 || r >= m.dimension(0) || c >= m.dimension(1)) throw std::out_of_range("matrix index out of range");
+        return m(r, c);
     }
 
-    // ---- Append ----
+    const std::string& matrix_elem_string(std::size_t row, Index r, Index c) const {
+        const Eigen::Tensor<std::string, 2>& m = matrix_at<std::string>(row);
+        if (r < 0 || c < 0 || r >= m.dimension(0) || c >= m.dimension(1)) throw std::out_of_range("matrix index out of range");
+        return m(r, c);
+    }
 
-    void append(const Cell& cell);  // defined out-of-line
+    template <typename T>
+    void append_scalar(const T& val) {
+        scalar_storage<T>()->append(val);
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::is_same<T, std::string>::value, void>::type
+    append_vector(const typename NumericVectorTypes<T>::OwnedType& v) {
+        if (v.size() != values_per_row()) throw std::bad_cast();
+        vector_storage_numeric<T>()->append(v);
+    }
+
+    void append_vector(const Eigen::Tensor<std::string, 1>& v) {
+        if (v.dimension(0) != values_per_row()) throw std::bad_cast();
+        vector_storage_string()->append(v);
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::is_same<T, std::string>::value, void>::type
+    append_matrix(const typename NumericMatrixTypes<T>::OwnedType& m) {
+        if (m.rows() != shape_[0] || m.cols() != shape_[1]) throw std::bad_cast();
+        matrix_storage_numeric<T>()->append(m);
+    }
+
+    void append_matrix(const Eigen::Tensor<std::string, 2>& m) {
+        if (m.dimension(0) != shape_[0] || m.dimension(1) != shape_[1]) throw std::bad_cast();
+        matrix_storage_string()->append(m);
+    }
 
     void append_from(const CellSeries& src, std::size_t row) {
         if (src.kind_ != kind_ || src.dtype_ != dtype_ || src.shape_ != shape_) throw std::bad_cast();
         if (row >= src.size()) throw std::out_of_range("row index out of range");
-        append_row_from(src, row);
+
+        if (kind_ == CellKind::kScalar) {
+            if (dtype_ == DTypeTag::kReal) append_scalar<double>(src.scalar_at<double>(row));
+            else if (dtype_ == DTypeTag::kInteger) append_scalar<int>(src.scalar_at<int>(row));
+            else if (dtype_ == DTypeTag::kComplex) append_scalar<std::complex<double> >(src.scalar_at<std::complex<double> >(row));
+            else append_scalar<std::string>(src.scalar_at<std::string>(row));
+            return;
+        }
+
+        if (kind_ == CellKind::kVector) {
+            if (dtype_ == DTypeTag::kReal) append_vector<double>(src.vector_at<double>(row));
+            else if (dtype_ == DTypeTag::kInteger) append_vector<int>(src.vector_at<int>(row));
+            else if (dtype_ == DTypeTag::kComplex) append_vector<std::complex<double> >(src.vector_at<std::complex<double> >(row));
+            else append_vector(src.vector_at<std::string>(row));
+            return;
+        }
+
+        if (dtype_ == DTypeTag::kReal) append_matrix<double>(src.matrix_at<double>(row));
+        else if (dtype_ == DTypeTag::kInteger) append_matrix<int>(src.matrix_at<int>(row));
+        else if (dtype_ == DTypeTag::kComplex) append_matrix<std::complex<double> >(src.matrix_at<std::complex<double> >(row));
+        else append_matrix(src.matrix_at<std::string>(row));
     }
 
-    template <typename T>
-    typename std::enable_if<IsSupported<T>::value, void>::type append_scalar(const T& val) {
-        typed_storage<T, CellKind::kScalar>()->append(val);
-    }
+    void append(const Cell& cell) {
+        if (!cell.has_value()) throw std::runtime_error("Cell has no value");
+        if (cell.kind() != kind_ || cell.dtype() != dtype_ || cell.cell_shape() != shape_) throw std::bad_cast();
 
-    template <typename T>
-    void append_vector(const typename VectorRowType<T>::type& v) {
-        if (static_cast<Index>(v.size()) != values_per_row()) throw std::bad_cast();
-        typed_storage<T, CellKind::kVector>()->append(v);
-    }
+        if (kind_ == CellKind::kScalar) {
+            if (dtype_ == DTypeTag::kReal) append_scalar<double>(cell.scalar<double>());
+            else if (dtype_ == DTypeTag::kInteger) append_scalar<int>(cell.scalar<int>());
+            else if (dtype_ == DTypeTag::kComplex) append_scalar<std::complex<double> >(cell.scalar<std::complex<double> >());
+            else append_scalar<std::string>(cell.scalar<std::string>());
+            return;
+        }
 
-    template <typename T>
-    void append_matrix(const typename MatrixRowType<T>::type& m) {
-        if (Cell::mat_rows(m) != shape_[0] || Cell::mat_cols(m) != shape_[1]) throw std::bad_cast();
-        typed_storage<T, CellKind::kMatrix>()->append(m);
-    }
+        if (kind_ == CellKind::kVector) {
+            if (dtype_ == DTypeTag::kReal) append_vector<double>(cell.vector<double>());
+            else if (dtype_ == DTypeTag::kInteger) append_vector<int>(cell.vector<int>());
+            else if (dtype_ == DTypeTag::kComplex) append_vector<std::complex<double> >(cell.vector<std::complex<double> >());
+            else append_vector(cell.vector<std::string>());
+            return;
+        }
 
-    // ---- Fill ----
+        if (dtype_ == DTypeTag::kReal) append_matrix<double>(cell.matrix<double>());
+        else if (dtype_ == DTypeTag::kInteger) append_matrix<int>(cell.matrix<int>());
+        else if (dtype_ == DTypeTag::kComplex) append_matrix<std::complex<double> >(cell.matrix<std::complex<double> >());
+        else append_matrix(cell.matrix<std::string>());
+    }
 
     template <typename T>
     void fill(const T& val) {
@@ -842,126 +1035,235 @@ public:
             if (kind_ == CellKind::kScalar) {
                 scalar_at<T>(i) = val;
             } else if (kind_ == CellKind::kVector) {
-                typename VectorRowType<T>::type& v = vector_at<T>(i);
-                fill_vector_row(v, val, std::is_same<T, std::string>());
+                fill_vector_row(i, val, std::is_same<T, std::string>());
             } else {
-                typename MatrixRowType<T>::type& m = matrix_at<T>(i);
-                fill_matrix_row(m, val, std::is_same<T, std::string>());
+                fill_matrix_row(i, val, std::is_same<T, std::string>());
             }
         }
     }
 
+    template <typename T>
+    typename std::enable_if<!std::is_same<T, std::string>::value, T*>::type mutable_contiguous_data() {
+        if (dtype_ != DTypeOf<T>::tag) throw std::bad_cast();
+        if (kind_ == CellKind::kScalar) return scalar_storage<T>()->data();
+        if (kind_ == CellKind::kVector) return vector_storage_numeric<T>()->data();
+        return matrix_storage_numeric<T>()->data();
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::is_same<T, std::string>::value, const T*>::type contiguous_data() const {
+        if (dtype_ != DTypeOf<T>::tag) throw std::bad_cast();
+        if (kind_ == CellKind::kScalar) return scalar_storage<T>()->data();
+        if (kind_ == CellKind::kVector) return vector_storage_numeric<T>()->data();
+        return matrix_storage_numeric<T>()->data();
+    }
+
+    std::size_t contiguous_elements() const {
+        return size() * static_cast<std::size_t>(values_per_row());
+    }
+
+    bool is_memcpy_compatible() const {
+        return dtype_ != DTypeTag::kString;
+    }
+
+    std::size_t contiguous_bytes() const {
+        if (dtype_ == DTypeTag::kReal) return contiguous_elements() * sizeof(double);
+        if (dtype_ == DTypeTag::kInteger) return contiguous_elements() * sizeof(int);
+        if (dtype_ == DTypeTag::kComplex) return contiguous_elements() * sizeof(std::complex<double>);
+        throw std::runtime_error("string storage is not memcpy-compatible");
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::is_same<T, std::string>::value, ContiguousBlockView>::type
+    export_contiguous_view() const {
+        if (dtype_ != DTypeOf<T>::tag) throw std::bad_cast();
+        ContiguousBlockView out;
+        out.data = contiguous_data<T>();
+        out.elements = contiguous_elements();
+        out.bytes = out.elements * sizeof(T);
+        out.element_size = sizeof(T);
+        out.rows = size();
+        out.kind = kind_;
+        out.dtype = dtype_;
+        out.cell_shape = shape_;
+        out.memcpy_compatible = true;
+        return out;
+    }
+
+    ContiguousBlockView export_contiguous_view() const {
+        if (dtype_ == DTypeTag::kReal) return export_contiguous_view<double>();
+        if (dtype_ == DTypeTag::kInteger) return export_contiguous_view<int>();
+        if (dtype_ == DTypeTag::kComplex) return export_contiguous_view<std::complex<double> >();
+        throw std::runtime_error("string storage is not memcpy-compatible");
+    }
+
+    Cell cell_at(std::size_t i) const {
+        if (i >= size()) throw std::out_of_range("cell index out of range");
+
+        if (kind_ == CellKind::kScalar) {
+            if (dtype_ == DTypeTag::kReal) return Cell::Scalar<double>(scalar_at<double>(i));
+            if (dtype_ == DTypeTag::kInteger) return Cell::Scalar<int>(scalar_at<int>(i));
+            if (dtype_ == DTypeTag::kComplex) return Cell::Scalar<std::complex<double> >(scalar_at<std::complex<double> >(i));
+            return Cell::Scalar<std::string>(scalar_at<std::string>(i));
+        }
+
+        if (kind_ == CellKind::kVector) {
+            if (dtype_ == DTypeTag::kReal) {
+                typename NumericVectorTypes<double>::OwnedType v = vector_at<double>(i);
+                return Cell::Vector<double>(v);
+            }
+            if (dtype_ == DTypeTag::kInteger) {
+                typename NumericVectorTypes<int>::OwnedType v = vector_at<int>(i);
+                return Cell::Vector<int>(v);
+            }
+            if (dtype_ == DTypeTag::kComplex) {
+                typename NumericVectorTypes<std::complex<double> >::OwnedType v = vector_at<std::complex<double> >(i);
+                return Cell::Vector<std::complex<double> >(v);
+            }
+            return Cell::Vector(vector_at<std::string>(i));
+        }
+
+        if (dtype_ == DTypeTag::kReal) {
+            typename NumericMatrixTypes<double>::OwnedType m = matrix_at<double>(i);
+            return Cell::Matrix<double>(m);
+        }
+        if (dtype_ == DTypeTag::kInteger) {
+            typename NumericMatrixTypes<int>::OwnedType m = matrix_at<int>(i);
+            return Cell::Matrix<int>(m);
+        }
+        if (dtype_ == DTypeTag::kComplex) {
+            typename NumericMatrixTypes<std::complex<double> >::OwnedType m = matrix_at<std::complex<double> >(i);
+            return Cell::Matrix<std::complex<double> >(m);
+        }
+        return Cell::Matrix(matrix_at<std::string>(i));
+    }
+
 private:
-    template <typename RowType, typename TVal>
-    static void fill_vector_row(RowType& row, const TVal& val, std::false_type) {
-        row.setConstant(val);
-    }
-
-    static void fill_vector_row(Eigen::Tensor<std::string, 1>& row, const std::string& val,
-                                std::true_type) {
-        for (Index j = 0; j < row.dimension(0); ++j) row(j) = val;
-    }
-
-    template <typename RowType, typename TVal>
-    static void fill_matrix_row(RowType& row, const TVal& val, std::false_type) {
-        row.setConstant(val);
-    }
-
-    static void fill_matrix_row(Eigen::Tensor<std::string, 2>& row, const std::string& val,
-                                std::true_type) {
-        for (Index r = 0; r < row.dimension(0); ++r)
-            for (Index c = 0; c < row.dimension(1); ++c)
-                row(r, c) = val;
-    }
-
-    static std::unique_ptr<CellStorage> make_storage(
-        CellKind kind, DTypeTag dtype, const std::vector<Index>& shape) {
-        validate_schema(kind, shape);
-        if (kind == CellKind::kScalar) {
-            if (dtype == DTypeTag::kReal) return std::unique_ptr<CellStorage>(new CellStorageImpl<double, CellKind::kScalar>());
-            if (dtype == DTypeTag::kInteger) return std::unique_ptr<CellStorage>(new CellStorageImpl<int, CellKind::kScalar>());
-            if (dtype == DTypeTag::kComplex) return std::unique_ptr<CellStorage>(new CellStorageImpl<std::complex<double>, CellKind::kScalar>());
-            return std::unique_ptr<CellStorage>(new CellStorageImpl<std::string, CellKind::kScalar>());
-        }
-        if (kind == CellKind::kVector) {
-            if (dtype == DTypeTag::kReal) return std::unique_ptr<CellStorage>(new CellStorageImpl<double, CellKind::kVector>(shape[0]));
-            if (dtype == DTypeTag::kInteger) return std::unique_ptr<CellStorage>(new CellStorageImpl<int, CellKind::kVector>(shape[0]));
-            if (dtype == DTypeTag::kComplex) return std::unique_ptr<CellStorage>(new CellStorageImpl<std::complex<double>, CellKind::kVector>(shape[0]));
-            return std::unique_ptr<CellStorage>(new CellStorageImpl<std::string, CellKind::kVector>(shape[0]));
-        }
-        if (dtype == DTypeTag::kReal) return std::unique_ptr<CellStorage>(new CellStorageImpl<double, CellKind::kMatrix>(shape[0], shape[1]));
-        if (dtype == DTypeTag::kInteger) return std::unique_ptr<CellStorage>(new CellStorageImpl<int, CellKind::kMatrix>(shape[0], shape[1]));
-        if (dtype == DTypeTag::kComplex) return std::unique_ptr<CellStorage>(new CellStorageImpl<std::complex<double>, CellKind::kMatrix>(shape[0], shape[1]));
-        return std::unique_ptr<CellStorage>(new CellStorageImpl<std::string, CellKind::kMatrix>(shape[0], shape[1]));
-    }
-
     static void validate_schema(CellKind kind, const std::vector<Index>& shape) {
         if (kind == CellKind::kScalar) {
             if (!shape.empty()) throw std::invalid_argument("scalar schema must have empty shape");
             return;
         }
+
         if (kind == CellKind::kVector) {
             if (shape.size() != 1 || shape[0] < 0) {
                 throw std::invalid_argument("vector schema must have one non-negative dimension");
             }
             return;
         }
+
         if (shape.size() != 2 || shape[0] < 0 || shape[1] < 0) {
             throw std::invalid_argument("matrix schema must have two non-negative dimensions");
         }
     }
 
-    template <typename T, CellKind Kind>
-    typename CellValueTraits<T, Kind>::StorageType* typed_storage() {
-        typedef CellValueTraits<T, Kind> Traits;
-        if (kind_ != Kind || dtype_ != Traits::kDType) throw std::bad_cast();
-        return static_cast<typename Traits::StorageType*>(storage_.get());
+    static std::unique_ptr<CellStorage> make_storage(CellKind kind, DTypeTag dtype, const std::vector<Index>& shape) {
+        validate_schema(kind, shape);
+        if (kind == CellKind::kScalar) {
+            if (dtype == DTypeTag::kReal) return std::unique_ptr<CellStorage>(new ScalarStorage<double>());
+            if (dtype == DTypeTag::kInteger) return std::unique_ptr<CellStorage>(new ScalarStorage<int>());
+            if (dtype == DTypeTag::kComplex) return std::unique_ptr<CellStorage>(new ScalarStorage<std::complex<double> >());
+            return std::unique_ptr<CellStorage>(new ScalarStorage<std::string>());
+        }
+
+        if (kind == CellKind::kVector) {
+            if (dtype == DTypeTag::kReal) return std::unique_ptr<CellStorage>(new VectorStorageNumeric<double>(shape[0]));
+            if (dtype == DTypeTag::kInteger) return std::unique_ptr<CellStorage>(new VectorStorageNumeric<int>(shape[0]));
+            if (dtype == DTypeTag::kComplex) return std::unique_ptr<CellStorage>(new VectorStorageNumeric<std::complex<double> >(shape[0]));
+            return std::unique_ptr<CellStorage>(new VectorStorageString(shape[0]));
+        }
+
+        if (dtype == DTypeTag::kReal) return std::unique_ptr<CellStorage>(new MatrixStorageNumeric<double>(shape[0], shape[1]));
+        if (dtype == DTypeTag::kInteger) return std::unique_ptr<CellStorage>(new MatrixStorageNumeric<int>(shape[0], shape[1]));
+        if (dtype == DTypeTag::kComplex) return std::unique_ptr<CellStorage>(new MatrixStorageNumeric<std::complex<double> >(shape[0], shape[1]));
+        return std::unique_ptr<CellStorage>(new MatrixStorageString(shape[0], shape[1]));
     }
 
-    template <typename T, CellKind Kind>
-    const typename CellValueTraits<T, Kind>::StorageType* typed_storage() const {
-        typedef CellValueTraits<T, Kind> Traits;
-        if (kind_ != Kind || dtype_ != Traits::kDType) throw std::bad_cast();
-        return static_cast<const typename Traits::StorageType*>(storage_.get());
+    template <typename T>
+    ScalarStorage<T>* scalar_storage() {
+        if (kind_ != CellKind::kScalar || dtype_ != DTypeOf<T>::tag) throw std::bad_cast();
+        return static_cast<ScalarStorage<T>*>(storage_.get());
     }
 
-    template <typename T, CellKind Kind>
-    void append_value_from(const CellSeries& src, std::size_t row) {
-        typed_storage<T, Kind>()->append(src.value<T, Kind>(row));
+    template <typename T>
+    const ScalarStorage<T>* scalar_storage() const {
+        if (kind_ != CellKind::kScalar || dtype_ != DTypeOf<T>::tag) throw std::bad_cast();
+        return static_cast<const ScalarStorage<T>*>(storage_.get());
     }
 
-    template <CellKind Kind>
-    void append_kind_from(const CellSeries& src, std::size_t row) {
-        if (dtype_ == DTypeTag::kReal) append_value_from<double, Kind>(src, row);
-        else if (dtype_ == DTypeTag::kInteger) append_value_from<int, Kind>(src, row);
-        else if (dtype_ == DTypeTag::kComplex) append_value_from<std::complex<double>, Kind>(src, row);
-        else append_value_from<std::string, Kind>(src, row);
+    template <typename T>
+    VectorStorageNumeric<T>* vector_storage_numeric() {
+        if (kind_ != CellKind::kVector || dtype_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
+        return static_cast<VectorStorageNumeric<T>*>(storage_.get());
     }
 
-    void append_row_from(const CellSeries& src, std::size_t row) {
-        if (kind_ == CellKind::kScalar) append_kind_from<CellKind::kScalar>(src, row);
-        else if (kind_ == CellKind::kVector) append_kind_from<CellKind::kVector>(src, row);
-        else append_kind_from<CellKind::kMatrix>(src, row);
+    template <typename T>
+    const VectorStorageNumeric<T>* vector_storage_numeric() const {
+        if (kind_ != CellKind::kVector || dtype_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
+        return static_cast<const VectorStorageNumeric<T>*>(storage_.get());
     }
 
-    // Cell -> series append helpers (defined out-of-line, need Cell complete).
-    template <typename T, CellKind Kind>
-    void append_cell_value(const Cell& cell);
-    template <CellKind Kind>
-    void append_cell_kind(const Cell& cell);
-    void append_cell(const Cell& cell);
+    VectorStorageString* vector_storage_string() {
+        if (kind_ != CellKind::kVector || dtype_ != DTypeTag::kString) throw std::bad_cast();
+        return static_cast<VectorStorageString*>(storage_.get());
+    }
+
+    const VectorStorageString* vector_storage_string() const {
+        if (kind_ != CellKind::kVector || dtype_ != DTypeTag::kString) throw std::bad_cast();
+        return static_cast<const VectorStorageString*>(storage_.get());
+    }
+
+    template <typename T>
+    MatrixStorageNumeric<T>* matrix_storage_numeric() {
+        if (kind_ != CellKind::kMatrix || dtype_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
+        return static_cast<MatrixStorageNumeric<T>*>(storage_.get());
+    }
+
+    template <typename T>
+    const MatrixStorageNumeric<T>* matrix_storage_numeric() const {
+        if (kind_ != CellKind::kMatrix || dtype_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
+        return static_cast<const MatrixStorageNumeric<T>*>(storage_.get());
+    }
+
+    MatrixStorageString* matrix_storage_string() {
+        if (kind_ != CellKind::kMatrix || dtype_ != DTypeTag::kString) throw std::bad_cast();
+        return static_cast<MatrixStorageString*>(storage_.get());
+    }
+
+    const MatrixStorageString* matrix_storage_string() const {
+        if (kind_ != CellKind::kMatrix || dtype_ != DTypeTag::kString) throw std::bad_cast();
+        return static_cast<const MatrixStorageString*>(storage_.get());
+    }
+
+    template <typename T>
+    void fill_vector_row(std::size_t row, const T& val, std::false_type) {
+        vector_at<T>(row).setConstant(val);
+    }
+
+    void fill_vector_row(std::size_t row, const std::string& val, std::true_type) {
+        Eigen::Tensor<std::string, 1>& t = vector_at<std::string>(row);
+        for (Index i = 0; i < t.dimension(0); ++i) t(i) = val;
+    }
+
+    template <typename T>
+    void fill_matrix_row(std::size_t row, const T& val, std::false_type) {
+        matrix_at<T>(row).setConstant(val);
+    }
+
+    void fill_matrix_row(std::size_t row, const std::string& val, std::true_type) {
+        Eigen::Tensor<std::string, 2>& t = matrix_at<std::string>(row);
+        for (Index r = 0; r < t.dimension(0); ++r) {
+            for (Index c = 0; c < t.dimension(1); ++c) {
+                t(r, c) = val;
+            }
+        }
+    }
 
     CellKind kind_;
     DTypeTag dtype_;
     std::vector<Index> shape_;
     std::unique_ptr<CellStorage> storage_;
 };
-
-// ============================================================================
-// CellSeries::RowView -- a single-row slice that depends on its owning series.
-// It borrows the series' data (no ownership). If the series is destroyed the
-// view is dangling; use to_cell() to obtain an independent Cell copy.
-// ============================================================================
 
 class CellSeries::RowView {
 public:
@@ -974,99 +1276,73 @@ public:
     std::vector<Index> cell_shape() const { return checked_owner()->cell_shape(); }
     std::size_t index() const { return idx_; }
 
-    template <typename T, CellKind Kind>
-    typename std::enable_if<CellValueTraits<T, Kind>::kValid,
-                            typename CellValueTraits<T, Kind>::ValueType&>::type
-    value() {
-        return checked_owner()->value<T, Kind>(idx_);
-    }
-    template <typename T, CellKind Kind>
-    typename std::enable_if<CellValueTraits<T, Kind>::kValid,
-                            const typename CellValueTraits<T, Kind>::ValueType&>::type
-    value() const {
-        return checked_owner()->value<T, Kind>(idx_);
-    }
-
     template <typename T>
     T& scalar() {
         return checked_owner()->scalar_at<T>(idx_);
     }
+
     template <typename T>
     const T& scalar() const {
         return checked_owner()->scalar_at<T>(idx_);
     }
 
     template <typename T>
-    typename VectorRowType<T>::type& vector() {
+    typename std::enable_if<!std::is_same<T, std::string>::value,
+                            typename NumericVectorTypes<T>::MapType>::type
+    vector() {
         return checked_owner()->vector_at<T>(idx_);
     }
+
     template <typename T>
-    const typename VectorRowType<T>::type& vector() const {
+    typename std::enable_if<!std::is_same<T, std::string>::value,
+                            typename NumericVectorTypes<T>::ConstMapType>::type
+    vector() const {
         return checked_owner()->vector_at<T>(idx_);
     }
 
     template <typename T>
-    typename MatrixRowType<T>::type& matrix() {
+    typename std::enable_if<std::is_same<T, std::string>::value, Eigen::Tensor<std::string, 1>&>::type
+    vector() {
+        return checked_owner()->vector_at<std::string>(idx_);
+    }
+
+    template <typename T>
+    typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 1>&>::type
+    vector() const {
+        return checked_owner()->vector_at<std::string>(idx_);
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::is_same<T, std::string>::value,
+                            typename NumericMatrixTypes<T>::MapType>::type
+    matrix() {
         return checked_owner()->matrix_at<T>(idx_);
     }
+
     template <typename T>
-    const typename MatrixRowType<T>::type& matrix() const {
+    typename std::enable_if<!std::is_same<T, std::string>::value,
+                            typename NumericMatrixTypes<T>::ConstMapType>::type
+    matrix() const {
         return checked_owner()->matrix_at<T>(idx_);
     }
 
     template <typename T>
-    typename VectorRowType<T>::type::Scalar& vector_at(Index i) {
-        return checked_owner()->vector_elem<T>(idx_, i);
-    }
-    template <typename T>
-    const typename VectorRowType<T>::type::Scalar& vector_at(Index i) const {
-        return checked_owner()->vector_elem<T>(idx_, i);
+    typename std::enable_if<std::is_same<T, std::string>::value, Eigen::Tensor<std::string, 2>&>::type
+    matrix() {
+        return checked_owner()->matrix_at<std::string>(idx_);
     }
 
     template <typename T>
-    typename MatrixRowType<T>::type::Scalar& matrix_at(Index r, Index c) {
-        return checked_owner()->matrix_elem<T>(idx_, r, c);
-    }
-    template <typename T>
-    const typename MatrixRowType<T>::type::Scalar& matrix_at(Index r, Index c) const {
-        return checked_owner()->matrix_elem<T>(idx_, r, c);
+    typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 2>&>::type
+    matrix() const {
+        return checked_owner()->matrix_at<std::string>(idx_);
     }
 
-    template <typename T, CellKind Kind>
-    typename std::enable_if<CellValueTraits<T, Kind>::kValid, void>::type set_value(
-        const typename CellValueTraits<T, Kind>::ValueType& v) {
-        checked_owner()->set_value<T, Kind>(idx_, v);
-    }
-
-    template <typename T>
-    void set_scalar(const T& v) {
-        checked_owner()->scalar_at<T>(idx_) = v;
-    }
-    template <typename T>
-    void set_vector(const typename VectorRowType<T>::type& v) {
-        checked_owner()->vector_at<T>(idx_) = v;
-    }
-    template <typename T>
-    void set_matrix(const typename MatrixRowType<T>::type& v) {
-        checked_owner()->matrix_at<T>(idx_) = v;
-    }
-    template <typename T>
-    void set_vector_at(Index i, const typename VectorRowType<T>::type::Scalar& v) {
-        checked_owner()->vector_elem<T>(idx_, i) = v;
-    }
-    template <typename T>
-    void set_matrix_at(Index r, Index c, const typename MatrixRowType<T>::type::Scalar& v) {
-        checked_owner()->matrix_elem<T>(idx_, r, c) = v;
-    }
-
-    // Materialize this view into an independent, owning Cell.
     Cell to_cell() const { return checked_owner()->cell_at(idx_); }
 
 private:
     CellSeries* checked_owner() const {
-        if (!owner_ || idx_ >= owner_->size()) {
-            throw std::out_of_range("row view is invalid");
-        }
+        if (!owner_ || idx_ >= owner_->size()) throw std::out_of_range("row view is invalid");
         return owner_;
     }
 
@@ -1085,53 +1361,48 @@ public:
     std::vector<Index> cell_shape() const { return checked_owner()->cell_shape(); }
     std::size_t index() const { return idx_; }
 
-    template <typename T, CellKind Kind>
-    typename std::enable_if<CellValueTraits<T, Kind>::kValid,
-                            const typename CellValueTraits<T, Kind>::ValueType&>::type
-    value() const {
-        return checked_owner()->value<T, Kind>(idx_);
-    }
-
     template <typename T>
     const T& scalar() const {
         return checked_owner()->scalar_at<T>(idx_);
     }
 
     template <typename T>
-    const typename VectorRowType<T>::type& vector() const {
+    typename std::enable_if<!std::is_same<T, std::string>::value,
+                            typename NumericVectorTypes<T>::ConstMapType>::type
+    vector() const {
         return checked_owner()->vector_at<T>(idx_);
     }
 
     template <typename T>
-    const typename MatrixRowType<T>::type& matrix() const {
+    typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 1>&>::type
+    vector() const {
+        return checked_owner()->vector_at<std::string>(idx_);
+    }
+
+    template <typename T>
+    typename std::enable_if<!std::is_same<T, std::string>::value,
+                            typename NumericMatrixTypes<T>::ConstMapType>::type
+    matrix() const {
         return checked_owner()->matrix_at<T>(idx_);
     }
 
     template <typename T>
-    const typename VectorRowType<T>::type::Scalar& vector_at(Index i) const {
-        return checked_owner()->vector_elem<T>(idx_, i);
-    }
-
-    template <typename T>
-    const typename MatrixRowType<T>::type::Scalar& matrix_at(Index r, Index c) const {
-        return checked_owner()->matrix_elem<T>(idx_, r, c);
+    typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 2>&>::type
+    matrix() const {
+        return checked_owner()->matrix_at<std::string>(idx_);
     }
 
     Cell to_cell() const { return checked_owner()->cell_at(idx_); }
 
 private:
     const CellSeries* checked_owner() const {
-        if (!owner_ || idx_ >= owner_->size()) {
-            throw std::out_of_range("row view is invalid");
-        }
+        if (!owner_ || idx_ >= owner_->size()) throw std::out_of_range("row view is invalid");
         return owner_;
     }
 
     const CellSeries* owner_;
     std::size_t idx_;
 };
-
-// ---- Out-of-line CellSeries members that need RowView / Cell complete ----
 
 inline CellSeries::RowView CellSeries::row(std::size_t i) {
     if (i >= size()) throw std::out_of_range("cell index out of range");
@@ -1149,53 +1420,6 @@ inline CellSeries::iterator::reference CellSeries::iterator::operator*() const {
 
 inline CellSeries::const_iterator::reference CellSeries::const_iterator::operator*() const {
     return ConstRowView(owner_, idx_);
-}
-
-inline Cell CellSeries::cell_at(std::size_t i) const {
-    if (i >= size()) throw std::out_of_range("cell index out of range");
-    if (kind_ == CellKind::kScalar) {
-        if (dtype_ == DTypeTag::kReal) return Cell::Scalar<double>(value<double, CellKind::kScalar>(i));
-        if (dtype_ == DTypeTag::kInteger) return Cell::Scalar<int>(value<int, CellKind::kScalar>(i));
-        if (dtype_ == DTypeTag::kComplex) return Cell::Scalar<std::complex<double> >(value<std::complex<double>, CellKind::kScalar>(i));
-        return Cell::Scalar<std::string>(value<std::string, CellKind::kScalar>(i));
-    }
-    if (kind_ == CellKind::kVector) {
-        if (dtype_ == DTypeTag::kReal) return Cell::Vector<double>(value<double, CellKind::kVector>(i));
-        if (dtype_ == DTypeTag::kInteger) return Cell::Vector<int>(value<int, CellKind::kVector>(i));
-        if (dtype_ == DTypeTag::kComplex) return Cell::Vector<std::complex<double> >(value<std::complex<double>, CellKind::kVector>(i));
-        return Cell::Vector<std::string>(value<std::string, CellKind::kVector>(i));
-    }
-    if (dtype_ == DTypeTag::kReal) return Cell::Matrix<double>(value<double, CellKind::kMatrix>(i));
-    if (dtype_ == DTypeTag::kInteger) return Cell::Matrix<int>(value<int, CellKind::kMatrix>(i));
-    if (dtype_ == DTypeTag::kComplex) return Cell::Matrix<std::complex<double> >(value<std::complex<double>, CellKind::kMatrix>(i));
-    return Cell::Matrix<std::string>(value<std::string, CellKind::kMatrix>(i));
-}
-
-template <typename T, CellKind Kind>
-inline void CellSeries::append_cell_value(const Cell& cell) {
-    typed_storage<T, Kind>()->append(cell.value<T, Kind>());
-}
-
-template <CellKind Kind>
-inline void CellSeries::append_cell_kind(const Cell& cell) {
-    if (dtype_ == DTypeTag::kReal) append_cell_value<double, Kind>(cell);
-    else if (dtype_ == DTypeTag::kInteger) append_cell_value<int, Kind>(cell);
-    else if (dtype_ == DTypeTag::kComplex) append_cell_value<std::complex<double>, Kind>(cell);
-    else append_cell_value<std::string, Kind>(cell);
-}
-
-inline void CellSeries::append_cell(const Cell& cell) {
-    if (kind_ == CellKind::kScalar) append_cell_kind<CellKind::kScalar>(cell);
-    else if (kind_ == CellKind::kVector) append_cell_kind<CellKind::kVector>(cell);
-    else append_cell_kind<CellKind::kMatrix>(cell);
-}
-
-inline void CellSeries::append(const Cell& cell) {
-    if (!cell.has_value()) throw std::runtime_error("Cell has no value");
-    if (cell.kind() != kind_ || cell.dtype() != dtype_ || cell.cell_shape() != shape_) {
-        throw std::bad_cast();
-    }
-    append_cell(cell);
 }
 
 }  // namespace xdataset

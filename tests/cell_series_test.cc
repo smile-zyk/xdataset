@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <complex>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -150,4 +151,82 @@ TEST(CellSeriesTest, IndependentCellAppendAndRowView) {
 
     Cell copied = built.row(0).to_cell();
     EXPECT_DOUBLE_EQ(copied.scalar<double>(), 1.25);
+}
+
+TEST(CellSeriesTest, ContiguousMemcpyScalarRoundTrip) {
+    CellSeries src = CellSeries::Scalars<double>(4);
+    src.scalar_at<double>(0) = 1.0;
+    src.scalar_at<double>(1) = 2.5;
+    src.scalar_at<double>(2) = -3.0;
+    src.scalar_at<double>(3) = 7.25;
+
+    CellSeries dst = CellSeries::Scalars<double>(4);
+    std::memcpy(dst.mutable_contiguous_data<double>(),
+                src.contiguous_data<double>(),
+                src.contiguous_bytes());
+
+    EXPECT_TRUE(src.is_memcpy_compatible());
+    EXPECT_EQ(src.contiguous_elements(), 4u);
+    EXPECT_EQ(src.contiguous_bytes(), 4u * sizeof(double));
+    EXPECT_DOUBLE_EQ(dst.scalar_at<double>(0), 1.0);
+    EXPECT_DOUBLE_EQ(dst.scalar_at<double>(1), 2.5);
+    EXPECT_DOUBLE_EQ(dst.scalar_at<double>(2), -3.0);
+    EXPECT_DOUBLE_EQ(dst.scalar_at<double>(3), 7.25);
+}
+
+TEST(CellSeriesTest, ContiguousMemcpyVectorRoundTripAndView) {
+    CellSeries src = CellSeries::Vectors<int>(2, 3);
+    src.vector_at<int>(0) << 1, 2, 3;
+    src.vector_at<int>(1) << 4, 5, 6;
+
+    CellSeries dst = CellSeries::Vectors<int>(2, 3);
+    std::memcpy(dst.mutable_contiguous_data<int>(),
+                src.contiguous_data<int>(),
+                src.contiguous_bytes());
+
+    EXPECT_EQ(dst.vector_at<int>(0)(0), 1);
+    EXPECT_EQ(dst.vector_at<int>(0)(1), 2);
+    EXPECT_EQ(dst.vector_at<int>(0)(2), 3);
+    EXPECT_EQ(dst.vector_at<int>(1)(0), 4);
+    EXPECT_EQ(dst.vector_at<int>(1)(1), 5);
+    EXPECT_EQ(dst.vector_at<int>(1)(2), 6);
+
+    CellSeries::ContiguousBlockView view = src.export_contiguous_view();
+    EXPECT_EQ(view.rows, 2u);
+    ASSERT_EQ(view.cell_shape.size(), 1u);
+    EXPECT_EQ(view.cell_shape[0], 3);
+    EXPECT_EQ(view.elements, 6u);
+    EXPECT_EQ(view.bytes, 6u * sizeof(int));
+    EXPECT_EQ(view.dtype, xdataset::DTypeTag::kInteger);
+}
+
+TEST(CellSeriesTest, ContiguousMemcpyMatrixRoundTripAndOrder) {
+    CellSeries src = CellSeries::Matrices<double>(2, 2, 2);
+    src.matrix_at<double>(0) << 1.0, 2.0, 3.0, 4.0;
+    src.matrix_at<double>(1) << 5.0, 6.0, 7.0, 8.0;
+
+    CellSeries dst = CellSeries::Matrices<double>(2, 2, 2);
+    std::memcpy(dst.mutable_contiguous_data<double>(),
+                src.contiguous_data<double>(),
+                src.contiguous_bytes());
+
+    EXPECT_DOUBLE_EQ(dst.matrix_at<double>(0)(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(dst.matrix_at<double>(0)(0, 1), 2.0);
+    EXPECT_DOUBLE_EQ(dst.matrix_at<double>(0)(1, 0), 3.0);
+    EXPECT_DOUBLE_EQ(dst.matrix_at<double>(0)(1, 1), 4.0);
+    EXPECT_DOUBLE_EQ(dst.matrix_at<double>(1)(0, 0), 5.0);
+    EXPECT_DOUBLE_EQ(dst.matrix_at<double>(1)(0, 1), 6.0);
+    EXPECT_DOUBLE_EQ(dst.matrix_at<double>(1)(1, 0), 7.0);
+    EXPECT_DOUBLE_EQ(dst.matrix_at<double>(1)(1, 1), 8.0);
+
+    const double* flat = src.contiguous_data<double>();
+    ASSERT_NE(flat, static_cast<const double*>(nullptr));
+    EXPECT_DOUBLE_EQ(flat[0], 1.0);
+    EXPECT_DOUBLE_EQ(flat[1], 2.0);
+    EXPECT_DOUBLE_EQ(flat[2], 3.0);
+    EXPECT_DOUBLE_EQ(flat[3], 4.0);
+    EXPECT_DOUBLE_EQ(flat[4], 5.0);
+    EXPECT_DOUBLE_EQ(flat[5], 6.0);
+    EXPECT_DOUBLE_EQ(flat[6], 7.0);
+    EXPECT_DOUBLE_EQ(flat[7], 8.0);
 }
