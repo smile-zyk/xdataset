@@ -221,6 +221,36 @@ TEST(VariableDataTest, WrapperDelegatesMappingAndSeries) {
     EXPECT_EQ(selected[1], 18u);
 }
 
+TEST(VariableDataTest, SelectRebuildsSeriesAndProjectedShape) {
+    MultiDimensionSpec spec;
+    spec.add_uniform(2).add_uniform(3).add_uniform(4);  // total 24
+
+    CellSeries s = CellSeries::ScalarsFrom<int>(std::vector<int>{
+        0, 1, 2, 3,
+        4, 5, 6, 7,
+        8, 9, 10, 11,
+        12, 13, 14, 15,
+        16, 17, 18, 19,
+        20, 21, 22, 23});
+    VariableData vd(spec, s);
+
+    std::vector<MultiIndexSelector> query;
+    query.push_back(MultiIndexSelector::Equal(1));
+    query.push_back(MultiIndexSelector::Any());
+    query.push_back(MultiIndexSelector::Equal(2));
+
+    VariableData selected = vd.select(query);
+
+    EXPECT_EQ(selected.size(), 3u);
+    EXPECT_EQ(selected.multi_dimension_spec().rank(), 1u);
+    EXPECT_EQ(selected.multi_dimension_spec().total_cell_count(), 3u);
+    EXPECT_EQ(selected.multi_index(0), (std::vector<Index>{0}));
+    EXPECT_EQ(selected.multi_index(2), (std::vector<Index>{2}));
+    EXPECT_EQ(selected.series().scalar_at<int>(0), 14);
+    EXPECT_EQ(selected.series().scalar_at<int>(1), 18);
+    EXPECT_EQ(selected.series().scalar_at<int>(2), 22);
+}
+
 TEST(VariableDataTest, WrapperShapeMismatchThrows) {
     MultiDimensionSpec spec;
     spec.add_uniform(2).add_uniform(2);  // total 4
