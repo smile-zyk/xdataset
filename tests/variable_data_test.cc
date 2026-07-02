@@ -18,8 +18,7 @@ TEST(VariableDataTest, Create1DShape) {
     VariableData vd = VariableData::Create<int>(std::vector<Index>{5}, 0);
     EXPECT_EQ(vd.rank(), 1u);
     EXPECT_EQ(vd.size(), 5u);
-    ASSERT_EQ(vd.shape().size(), 1u);
-    EXPECT_EQ(vd.shape()[0], 5);
+    EXPECT_EQ(vd.shape_spec().dim_size(0), 5);
 }
 
 TEST(VariableDataTest, Access1DElement) {
@@ -41,9 +40,8 @@ TEST(VariableDataTest, Create2DShape) {
     VariableData vd = VariableData::Create<double>(std::vector<Index>{3, 5}, 0.0);
     EXPECT_EQ(vd.rank(), 2u);
     EXPECT_EQ(vd.size(), 15u);
-    ASSERT_EQ(vd.shape().size(), 2u);
-    EXPECT_EQ(vd.shape()[0], 3);
-    EXPECT_EQ(vd.shape()[1], 5);
+    EXPECT_EQ(vd.shape_spec().dim_size(0), 3);
+    EXPECT_EQ(vd.shape_spec().dim_size(1), 5);
 }
 
 TEST(VariableDataTest, Access2DElementByMultiIndex) {
@@ -94,10 +92,9 @@ TEST(VariableDataTest, Create3DShape) {
     VariableData vd = VariableData::Create<double>(std::vector<Index>{2, 3, 4}, 0.0);
     EXPECT_EQ(vd.rank(), 3u);
     EXPECT_EQ(vd.size(), 24u);  // 2*3*4
-    ASSERT_EQ(vd.shape().size(), 3u);
-    EXPECT_EQ(vd.shape()[0], 2);
-    EXPECT_EQ(vd.shape()[1], 3);
-    EXPECT_EQ(vd.shape()[2], 4);
+    EXPECT_EQ(vd.shape_spec().dim_size(0), 2);
+    EXPECT_EQ(vd.shape_spec().dim_size(1), 3);
+    EXPECT_EQ(vd.shape_spec().dim_size(2), 4);
 }
 
 TEST(VariableDataTest, Access3DElement) {
