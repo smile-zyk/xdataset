@@ -624,7 +624,7 @@ public:
         CellKind kind;
         DTypeTag dtype;
         std::vector<Index> cell_shape;
-        bool memcpy_compatible;
+        bool trivially_copyable;
     };
 
     class RowView;
@@ -799,11 +799,14 @@ public:
     void resize(std::size_t n) { storage_->resize(n); }
     void clear() { storage_->resize(0); }
 
-    CellSeries head(std::size_t n) const { return iloc(0, n); }
+    CellSeries head(std::size_t n) const {
+        std::size_t sz = size();
+        return iloc(0, n < sz ? n : sz);
+    }
 
     CellSeries tail(std::size_t n) const {
         std::size_t sz = size();
-        return iloc(sz > n ? sz - n : 0, sz);
+        return iloc(n < sz ? sz - n : 0, sz);
     }
 
     CellSeries iloc(std::size_t start, std::size_t end) const {
@@ -1062,7 +1065,7 @@ public:
         return size() * static_cast<std::size_t>(values_per_row());
     }
 
-    bool is_memcpy_compatible() const {
+    bool is_trivially_copyable() const {
         return dtype_ != DTypeTag::kString;
     }
 
@@ -1070,7 +1073,7 @@ public:
         if (dtype_ == DTypeTag::kReal) return contiguous_elements() * sizeof(double);
         if (dtype_ == DTypeTag::kInteger) return contiguous_elements() * sizeof(int);
         if (dtype_ == DTypeTag::kComplex) return contiguous_elements() * sizeof(std::complex<double>);
-        throw std::runtime_error("string storage is not memcpy-compatible");
+        throw std::runtime_error("string storage is not trivially-copyable");
     }
 
     template <typename T>
@@ -1086,7 +1089,7 @@ public:
         out.kind = kind_;
         out.dtype = dtype_;
         out.cell_shape = shape_;
-        out.memcpy_compatible = true;
+        out.trivially_copyable = true;
         return out;
     }
 
@@ -1094,7 +1097,7 @@ public:
         if (dtype_ == DTypeTag::kReal) return export_contiguous_view<double>();
         if (dtype_ == DTypeTag::kInteger) return export_contiguous_view<int>();
         if (dtype_ == DTypeTag::kComplex) return export_contiguous_view<std::complex<double> >();
-        throw std::runtime_error("string storage is not memcpy-compatible");
+        throw std::runtime_error("string storage is not trivially-copyable");
     }
 
     Cell cell_at(std::size_t i) const {
