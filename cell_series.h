@@ -743,11 +743,26 @@ public:
     }
 
     template <typename T>
-    static CellSeries From(const std::vector<T>& values) {
+    static CellSeries ScalarsFrom(const std::vector<T>& values) {
         static_assert(IsSupported<T>::value, "unsupported type");
         CellSeries s(CellKind::kScalar, DTypeOf<T>::tag, std::vector<Index>());
         s.resize(values.size());
         for (std::size_t i = 0; i < values.size(); ++i) s.scalar_at<T>(i) = values[i];
+        return s;
+    }
+
+    template <typename T>
+    static CellSeries ScalarsFrom(const T* values, std::size_t len) {
+        static_assert(IsSupported<T>::value, "unsupported type");
+        if (len > 0 && values == nullptr) {
+            throw std::invalid_argument("values pointer must not be null when len > 0");
+        }
+
+        CellSeries s(CellKind::kScalar, DTypeOf<T>::tag, std::vector<Index>());
+        s.resize(len);
+        for (std::size_t i = 0; i < len; ++i) {
+            s.scalar_at<T>(i) = values[i];
+        }
         return s;
     }
 
@@ -761,6 +776,82 @@ public:
     }
 
     template <typename T>
+    static typename std::enable_if<!std::is_same<T, std::string>::value, CellSeries>::type
+    VectorsFromFlat(Index width, const T* values, std::size_t len) {
+        if (width < 0) {
+            throw std::invalid_argument("vector width must be non-negative");
+        }
+        if (len > 0 && values == nullptr) {
+            throw std::invalid_argument("values pointer must not be null when len > 0");
+        }
+
+        const std::size_t width_sz = static_cast<std::size_t>(width);
+        if (width_sz == 0) {
+            if (len != 0) {
+                throw std::invalid_argument("vector width 0 requires len = 0");
+            }
+            return Vectors<T>(0, width);
+        }
+        if (len % width_sz != 0) {
+            throw std::invalid_argument("vector flat data length must be a multiple of width");
+        }
+
+        const std::size_t rows = len / width_sz;
+        CellSeries s = Vectors<T>(rows, width);
+        T* dst = s.mutable_contiguous_data<T>();
+        std::copy(values, values + len, dst);
+        return s;
+    }
+
+    template <typename T>
+    static typename std::enable_if<!std::is_same<T, std::string>::value, CellSeries>::type
+    VectorsFromFlat(Index width, const std::vector<T>& values) {
+        return VectorsFromFlat<T>(
+            width,
+            values.empty() ? static_cast<const T*>(nullptr) : &values[0],
+            values.size());
+    }
+
+    template <typename T>
+    static typename std::enable_if<!std::is_same<T, std::string>::value, CellSeries>::type
+    VectorsFromRows(const std::vector<typename NumericVectorTypes<T>::OwnedType>& rows) {
+        if (rows.empty()) {
+            return Vectors<T>(0, 0);
+        }
+
+        const Index width = static_cast<Index>(rows[0].size());
+        CellSeries out = Vectors<T>(rows.size(), width);
+        for (std::size_t i = 0; i < rows.size(); ++i) {
+            if (rows[i].size() != width) {
+                throw std::invalid_argument("all vector rows must have the same width");
+            }
+            out.vector_at<T>(i) = rows[i];
+        }
+        return out;
+    }
+
+    static CellSeries VectorsFromRows(const std::vector<Eigen::Tensor<std::string, 1> >& rows) {
+        if (rows.empty()) {
+            return Vectors<std::string>(0, 0);
+        }
+
+        const Index width = rows[0].dimension(0);
+        CellSeries out = Vectors<std::string>(rows.size(), width);
+        for (std::size_t i = 0; i < rows.size(); ++i) {
+            if (rows[i].dimension(0) != width) {
+                throw std::invalid_argument("all vector rows must have the same width");
+            }
+            out.vector_at<std::string>(i) = rows[i];
+        }
+        return out;
+    }
+
+    template <typename T>
+    static CellSeries VectorsWithZeroRows(Index width) {
+        return Vectors<T>(0, width);
+    }
+
+    template <typename T>
     static CellSeries Matrices(std::size_t rows, Index cell_rows, Index cell_cols, const T& fill_val = T()) {
         static_assert(IsSupported<T>::value, "unsupported type");
         std::vector<Index> shape;
@@ -770,6 +861,87 @@ public:
         s.resize(rows);
         s.fill(fill_val);
         return s;
+    }
+
+    template <typename T>
+    static typename std::enable_if<!std::is_same<T, std::string>::value, CellSeries>::type
+    MatricesFromFlat(Index cell_rows, Index cell_cols, const T* values, std::size_t len) {
+        if (cell_rows < 0 || cell_cols < 0) {
+            throw std::invalid_argument("matrix shape must be non-negative");
+        }
+        if (len > 0 && values == nullptr) {
+            throw std::invalid_argument("values pointer must not be null when len > 0");
+        }
+
+        const std::size_t elems_per_row = static_cast<std::size_t>(cell_rows) *
+                                          static_cast<std::size_t>(cell_cols);
+        if (elems_per_row == 0) {
+            if (len != 0) {
+                throw std::invalid_argument("zero-sized matrix cells require len = 0");
+            }
+            return Matrices<T>(0, cell_rows, cell_cols);
+        }
+        if (len % elems_per_row != 0) {
+            throw std::invalid_argument(
+                "matrix flat data length must be a multiple of cell_rows * cell_cols");
+        }
+
+        const std::size_t rows = len / elems_per_row;
+        CellSeries s = Matrices<T>(rows, cell_rows, cell_cols);
+        T* dst = s.mutable_contiguous_data<T>();
+        std::copy(values, values + len, dst);
+        return s;
+    }
+
+    template <typename T>
+    static typename std::enable_if<!std::is_same<T, std::string>::value, CellSeries>::type
+    MatricesFromFlat(Index cell_rows, Index cell_cols, const std::vector<T>& values) {
+        return MatricesFromFlat<T>(
+            cell_rows,
+            cell_cols,
+            values.empty() ? static_cast<const T*>(nullptr) : &values[0],
+            values.size());
+    }
+
+    template <typename T>
+    static typename std::enable_if<!std::is_same<T, std::string>::value, CellSeries>::type
+    MatricesFromRows(const std::vector<typename NumericMatrixTypes<T>::OwnedType>& rows) {
+        if (rows.empty()) {
+            return Matrices<T>(0, 0, 0);
+        }
+
+        const Index cell_rows = static_cast<Index>(rows[0].rows());
+        const Index cell_cols = static_cast<Index>(rows[0].cols());
+        CellSeries out = Matrices<T>(rows.size(), cell_rows, cell_cols);
+        for (std::size_t i = 0; i < rows.size(); ++i) {
+            if (rows[i].rows() != cell_rows || rows[i].cols() != cell_cols) {
+                throw std::invalid_argument("all matrix rows must have the same shape");
+            }
+            out.matrix_at<T>(i) = rows[i];
+        }
+        return out;
+    }
+
+    static CellSeries MatricesFromRows(const std::vector<Eigen::Tensor<std::string, 2> >& rows) {
+        if (rows.empty()) {
+            return Matrices<std::string>(0, 0, 0);
+        }
+
+        const Index cell_rows = rows[0].dimension(0);
+        const Index cell_cols = rows[0].dimension(1);
+        CellSeries out = Matrices<std::string>(rows.size(), cell_rows, cell_cols);
+        for (std::size_t i = 0; i < rows.size(); ++i) {
+            if (rows[i].dimension(0) != cell_rows || rows[i].dimension(1) != cell_cols) {
+                throw std::invalid_argument("all matrix rows must have the same shape");
+            }
+            out.matrix_at<std::string>(i) = rows[i];
+        }
+        return out;
+    }
+
+    template <typename T>
+    static CellSeries MatricesWithZeroRows(Index cell_rows, Index cell_cols) {
+        return Matrices<T>(0, cell_rows, cell_cols);
     }
 
     bool has_value() const { return storage_->size() != 0; }

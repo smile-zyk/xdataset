@@ -4,180 +4,227 @@
 
 #include <vector>
 
-using xdataset::Cell;
-using xdataset::CellKind;
 using xdataset::CellSeries;
 using xdataset::Index;
+using xdataset::MultiDimensionSpec;
+using xdataset::MultiIndexSelector;
 using xdataset::VariableData;
 
-// ---------------------------------------------------------------------------
-// VariableData — 1D shape
-// ---------------------------------------------------------------------------
+TEST(MultiIndexSelectorTest, AnyAndEqual) {
+    MultiIndexSelector any = MultiIndexSelector::Any();
+    MultiIndexSelector exact = MultiIndexSelector::Equal(3);
 
-TEST(VariableDataTest, Create1DShape) {
-    VariableData vd = VariableData::Create<int>(std::vector<Index>{5}, 0);
-    EXPECT_EQ(vd.rank(), 1u);
-    EXPECT_EQ(vd.size(), 5u);
-    EXPECT_EQ(vd.shape_spec().dim_size(0), 5);
+    EXPECT_TRUE(any.matches(0));
+    EXPECT_TRUE(any.matches(9));
+    EXPECT_TRUE(exact.matches(3));
+    EXPECT_FALSE(exact.matches(2));
 }
 
-TEST(VariableDataTest, Access1DElement) {
-    VariableData vd = VariableData::Create<int>(std::vector<Index>{3}, 0);
-    vd.at_1d<int>(0) = 10;
-    vd.at_1d<int>(1) = 20;
-    vd.at_1d<int>(2) = 30;
-
-    EXPECT_EQ(vd.at_1d<int>(0), 10);
-    EXPECT_EQ(vd.at_1d<int>(1), 20);
-    EXPECT_EQ(vd.at_1d<int>(2), 30);
+TEST(MultiIndexSelectorTest, EqualMinusOneMeansAny) {
+    MultiIndexSelector s = MultiIndexSelector::Equal(-1);
+    EXPECT_TRUE(s.matches(0));
+    EXPECT_TRUE(s.matches(5));
 }
 
-// ---------------------------------------------------------------------------
-// VariableData — 2D shape and multi-dimensional indexing
-// ---------------------------------------------------------------------------
-
-TEST(VariableDataTest, Create2DShape) {
-    VariableData vd = VariableData::Create<double>(std::vector<Index>{3, 5}, 0.0);
-    EXPECT_EQ(vd.rank(), 2u);
-    EXPECT_EQ(vd.size(), 15u);
-    EXPECT_EQ(vd.shape_spec().dim_size(0), 3);
-    EXPECT_EQ(vd.shape_spec().dim_size(1), 5);
+TEST(MultiIndexSelectorTest, InWithMinusOneMeansAny) {
+    MultiIndexSelector s = MultiIndexSelector::In(std::vector<Index>{1, -1, 3});
+    EXPECT_TRUE(s.matches(0));
+    EXPECT_TRUE(s.matches(3));
 }
 
-TEST(VariableDataTest, Access2DElementByMultiIndex) {
-    VariableData vd = VariableData::Create<double>(std::vector<Index>{3, 5}, 0.0);
+TEST(MultiIndexSelectorTest, EqualAndInNewNames) {
+    MultiIndexSelector equal = MultiIndexSelector::Equal(2);
+    MultiIndexSelector in = MultiIndexSelector::In(std::vector<Index>{1, 2, 2, 3});
 
-    // Access via multi-dimensional index: (i, j) -> i*5 + j
-    vd.at_2d<double>(0, 1) = 10.5;  // index 0*5 + 1 = 1
-    vd.at_2d<double>(1, 2) = 20.3;  // index 1*5 + 2 = 7
-    vd.at_2d<double>(2, 4) = 30.7;  // index 2*5 + 4 = 14
+    EXPECT_TRUE(equal.is_equal());
+    EXPECT_EQ(equal.equal_value(), 2);
+    EXPECT_TRUE(equal.matches(2));
+    EXPECT_FALSE(equal.matches(3));
 
-    EXPECT_DOUBLE_EQ(vd.at_2d<double>(0, 1), 10.5);
-    EXPECT_DOUBLE_EQ(vd.at_2d<double>(1, 2), 20.3);
-    EXPECT_DOUBLE_EQ(vd.at_2d<double>(2, 4), 30.7);
+    EXPECT_TRUE(in.is_in());
+    EXPECT_TRUE(in.matches(1));
+    EXPECT_TRUE(in.matches(2));
+    EXPECT_FALSE(in.matches(4));
 }
 
-TEST(VariableDataTest, Access2DElementByFlatIndex) {
-    VariableData vd = VariableData::Create<int>(std::vector<Index>{3, 5}, 0);
+TEST(MultiDimensionSpecTest, MixedLevelsAndTotalCount) {
+    // [3, 2, [2,3,6,8,1,2], 3]
+    MultiDimensionSpec spec;
+    spec.add_uniform(3)
+        .add_uniform(2)
+        .add_jagged(std::vector<Index>{2, 3, 6, 8, 1, 2})
+        .add_uniform(3);
 
-    // Set via flat index
-    vd.at_1d<int>(0) = 100;   // (0, 0)
-    vd.at_1d<int>(1) = 101;   // (0, 1)
-    vd.at_1d<int>(5) = 200;   // (1, 0)
-    vd.at_1d<int>(7) = 207;   // (1, 2)
-    vd.at_1d<int>(14) = 314;  // (2, 4)
-
-    // Verify via multi-dimensional access
-    EXPECT_EQ(vd.at_2d<int>(0, 0), 100);
-    EXPECT_EQ(vd.at_2d<int>(0, 1), 101);
-    EXPECT_EQ(vd.at_2d<int>(1, 0), 200);
-    EXPECT_EQ(vd.at_2d<int>(1, 2), 207);
-    EXPECT_EQ(vd.at_2d<int>(2, 4), 314);
+    std::vector<std::size_t> levels = spec.level_node_counts();
+    ASSERT_EQ(levels.size(), 5u);
+    EXPECT_EQ(levels[0], 1u);
+    EXPECT_EQ(levels[1], 3u);
+    EXPECT_EQ(levels[2], 6u);
+    EXPECT_EQ(levels[3], 22u);
+    EXPECT_EQ(levels[4], 66u);
+    EXPECT_EQ(spec.total_cell_count(), 66u);
 }
 
-TEST(VariableDataTest, FlatIndexConversion2D) {
-    VariableData vd = VariableData::Create<int>(std::vector<Index>{3, 5}, 0);
-    std::vector<Index> indices = {1, 2};
+TEST(MultiDimensionSpecTest, ExactMultiToFlatAndBack) {
+    MultiDimensionSpec spec;
+    spec.add_uniform(2)
+        .add_jagged(std::vector<Index>{3, 5});
 
-    // Direct assignment to verify conversion: (1, 2) -> 1*5 + 2 = 7
-    vd.at<int>(indices) = 42;
-    EXPECT_EQ(vd.at_1d<int>(7), 42);
+    EXPECT_EQ(spec.flat_index(std::vector<Index>{0, 0}), 0u);
+    EXPECT_EQ(spec.flat_index(std::vector<Index>{0, 2}), 2u);
+    EXPECT_EQ(spec.flat_index(std::vector<Index>{1, 0}), 3u);
+    EXPECT_EQ(spec.flat_index(std::vector<Index>{1, 4}), 7u);
+
+    EXPECT_EQ(spec.multi_index(0), (std::vector<Index>{0, 0}));
+    EXPECT_EQ(spec.multi_index(2), (std::vector<Index>{0, 2}));
+    EXPECT_EQ(spec.multi_index(3), (std::vector<Index>{1, 0}));
+    EXPECT_EQ(spec.multi_index(7), (std::vector<Index>{1, 4}));
 }
 
-// ---------------------------------------------------------------------------
-// VariableData — 3D shape
-// ---------------------------------------------------------------------------
-
-TEST(VariableDataTest, Create3DShape) {
-    VariableData vd = VariableData::Create<double>(std::vector<Index>{2, 3, 4}, 0.0);
-    EXPECT_EQ(vd.rank(), 3u);
-    EXPECT_EQ(vd.size(), 24u);  // 2*3*4
-    EXPECT_EQ(vd.shape_spec().dim_size(0), 2);
-    EXPECT_EQ(vd.shape_spec().dim_size(1), 3);
-    EXPECT_EQ(vd.shape_spec().dim_size(2), 4);
+TEST(MultiDimensionSpecTest, FlatToMultiOutOfRangeThrows) {
+    MultiDimensionSpec spec;
+    spec.add_uniform(2).add_jagged(std::vector<Index>{3, 5});
+    EXPECT_THROW(spec.multi_index(8), std::out_of_range);
 }
 
-TEST(VariableDataTest, Access3DElement) {
-    VariableData vd = VariableData::Create<int>(std::vector<Index>{2, 3, 4}, 0);
+TEST(MultiDimensionSpecTest, QueryWithWildcardAndIn) {
+    // Shape: [2, 3, 4] => flat = i*12 + j*4 + k
+    MultiDimensionSpec spec;
+    spec.add_uniform(2).add_uniform(3).add_uniform(4);
 
-    // Access via 3D indices: (i, j, k) -> i*(3*4) + j*4 + k
-    vd.at_3d<int>(0, 0, 0) = 1;      // 0
-    vd.at_3d<int>(0, 1, 2) = 6;      // 0*12 + 1*4 + 2 = 6
-    vd.at_3d<int>(1, 2, 3) = 23;     // 1*12 + 2*4 + 3 = 23
+    std::vector<MultiIndexSelector> query;
+    query.push_back(MultiIndexSelector::Any());
+    query.push_back(MultiIndexSelector::In(std::vector<Index>{1, 2}));
+    query.push_back(MultiIndexSelector::Equal(3));
 
-    EXPECT_EQ(vd.at_3d<int>(0, 0, 0), 1);
-    EXPECT_EQ(vd.at_3d<int>(0, 1, 2), 6);
-    EXPECT_EQ(vd.at_3d<int>(1, 2, 3), 23);
+    // Expected: (0,1,3)=7, (0,2,3)=11, (1,1,3)=19, (1,2,3)=23
+    std::vector<std::size_t> flat = spec.flat_indices(query);
+    ASSERT_EQ(flat.size(), 4u);
+    EXPECT_EQ(flat[0], 7u);
+    EXPECT_EQ(flat[1], 11u);
+    EXPECT_EQ(flat[2], 19u);
+    EXPECT_EQ(flat[3], 23u);
 }
 
-// ---------------------------------------------------------------------------
-// VariableData — exceptions
-// ---------------------------------------------------------------------------
+TEST(MultiDimensionSpecTest, QueryWithMinusOneConvenience) {
+    // [-1, 2, 1] for shape [2,3,4]
+    MultiDimensionSpec spec;
+    spec.add_uniform(2).add_uniform(3).add_uniform(4);
 
-TEST(VariableDataTest, ShapeMismatchThrows) {
-    CellSeries s = CellSeries::Scalars<int>(10, 0);
-    std::vector<Index> shape = {3, 5};  // 15 elements, but series has 10
-    EXPECT_THROW({
-        VariableData vd(shape, s);
-    }, std::invalid_argument);
+    std::vector<std::size_t> flat = spec.flat_indices(std::vector<Index>{-1, 2, 1});
+    ASSERT_EQ(flat.size(), 2u);
+    EXPECT_EQ(flat[0], 9u);   // (0,2,1)
+    EXPECT_EQ(flat[1], 21u);  // (1,2,1)
 }
 
-TEST(VariableDataTest, IndexCountMismatchThrows) {
-    VariableData vd = VariableData::Create<int>(std::vector<Index>{3, 5}, 0);
-    std::vector<Index> indices = {1};  // Only 1 index, but shape has rank 2
-    EXPECT_THROW(vd.at<int>(indices), std::invalid_argument);
+TEST(MultiDimensionSpecTest, InnermostGroupsUniformShape) {
+    MultiDimensionSpec spec;
+    spec.add_uniform(2).add_uniform(3).add_uniform(4);
+
+    const std::vector<std::size_t> levels = spec.level_node_counts();
+    ASSERT_EQ(levels[levels.size() - 2], 6u);
+
+    const std::vector<std::vector<std::size_t> > groups = spec.innermost_groups();
+    ASSERT_EQ(groups.size(), levels[levels.size() - 2]);
+
+    EXPECT_EQ(groups[0], (std::vector<std::size_t>{0, 1, 2, 3}));
+    EXPECT_EQ(groups[1], (std::vector<std::size_t>{4, 5, 6, 7}));
+    EXPECT_EQ(groups[5], (std::vector<std::size_t>{20, 21, 22, 23}));
 }
 
-TEST(VariableDataTest, IndexOutOfBoundsThrows) {
-    VariableData vd = VariableData::Create<int>(std::vector<Index>{3, 5}, 0);
-    std::vector<Index> indices = {3, 0};  // i=3 out of bounds [0,3)
-    EXPECT_THROW(vd.at<int>(indices), std::out_of_range);
+TEST(MultiDimensionSpecTest, InnermostGroupsJaggedShape) {
+    // [2, [2,1], 2, [1,2,3,4,5,6]] total 21
+    MultiDimensionSpec spec;
+    spec.add_uniform(2)
+        .add_jagged(std::vector<Index>{2, 1})
+        .add_uniform(2)
+        .add_jagged(std::vector<Index>{1, 2, 3, 4, 5, 6});
+
+    const std::vector<std::size_t> levels = spec.level_node_counts();
+    ASSERT_EQ(levels[levels.size() - 2], 6u);
+
+    const std::vector<std::vector<std::size_t> > groups = spec.innermost_groups();
+    ASSERT_EQ(groups.size(), levels[levels.size() - 2]);
+
+    EXPECT_EQ(groups[0], (std::vector<std::size_t>{0}));
+    EXPECT_EQ(groups[1], (std::vector<std::size_t>{1, 2}));
+    EXPECT_EQ(groups[2], (std::vector<std::size_t>{3, 4, 5}));
+    EXPECT_EQ(groups[3], (std::vector<std::size_t>{6, 7, 8, 9}));
+    EXPECT_EQ(groups[4], (std::vector<std::size_t>{10, 11, 12, 13, 14}));
+    EXPECT_EQ(groups[5], (std::vector<std::size_t>{15, 16, 17, 18, 19, 20}));
 }
 
-TEST(VariableDataTest, Access2DOutOfBoundsThrows) {
-    VariableData vd = VariableData::Create<int>(std::vector<Index>{3, 5}, 0);
-    EXPECT_THROW(vd.at_2d<int>(2, 5), std::out_of_range);  // j=5 out of bounds
-    EXPECT_THROW(vd.at_2d<int>(3, 0), std::out_of_range);  // i=3 out of bounds
+TEST(MultiDimensionSpecTest, ErgonomicApiAliasesWork) {
+    MultiDimensionSpec spec = MultiDimensionSpec::UniformShape(std::vector<Index>{2, 3, 4});
+
+    EXPECT_EQ(spec.ndim(), 3u);
+    EXPECT_FALSE(spec.empty());
+    EXPECT_EQ(spec.total_size(), 24u);
+    EXPECT_EQ(spec.at(std::vector<Index>{1, 2, 3}), 23u);
+
+    std::vector<std::size_t> selected =
+        spec.select_flat_indices(std::vector<Index>{-1, 1, 2});
+    ASSERT_EQ(selected.size(), 2u);
+    EXPECT_EQ(selected[0], 6u);
+    EXPECT_EQ(selected[1], 18u);
 }
 
-// ---------------------------------------------------------------------------
-// VariableData — fill and iterate
-// ---------------------------------------------------------------------------
+TEST(MultiDimensionSpecTest, QueryAgainstJaggedShape) {
+    // [2, [2,1], 2, [1,2,3,4,5,6]] total 21
+    MultiDimensionSpec spec;
+    spec.add_uniform(2)
+        .add_jagged(std::vector<Index>{2, 1})
+        .add_uniform(2)
+        .add_jagged(std::vector<Index>{1, 2, 3, 4, 5, 6});
 
-TEST(VariableDataTest, FillAllElements2D) {
-    VariableData vd = VariableData::Create<double>(std::vector<Index>{2, 3}, 0.0);
-    vd.series().fill<double>(5.5);
+    std::vector<MultiIndexSelector> query;
+    query.push_back(MultiIndexSelector::Equal(1));
+    query.push_back(MultiIndexSelector::Equal(0));
+    query.push_back(MultiIndexSelector::Any());
+    query.push_back(MultiIndexSelector::Equal(4));
 
-    for (Index i = 0; i < 2; ++i)
-        for (Index j = 0; j < 3; ++j)
-            EXPECT_DOUBLE_EQ(vd.at_2d<double>(i, j), 5.5);
+    // Matches: (1,0,0,4)=14 and (1,0,1,4)=19
+    std::vector<std::size_t> flat = spec.flat_indices(query);
+    ASSERT_EQ(flat.size(), 2u);
+    EXPECT_EQ(flat[0], 14u);
+    EXPECT_EQ(flat[1], 19u);
 }
 
-TEST(VariableDataTest, CreateWithInitialValues) {
-    VariableData vd = VariableData::Create<int>(std::vector<Index>{2, 3}, 42);
+TEST(MultiDimensionSpecTest, JaggedParentCountMismatchThrows) {
+    MultiDimensionSpec spec;
+    spec.add_uniform(3).add_jagged(std::vector<Index>{2, 4});
 
-    for (Index i = 0; i < 2; ++i)
-        for (Index j = 0; j < 3; ++j)
-            EXPECT_EQ(vd.at_2d<int>(i, j), 42);
+    EXPECT_THROW(spec.validate_definition(), std::invalid_argument);
+    EXPECT_THROW(spec.total_cell_count(), std::invalid_argument);
+    EXPECT_THROW(spec.build_layout(), std::invalid_argument);
 }
 
-// ---------------------------------------------------------------------------
-// VariableData — underlying series access
-// ---------------------------------------------------------------------------
+TEST(VariableDataTest, WrapperDelegatesMappingAndSeries) {
+    MultiDimensionSpec spec;
+    spec.add_uniform(2).add_uniform(3).add_uniform(4);  // total 24
 
-TEST(VariableDataTest, AccessUnderlyingSeries) {
-    VariableData vd = VariableData::Create<double>(std::vector<Index>{2, 3}, 0.0);
-    vd.at_2d<double>(0, 1) = 7.5;
+    CellSeries s = CellSeries::Scalars<int>(24, 0);
+    VariableData vd(spec, s);
 
-    const CellSeries& s = vd.series();
-    EXPECT_EQ(s.size(), 6u);
-    EXPECT_DOUBLE_EQ(s.scalar_at<double>(1), 7.5);
+    EXPECT_EQ(vd.size(), 24u);
+
+    std::size_t flat = vd.flat_index(std::vector<Index>{1, 2, 3});
+    EXPECT_EQ(flat, 23u);
+
+    vd.series().scalar_at<int>(flat) = 99;
+    EXPECT_EQ(vd.series().scalar_at<int>(23), 99);
+    EXPECT_EQ(vd.multi_index(23), (std::vector<Index>{1, 2, 3}));
+
+    std::vector<std::size_t> selected = vd.flat_indices(std::vector<Index>{-1, 1, 2});
+    ASSERT_EQ(selected.size(), 2u);
+    EXPECT_EQ(selected[0], 6u);
+    EXPECT_EQ(selected[1], 18u);
 }
 
-TEST(VariableDataTest, MutableSeriesAccess) {
-    VariableData vd = VariableData::Create<int>(std::vector<Index>{2, 3}, 0);
-    vd.series().scalar_at<int>(3) = 99;
+TEST(VariableDataTest, WrapperShapeMismatchThrows) {
+    MultiDimensionSpec spec;
+    spec.add_uniform(2).add_uniform(2);  // total 4
 
-    // Verify via multi-dimensional access: index 3 = (1, 0)
-    EXPECT_EQ(vd.at_2d<int>(1, 0), 99);
+    CellSeries bad = CellSeries::Scalars<int>(3, 0);
+    EXPECT_THROW(VariableData(spec, bad), std::invalid_argument);
 }

@@ -46,7 +46,7 @@ TEST(ScalarTest, AppendGrowsSize) {
 
 TEST(ScalarTest, FromVector) {
     std::vector<int> raw = {10, 20, 30};
-    CellSeries ids = CellSeries::From<int>(raw);
+    CellSeries ids = CellSeries::ScalarsFrom<int>(raw);
     ASSERT_EQ(ids.size(), 3u);
     EXPECT_EQ(ids.scalar_at<int>(0), 10);
     EXPECT_EQ(ids.scalar_at<int>(1), 20);
@@ -99,7 +99,7 @@ TEST(ScalarTest, StringDtype) {
 // ---------------------------------------------------------------------------
 
 TEST(ScalarSliceTest, Head) {
-    CellSeries s = CellSeries::From<int>(std::vector<int>{1, 2, 3, 4, 5});
+    CellSeries s = CellSeries::ScalarsFrom<int>(std::vector<int>{1, 2, 3, 4, 5});
     CellSeries h = s.head(3);
     ASSERT_EQ(h.size(), 3u);
     EXPECT_EQ(h.scalar_at<int>(0), 1);
@@ -107,7 +107,7 @@ TEST(ScalarSliceTest, Head) {
 }
 
 TEST(ScalarSliceTest, Tail) {
-    CellSeries s = CellSeries::From<int>(std::vector<int>{1, 2, 3, 4, 5});
+    CellSeries s = CellSeries::ScalarsFrom<int>(std::vector<int>{1, 2, 3, 4, 5});
     CellSeries t = s.tail(2);
     ASSERT_EQ(t.size(), 2u);
     EXPECT_EQ(t.scalar_at<int>(0), 4);
@@ -115,7 +115,7 @@ TEST(ScalarSliceTest, Tail) {
 }
 
 TEST(ScalarSliceTest, IlocMiddle) {
-    CellSeries s = CellSeries::From<int>(std::vector<int>{10, 20, 30, 40, 50});
+    CellSeries s = CellSeries::ScalarsFrom<int>(std::vector<int>{10, 20, 30, 40, 50});
     CellSeries mid = s.iloc(1, 4);
     ASSERT_EQ(mid.size(), 3u);
     EXPECT_EQ(mid.scalar_at<int>(0), 20);
@@ -123,20 +123,20 @@ TEST(ScalarSliceTest, IlocMiddle) {
 }
 
 TEST(ScalarSliceTest, IlocEmptyRange) {
-    CellSeries s = CellSeries::From<int>(std::vector<int>{1, 2, 3});
+    CellSeries s = CellSeries::ScalarsFrom<int>(std::vector<int>{1, 2, 3});
     CellSeries empty = s.iloc(2, 2);
     EXPECT_EQ(empty.size(), 0u);
     EXPECT_TRUE(empty.empty());
 }
 
 TEST(ScalarSliceTest, HeadMoreThanSize) {
-    CellSeries s = CellSeries::From<int>(std::vector<int>{1, 2});
+    CellSeries s = CellSeries::ScalarsFrom<int>(std::vector<int>{1, 2});
     CellSeries h = s.head(10);
     EXPECT_EQ(h.size(), 2u);
 }
 
 TEST(ScalarSliceTest, TailMoreThanSize) {
-    CellSeries s = CellSeries::From<int>(std::vector<int>{1, 2});
+    CellSeries s = CellSeries::ScalarsFrom<int>(std::vector<int>{1, 2});
     CellSeries t = s.tail(10);
     EXPECT_EQ(t.size(), 2u);
 }
@@ -298,6 +298,63 @@ TEST(VectorTest, StringVectorFill) {
     EXPECT_EQ(tags.vector_at<std::string>(1)(2), "n/a");
 }
 
+TEST(VectorTest, FromFlatDataVector) {
+    CellSeries vecs = CellSeries::VectorsFromFlat<double>(3, std::vector<double>{1, 2, 3, 4, 5, 6});
+    ASSERT_EQ(vecs.size(), 2u);
+    EXPECT_EQ(vecs.values_per_row(), 3);
+    EXPECT_DOUBLE_EQ(vecs.vector_at<double>(0)(0), 1.0);
+    EXPECT_DOUBLE_EQ(vecs.vector_at<double>(0)(2), 3.0);
+    EXPECT_DOUBLE_EQ(vecs.vector_at<double>(1)(1), 5.0);
+}
+
+TEST(VectorTest, FromPointerAndLength) {
+    const int raw[] = {7, 8, 9, 10};
+    CellSeries vecs = CellSeries::VectorsFromFlat<int>(2, raw, 4);
+    ASSERT_EQ(vecs.size(), 2u);
+    EXPECT_EQ(vecs.vector_at<int>(0)(0), 7);
+    EXPECT_EQ(vecs.vector_at<int>(0)(1), 8);
+    EXPECT_EQ(vecs.vector_at<int>(1)(0), 9);
+    EXPECT_EQ(vecs.vector_at<int>(1)(1), 10);
+}
+
+TEST(VectorTest, FromRowsNumeric) {
+    std::vector<Eigen::VectorXd> rows(2, Eigen::VectorXd(3));
+    rows[0] << 1.0, 2.0, 3.0;
+    rows[1] << 4.0, 5.0, 6.0;
+
+    CellSeries vecs = CellSeries::VectorsFromRows<double>(rows);
+    ASSERT_EQ(vecs.size(), 2u);
+    EXPECT_EQ(vecs.values_per_row(), 3);
+    EXPECT_DOUBLE_EQ(vecs.vector_at<double>(0)(0), 1.0);
+    EXPECT_DOUBLE_EQ(vecs.vector_at<double>(1)(2), 6.0);
+}
+
+TEST(VectorTest, FromRowsString) {
+    std::vector<Eigen::Tensor<std::string, 1> > rows(2, Eigen::Tensor<std::string, 1>(2));
+    rows[0](0) = "a";
+    rows[0](1) = "b";
+    rows[1](0) = "c";
+    rows[1](1) = "d";
+
+    CellSeries vecs = CellSeries::VectorsFromRows(rows);
+    ASSERT_EQ(vecs.size(), 2u);
+    EXPECT_EQ(vecs.vector_at<std::string>(0)(1), "b");
+    EXPECT_EQ(vecs.vector_at<std::string>(1)(0), "c");
+}
+
+TEST(VectorTest, DynamicAppendWithoutInitialRowCount) {
+    CellSeries vecs = CellSeries::VectorsWithZeroRows<double>(3);
+    EXPECT_EQ(vecs.size(), 0u);
+
+    Eigen::Vector3d a(1.0, 2.0, 3.0);
+    Eigen::Vector3d b(4.0, 5.0, 6.0);
+    vecs.append_vector<double>(a);
+    vecs.append_vector<double>(b);
+
+    ASSERT_EQ(vecs.size(), 2u);
+    EXPECT_DOUBLE_EQ(vecs.vector_at<double>(1)(2), 6.0);
+}
+
 TEST(VectorTest, StringElementAccessor) {
     CellSeries tags = CellSeries::Vectors<std::string>(1, 2);
     tags.vector_at<std::string>(0)(0) = "hello";
@@ -342,6 +399,15 @@ TEST(VectorExceptionTest, ElementAccessorOutOfRange) {
 TEST(VectorExceptionTest, StringElementAccessorOutOfRange) {
     CellSeries tags = CellSeries::Vectors<std::string>(1, 2);
     EXPECT_THROW(tags.vector_elem_string(0, 2), std::out_of_range);
+}
+
+TEST(VectorExceptionTest, FromRowsMismatchedWidthThrows) {
+    std::vector<Eigen::VectorXd> rows;
+    rows.push_back(Eigen::VectorXd(3));
+    rows.push_back(Eigen::VectorXd(2));
+    rows[0] << 1.0, 2.0, 3.0;
+    rows[1] << 4.0, 5.0;
+    EXPECT_THROW(CellSeries::VectorsFromRows<double>(rows), std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------
@@ -443,6 +509,75 @@ TEST(MatrixTest, IlocPreservesContent) {
     EXPECT_DOUBLE_EQ(sub.matrix_at<double>(0)(0, 0), 1.0);
 }
 
+TEST(MatrixTest, FromFlatDataVector) {
+    CellSeries mats = CellSeries::MatricesFromFlat<double>(
+        2,
+        2,
+        std::vector<double>{1, 2, 3, 4, 5, 6, 7, 8});
+
+    ASSERT_EQ(mats.size(), 2u);
+    EXPECT_DOUBLE_EQ(mats.matrix_at<double>(0)(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(mats.matrix_at<double>(0)(1, 1), 4.0);
+    EXPECT_DOUBLE_EQ(mats.matrix_at<double>(1)(0, 0), 5.0);
+    EXPECT_DOUBLE_EQ(mats.matrix_at<double>(1)(1, 1), 8.0);
+}
+
+TEST(MatrixTest, FromPointerAndLength) {
+    const int raw[] = {1, 2, 3, 4, 5, 6};
+    CellSeries mats = CellSeries::MatricesFromFlat<int>(1, 3, raw, 6);
+
+    ASSERT_EQ(mats.size(), 2u);
+    EXPECT_EQ(mats.matrix_at<int>(0)(0, 0), 1);
+    EXPECT_EQ(mats.matrix_at<int>(0)(0, 2), 3);
+    EXPECT_EQ(mats.matrix_at<int>(1)(0, 0), 4);
+    EXPECT_EQ(mats.matrix_at<int>(1)(0, 2), 6);
+}
+
+TEST(MatrixTest, FromRowsNumeric) {
+    std::vector<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> > rows(
+        2,
+        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>(2, 2));
+    rows[0] << 1.0, 2.0, 3.0, 4.0;
+    rows[1] << 5.0, 6.0, 7.0, 8.0;
+
+    CellSeries mats = CellSeries::MatricesFromRows<double>(rows);
+    ASSERT_EQ(mats.size(), 2u);
+    EXPECT_DOUBLE_EQ(mats.matrix_at<double>(0)(1, 1), 4.0);
+    EXPECT_DOUBLE_EQ(mats.matrix_at<double>(1)(0, 0), 5.0);
+}
+
+TEST(MatrixTest, FromRowsString) {
+    std::vector<Eigen::Tensor<std::string, 2> > rows(2, Eigen::Tensor<std::string, 2>(2, 2));
+    rows[0](0, 0) = "w";
+    rows[0](0, 1) = "x";
+    rows[0](1, 0) = "y";
+    rows[0](1, 1) = "z";
+    rows[1](0, 0) = "a";
+    rows[1](0, 1) = "b";
+    rows[1](1, 0) = "c";
+    rows[1](1, 1) = "d";
+
+    CellSeries mats = CellSeries::MatricesFromRows(rows);
+    ASSERT_EQ(mats.size(), 2u);
+    EXPECT_EQ(mats.matrix_at<std::string>(0)(1, 0), "y");
+    EXPECT_EQ(mats.matrix_at<std::string>(1)(0, 1), "b");
+}
+
+TEST(MatrixTest, DynamicAppendWithoutInitialRowCount) {
+    CellSeries mats = CellSeries::MatricesWithZeroRows<double>(2, 2);
+    EXPECT_EQ(mats.size(), 0u);
+
+    Eigen::Matrix2d a;
+    a << 1, 2, 3, 4;
+    Eigen::Matrix2d b;
+    b << 5, 6, 7, 8;
+    mats.append_matrix<double>(a);
+    mats.append_matrix<double>(b);
+
+    ASSERT_EQ(mats.size(), 2u);
+    EXPECT_DOUBLE_EQ(mats.matrix_at<double>(1)(1, 0), 7.0);
+}
+
 // ---------------------------------------------------------------------------
 // Matrix — out-of-range and size mismatch
 // ---------------------------------------------------------------------------
@@ -469,6 +604,25 @@ TEST(MatrixExceptionTest, ElementAccessorOutOfRange) {
 TEST(MatrixExceptionTest, StringElementAccessorOutOfRange) {
     CellSeries strmat = CellSeries::Matrices<std::string>(1, 2, 2, std::string("x"));
     EXPECT_THROW(strmat.matrix_elem_string(0, 2, 0), std::out_of_range);
+}
+
+TEST(MatrixExceptionTest, FromRowsMismatchedShapeThrows) {
+    std::vector<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> > rows;
+    rows.push_back(Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>(2, 2));
+    rows.push_back(Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>(2, 3));
+    rows[0] << 1.0, 2.0, 3.0, 4.0;
+    rows[1] << 5.0, 6.0, 7.0, 8.0, 9.0, 10.0;
+    EXPECT_THROW(CellSeries::MatricesFromRows<double>(rows), std::invalid_argument);
+}
+
+TEST(FromExceptionTest, VectorPointerLengthMismatchThrows) {
+    const double raw[] = {1.0, 2.0, 3.0, 4.0, 5.0};
+    EXPECT_THROW(CellSeries::VectorsFromFlat<double>(2, raw, 5), std::invalid_argument);
+}
+
+TEST(FromExceptionTest, MatrixPointerLengthMismatchThrows) {
+    const double raw[] = {1.0, 2.0, 3.0, 4.0, 5.0};
+    EXPECT_THROW(CellSeries::MatricesFromFlat<double>(2, 2, raw, 5), std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------
@@ -525,7 +679,7 @@ TEST(CellTest, AppendMismatchedCellThrows) {
 }
 
 TEST(CellTest, CellAtRoundtripScalar) {
-    CellSeries s = CellSeries::From<int>(std::vector<int>{1, 2, 3});
+    CellSeries s = CellSeries::ScalarsFrom<int>(std::vector<int>{1, 2, 3});
     Cell c = s.cell_at(1);
     EXPECT_EQ(c.kind(), CellKind::kScalar);
     EXPECT_EQ(c.dtype(), DTypeTag::kInteger);
@@ -571,7 +725,7 @@ TEST(IteratorTest, MutableIteratorCollectsValues) {
 }
 
 TEST(IteratorTest, ConstIteratorCollectsValues) {
-    CellSeries s = CellSeries::From<int>(std::vector<int>{10, 20, 30});
+    CellSeries s = CellSeries::ScalarsFrom<int>(std::vector<int>{10, 20, 30});
     const CellSeries& cs = s;
 
     std::vector<int> values;
