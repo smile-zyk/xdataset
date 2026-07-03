@@ -156,6 +156,11 @@ struct MultiIndexLevelLayout {
 
 class MultiDimensionSpec {
 public:
+    struct ProjectedSelectionResult {
+        std::vector<std::size_t> flat_indices;
+        std::vector<std::vector<Index> > projected_multi_indices;
+    };
+
     MultiDimensionSpec()
         : cache_valid_(false), cache_has_jagged_(false) {}
 
@@ -387,6 +392,61 @@ public:
     std::vector<std::size_t> select_flat_indices(
         const std::vector<Index>& selectors_with_any) const {
         return flat_indices(selectors_with_any);
+    }
+
+    ProjectedSelectionResult select_with_projection(
+        const std::vector<MultiIndexSelector>& selectors,
+        const std::vector<std::size_t>& retained_dims) const {
+        if (selectors.size() != dims_.size()) {
+            throw std::invalid_argument("number of selectors must match rank");
+        }
+
+        std::vector<Index> projected_dim_positions(selectors.size(), Index(-1));
+        for (std::size_t i = 0; i < retained_dims.size(); ++i) {
+            const std::size_t dim = retained_dims[i];
+            if (dim >= selectors.size()) {
+                throw std::invalid_argument("retained dimension out of range");
+            }
+            if (projected_dim_positions[dim] != Index(-1)) {
+                throw std::invalid_argument("retained dimensions must be unique");
+            }
+            projected_dim_positions[dim] = static_cast<Index>(i);
+        }
+
+        ProjectedSelectionResult out;
+        if (dims_.empty()) {
+            out.flat_indices.push_back(0);
+            out.projected_multi_indices.push_back(std::vector<Index>());
+            return out;
+        }
+
+        ensure_cache();
+        if (!cache_has_jagged_) {
+            const std::size_t estimate = estimate_uniform_hits(selectors);
+            out.flat_indices.reserve(estimate);
+            out.projected_multi_indices.reserve(estimate);
+        }
+
+        std::vector<Index> projected_index(retained_dims.size(), 0);
+        if (!cache_has_jagged_) {
+            collect_uniform_hits_with_projection(
+                selectors,
+                projected_dim_positions,
+                0,
+                0,
+                &projected_index,
+                &out);
+            return out;
+        }
+
+        collect_jagged_hits_with_projection(
+            selectors,
+            projected_dim_positions,
+            0,
+            0,
+            &projected_index,
+            &out);
+        return out;
     }
 
 private:
@@ -650,6 +710,196 @@ private:
                 out->push_back(next_node);
             } else {
                 collect_jagged_hits(selectors, dim + 1, next_node, out);
+            }
+        }
+    }
+
+    void collect_uniform_hits_with_projection(
+        const std::vector<MultiIndexSelector>& selectors,
+        const std::vector<Index>& projected_dim_positions,
+        std::size_t dim,
+        std::size_t flat_prefix,
+        std::vector<Index>* projected_index,
+        ProjectedSelectionResult* out) const {
+        const std::size_t stride = cached_uniform_strides_[dim];
+        const std::size_t dim_size = cached_uniform_sizes_[dim];
+        const MultiIndexSelector& selector = selectors[dim];
+        const bool is_last_dim = (dim + 1 == selectors.size());
+        const Index projected_slot = projected_dim_positions[dim];
+
+        if (selector.is_any()) {
+            for (std::size_t idx = 0; idx < dim_size; ++idx) {
+                if (projected_slot >= 0) {
+                    (*projected_index)[static_cast<std::size_t>(projected_slot)] =
+                        static_cast<Index>(idx);
+                }
+
+                const std::size_t next_flat = checked_add(
+                    flat_prefix,
+                    checked_mul(idx, stride, "uniform flat index overflow"),
+                    "uniform flat index overflow");
+                if (is_last_dim) {
+                    out->flat_indices.push_back(next_flat);
+                    out->projected_multi_indices.push_back(*projected_index);
+                } else {
+                    collect_uniform_hits_with_projection(
+                        selectors,
+                        projected_dim_positions,
+                        dim + 1,
+                        next_flat,
+                        projected_index,
+                        out);
+                }
+            }
+            return;
+        }
+
+        if (selector.is_equal()) {
+            const Index idx = selector.equal_value();
+            if (idx < 0 || static_cast<std::size_t>(idx) >= dim_size) {
+                return;
+            }
+
+            if (projected_slot >= 0) {
+                (*projected_index)[static_cast<std::size_t>(projected_slot)] = idx;
+            }
+
+            const std::size_t next_flat = checked_add(
+                flat_prefix,
+                checked_mul(static_cast<std::size_t>(idx), stride, "uniform flat index overflow"),
+                "uniform flat index overflow");
+            if (is_last_dim) {
+                out->flat_indices.push_back(next_flat);
+                out->projected_multi_indices.push_back(*projected_index);
+            } else {
+                collect_uniform_hits_with_projection(
+                    selectors,
+                    projected_dim_positions,
+                    dim + 1,
+                    next_flat,
+                    projected_index,
+                    out);
+            }
+            return;
+        }
+
+        const std::vector<Index>& values = selector.in_values();
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const Index idx = values[i];
+            if (idx < 0 || static_cast<std::size_t>(idx) >= dim_size) {
+                continue;
+            }
+
+            if (projected_slot >= 0) {
+                (*projected_index)[static_cast<std::size_t>(projected_slot)] = static_cast<Index>(i);
+            }
+
+            const std::size_t next_flat = checked_add(
+                flat_prefix,
+                checked_mul(static_cast<std::size_t>(idx), stride, "uniform flat index overflow"),
+                "uniform flat index overflow");
+            if (is_last_dim) {
+                out->flat_indices.push_back(next_flat);
+                out->projected_multi_indices.push_back(*projected_index);
+            } else {
+                collect_uniform_hits_with_projection(
+                    selectors,
+                    projected_dim_positions,
+                    dim + 1,
+                    next_flat,
+                    projected_index,
+                    out);
+            }
+        }
+    }
+
+    void collect_jagged_hits_with_projection(
+        const std::vector<MultiIndexSelector>& selectors,
+        const std::vector<Index>& projected_dim_positions,
+        std::size_t dim,
+        std::size_t parent_index,
+        std::vector<Index>* projected_index,
+        ProjectedSelectionResult* out) const {
+        const MultiIndexLevelLayout& level = cached_layout_[dim];
+        const std::size_t child_base = level.child_prefixes[parent_index];
+        const std::size_t child_count = level.child_counts[parent_index];
+        const MultiIndexSelector& selector = selectors[dim];
+        const bool is_last_dim = (dim + 1 == selectors.size());
+        const Index projected_slot = projected_dim_positions[dim];
+
+        if (selector.is_any()) {
+            for (std::size_t child = 0; child < child_count; ++child) {
+                if (projected_slot >= 0) {
+                    (*projected_index)[static_cast<std::size_t>(projected_slot)] =
+                        static_cast<Index>(child);
+                }
+
+                const std::size_t next_node = child_base + child;
+                if (is_last_dim) {
+                    out->flat_indices.push_back(next_node);
+                    out->projected_multi_indices.push_back(*projected_index);
+                } else {
+                    collect_jagged_hits_with_projection(
+                        selectors,
+                        projected_dim_positions,
+                        dim + 1,
+                        next_node,
+                        projected_index,
+                        out);
+                }
+            }
+            return;
+        }
+
+        if (selector.is_equal()) {
+            const Index exact = selector.equal_value();
+            if (exact < 0 || static_cast<std::size_t>(exact) >= child_count) {
+                return;
+            }
+
+            if (projected_slot >= 0) {
+                (*projected_index)[static_cast<std::size_t>(projected_slot)] = exact;
+            }
+
+            const std::size_t next_node = child_base + static_cast<std::size_t>(exact);
+            if (is_last_dim) {
+                out->flat_indices.push_back(next_node);
+                out->projected_multi_indices.push_back(*projected_index);
+            } else {
+                collect_jagged_hits_with_projection(
+                    selectors,
+                    projected_dim_positions,
+                    dim + 1,
+                    next_node,
+                    projected_index,
+                    out);
+            }
+            return;
+        }
+
+        const std::vector<Index>& one_of = selector.in_values();
+        for (std::size_t i = 0; i < one_of.size(); ++i) {
+            const Index selected = one_of[i];
+            if (selected < 0 || static_cast<std::size_t>(selected) >= child_count) {
+                continue;
+            }
+
+            if (projected_slot >= 0) {
+                (*projected_index)[static_cast<std::size_t>(projected_slot)] = static_cast<Index>(i);
+            }
+
+            const std::size_t next_node = child_base + static_cast<std::size_t>(selected);
+            if (is_last_dim) {
+                out->flat_indices.push_back(next_node);
+                out->projected_multi_indices.push_back(*projected_index);
+            } else {
+                collect_jagged_hits_with_projection(
+                    selectors,
+                    projected_dim_positions,
+                    dim + 1,
+                    next_node,
+                    projected_index,
+                    out);
             }
         }
     }

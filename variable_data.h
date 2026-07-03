@@ -21,6 +21,11 @@ public:
         validate_shape();
     }
 
+    VariableData(MultiDimensionSpec&& spec, CellSeries&& series)
+        : spec_(std::move(spec)), series_(std::move(series)) {
+        validate_shape();
+    }
+
     const MultiDimensionSpec& multi_dimension_spec() const { return spec_; }
 
     const CellSeries& series() const { return series_; }
@@ -45,22 +50,20 @@ public:
     }
 
     VariableData select(const std::vector<MultiIndexSelector>& selectors) const {
-        const std::vector<std::size_t> selected_flats = spec_.flat_indices(selectors);
         const std::vector<std::size_t> retained_dims = retained_dimension_positions(selectors);
+        const MultiDimensionSpec::ProjectedSelectionResult selection =
+            spec_.select_with_projection(selectors, retained_dims);
 
         CellSeries selected_series(series_.cell_kind(), series_.dtype(), series_.cell_shape());
-        std::vector<std::vector<Index> > projected_multi_indices;
-        projected_multi_indices.reserve(selected_flats.size());
+        selected_series.resize(selection.flat_indices.size());
 
-        for (std::size_t i = 0; i < selected_flats.size(); ++i) {
-            const std::size_t flat = selected_flats[i];
-            selected_series.append(series_.cell_at(flat));
-            projected_multi_indices.push_back(project_projected_index(
-                spec_.multi_index(flat), selectors, retained_dims));
+        for (std::size_t i = 0; i < selection.flat_indices.size(); ++i) {
+            selected_series.assign_from(series_, selection.flat_indices[i], i);
         }
 
-        return VariableData(build_projected_spec(projected_multi_indices, retained_dims.size()),
-                            selected_series);
+        return VariableData(
+            build_projected_spec(selection.projected_multi_indices, retained_dims.size()),
+            std::move(selected_series));
     }
 
 private:
@@ -74,32 +77,6 @@ private:
             }
         }
         return retained_dims;
-    }
-
-    static std::vector<Index> project_projected_index(
-        const std::vector<Index>& original_index,
-        const std::vector<MultiIndexSelector>& selectors,
-        const std::vector<std::size_t>& retained_dims) {
-        std::vector<Index> projected_index;
-        projected_index.reserve(retained_dims.size());
-
-        for (std::size_t i = 0; i < retained_dims.size(); ++i) {
-            const std::size_t dim = retained_dims[i];
-            const MultiIndexSelector& selector = selectors[dim];
-            const Index coord = original_index[dim];
-
-            if (selector.is_any()) {
-                projected_index.push_back(coord);
-                continue;
-            }
-
-            const std::vector<Index>& values = selector.in_values();
-            const std::vector<Index>::const_iterator it =
-                std::lower_bound(values.begin(), values.end(), coord);
-            projected_index.push_back(static_cast<Index>(it - values.begin()));
-        }
-
-        return projected_index;
     }
 
     static MultiDimensionSpec build_projected_spec(

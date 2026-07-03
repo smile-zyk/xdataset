@@ -1177,6 +1177,41 @@ public:
         else append_matrix(src.matrix_at<std::string>(row));
     }
 
+    void assign_from(const CellSeries& src, std::size_t src_row, std::size_t dst_row) {
+        if (src.kind_ != kind_ || src.dtype_ != dtype_ || src.shape_ != shape_) throw std::bad_cast();
+        if (src_row >= src.size() || dst_row >= size()) throw std::out_of_range("row index out of range");
+
+        if (kind_ == CellKind::kScalar) {
+            if (dtype_ == DTypeTag::kReal) scalar_at<double>(dst_row) = src.scalar_at<double>(src_row);
+            else if (dtype_ == DTypeTag::kInteger) scalar_at<int>(dst_row) = src.scalar_at<int>(src_row);
+            else if (dtype_ == DTypeTag::kComplex) {
+                scalar_at<std::complex<double> >(dst_row) = src.scalar_at<std::complex<double> >(src_row);
+            } else {
+                scalar_at<std::string>(dst_row) = src.scalar_at<std::string>(src_row);
+            }
+            return;
+        }
+
+        if (kind_ == CellKind::kVector) {
+            if (dtype_ == DTypeTag::kReal) vector_at<double>(dst_row) = src.vector_at<double>(src_row);
+            else if (dtype_ == DTypeTag::kInteger) vector_at<int>(dst_row) = src.vector_at<int>(src_row);
+            else if (dtype_ == DTypeTag::kComplex) {
+                vector_at<std::complex<double> >(dst_row) = src.vector_at<std::complex<double> >(src_row);
+            } else {
+                vector_at<std::string>(dst_row) = src.vector_at<std::string>(src_row);
+            }
+            return;
+        }
+
+        if (dtype_ == DTypeTag::kReal) matrix_at<double>(dst_row) = src.matrix_at<double>(src_row);
+        else if (dtype_ == DTypeTag::kInteger) matrix_at<int>(dst_row) = src.matrix_at<int>(src_row);
+        else if (dtype_ == DTypeTag::kComplex) {
+            matrix_at<std::complex<double> >(dst_row) = src.matrix_at<std::complex<double> >(src_row);
+        } else {
+            matrix_at<std::string>(dst_row) = src.matrix_at<std::string>(src_row);
+        }
+    }
+
     void append(const Cell& cell) {
         if (!cell.has_value()) throw std::runtime_error("Cell has no value");
         if (cell.kind() != kind_ || cell.dtype() != dtype_ || cell.cell_shape() != shape_) throw std::bad_cast();
