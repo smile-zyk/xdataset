@@ -190,6 +190,39 @@ TEST(MultiDimensionSpecTest, QueryAgainstJaggedShape) {
     EXPECT_EQ(flat[1], 19u);
 }
 
+TEST(MultiDimensionSpecTest, SelectWithProjectionComplexCase) {
+    // Shape: [2,3,4]
+    // Query:
+    //  d0 = In([1,0]) -> normalized to [0,1]
+    //  d1 = Equal(2)
+    //  d2 = In([3,1]) -> normalized to [1,3]
+    // Retained order is intentionally [2,0] to verify remapping.
+    MultiDimensionSpec spec;
+    spec.add_uniform(2).add_uniform(3).add_uniform(4);
+
+    std::vector<MultiIndexSelector> query;
+    query.push_back(MultiIndexSelector::In(std::vector<Index>{1, 0}));
+    query.push_back(MultiIndexSelector::Equal(2));
+    query.push_back(MultiIndexSelector::In(std::vector<Index>{3, 1}));
+
+    const std::vector<std::size_t> retained_dims = std::vector<std::size_t>{2, 0};
+    const MultiDimensionSpec::ProjectedSelectionResult result =
+        spec.select_with_projection(query, retained_dims);
+
+    ASSERT_EQ(result.flat_indices.size(), 4u);
+    ASSERT_EQ(result.projected_multi_indices.size(), 4u);
+
+    EXPECT_EQ(result.flat_indices[0], 9u);   // (0,2,1)
+    EXPECT_EQ(result.flat_indices[1], 11u);  // (0,2,3)
+    EXPECT_EQ(result.flat_indices[2], 21u);  // (1,2,1)
+    EXPECT_EQ(result.flat_indices[3], 23u);  // (1,2,3)
+
+    EXPECT_EQ(result.projected_multi_indices[0], (std::vector<Index>{0, 0}));
+    EXPECT_EQ(result.projected_multi_indices[1], (std::vector<Index>{1, 0}));
+    EXPECT_EQ(result.projected_multi_indices[2], (std::vector<Index>{0, 1}));
+    EXPECT_EQ(result.projected_multi_indices[3], (std::vector<Index>{1, 1}));
+}
+
 TEST(MultiDimensionSpecTest, JaggedParentCountMismatchThrows) {
     MultiDimensionSpec spec;
     spec.add_uniform(3).add_jagged(std::vector<Index>{2, 4});

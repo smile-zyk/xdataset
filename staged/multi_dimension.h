@@ -401,17 +401,8 @@ public:
             throw std::invalid_argument("number of selectors must match rank");
         }
 
-        std::vector<Index> projected_dim_positions(selectors.size(), Index(-1));
-        for (std::size_t i = 0; i < retained_dims.size(); ++i) {
-            const std::size_t dim = retained_dims[i];
-            if (dim >= selectors.size()) {
-                throw std::invalid_argument("retained dimension out of range");
-            }
-            if (projected_dim_positions[dim] != Index(-1)) {
-                throw std::invalid_argument("retained dimensions must be unique");
-            }
-            projected_dim_positions[dim] = static_cast<Index>(i);
-        }
+        const std::vector<Index> projected_dim_positions =
+            build_projected_dim_positions(selectors.size(), retained_dims);
 
         ProjectedSelectionResult out;
         if (dims_.empty()) {
@@ -422,11 +413,11 @@ public:
 
         ensure_cache();
         if (!cache_has_jagged_) {
-            const std::size_t estimate = estimate_uniform_hits(selectors);
-            out.flat_indices.reserve(estimate);
-            out.projected_multi_indices.reserve(estimate);
+            reserve_projected_result_for_uniform(selectors, &out);
         }
 
+        // The current DFS path's projected coordinates. At each leaf we snapshot it
+        // into out.projected_multi_indices alongside the matched flat index.
         std::vector<Index> projected_index(retained_dims.size(), 0);
         if (!cache_has_jagged_) {
             collect_uniform_hits_with_projection(
@@ -469,6 +460,39 @@ private:
             throw std::overflow_error(context_message);
         }
         return left * right;
+    }
+
+    static void write_projected_coordinate(Index projected_slot,
+                                           Index value,
+                                           std::vector<Index>* projected_index) {
+        if (projected_slot >= 0) {
+            (*projected_index)[static_cast<std::size_t>(projected_slot)] = value;
+        }
+    }
+
+    static std::vector<Index> build_projected_dim_positions(
+        std::size_t selector_count,
+        const std::vector<std::size_t>& retained_dims) {
+        std::vector<Index> projected_dim_positions(selector_count, Index(-1));
+        for (std::size_t i = 0; i < retained_dims.size(); ++i) {
+            const std::size_t dim = retained_dims[i];
+            if (dim >= selector_count) {
+                throw std::invalid_argument("retained dimension out of range");
+            }
+            if (projected_dim_positions[dim] != Index(-1)) {
+                throw std::invalid_argument("retained dimensions must be unique");
+            }
+            projected_dim_positions[dim] = static_cast<Index>(i);
+        }
+        return projected_dim_positions;
+    }
+
+    void reserve_projected_result_for_uniform(
+        const std::vector<MultiIndexSelector>& selectors,
+        ProjectedSelectionResult* out) const {
+        const std::size_t estimate = estimate_uniform_hits(selectors);
+        out->flat_indices.reserve(estimate);
+        out->projected_multi_indices.reserve(estimate);
     }
 
     void invalidate_cache() {
@@ -729,10 +753,10 @@ private:
 
         if (selector.is_any()) {
             for (std::size_t idx = 0; idx < dim_size; ++idx) {
-                if (projected_slot >= 0) {
-                    (*projected_index)[static_cast<std::size_t>(projected_slot)] =
-                        static_cast<Index>(idx);
-                }
+                write_projected_coordinate(
+                    projected_slot,
+                    static_cast<Index>(idx),
+                    projected_index);
 
                 const std::size_t next_flat = checked_add(
                     flat_prefix,
@@ -760,9 +784,7 @@ private:
                 return;
             }
 
-            if (projected_slot >= 0) {
-                (*projected_index)[static_cast<std::size_t>(projected_slot)] = idx;
-            }
+            write_projected_coordinate(projected_slot, idx, projected_index);
 
             const std::size_t next_flat = checked_add(
                 flat_prefix,
@@ -790,9 +812,7 @@ private:
                 continue;
             }
 
-            if (projected_slot >= 0) {
-                (*projected_index)[static_cast<std::size_t>(projected_slot)] = static_cast<Index>(i);
-            }
+            write_projected_coordinate(projected_slot, static_cast<Index>(i), projected_index);
 
             const std::size_t next_flat = checked_add(
                 flat_prefix,
@@ -829,10 +849,10 @@ private:
 
         if (selector.is_any()) {
             for (std::size_t child = 0; child < child_count; ++child) {
-                if (projected_slot >= 0) {
-                    (*projected_index)[static_cast<std::size_t>(projected_slot)] =
-                        static_cast<Index>(child);
-                }
+                write_projected_coordinate(
+                    projected_slot,
+                    static_cast<Index>(child),
+                    projected_index);
 
                 const std::size_t next_node = child_base + child;
                 if (is_last_dim) {
@@ -857,9 +877,7 @@ private:
                 return;
             }
 
-            if (projected_slot >= 0) {
-                (*projected_index)[static_cast<std::size_t>(projected_slot)] = exact;
-            }
+            write_projected_coordinate(projected_slot, exact, projected_index);
 
             const std::size_t next_node = child_base + static_cast<std::size_t>(exact);
             if (is_last_dim) {
@@ -884,9 +902,7 @@ private:
                 continue;
             }
 
-            if (projected_slot >= 0) {
-                (*projected_index)[static_cast<std::size_t>(projected_slot)] = static_cast<Index>(i);
-            }
+            write_projected_coordinate(projected_slot, static_cast<Index>(i), projected_index);
 
             const std::size_t next_node = child_base + static_cast<std::size_t>(selected);
             if (is_last_dim) {

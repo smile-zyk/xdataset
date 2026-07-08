@@ -2,6 +2,8 @@
     "dependencies": [
         "gtest",
         "eigen3",
-        "llnl-units"
+        "llnl-units",
+        "boost-variant",
+        "tsl-ordered-map"
     ]
 }
