@@ -4,7 +4,6 @@
 #include "cell_series.h"
 #include "multi_dimension_spec.h"
 #include <string>
-#include <vector>
 
 namespace xdataset
 {
@@ -19,7 +18,6 @@ namespace xdataset
         std::string name;
         CellSeries data;
         MultiDimensionSpec multi_dimension_spec;
-        std::vector<std::string> dependencies;
         VariableKind kind = VariableKind::kDependent;
     };
 
@@ -46,11 +44,6 @@ namespace xdataset
             return multi_dimension_spec_;
         }
 
-        const std::vector<std::string>& dependencies() const
-        {
-            return dependencies_;
-        }
-
         VariableKind kind() const
         {
             return kind_;
@@ -60,7 +53,6 @@ namespace xdataset
         void validate() const;
 
         std::string name_;
-        std::vector<std::string> dependencies_;
         CellSeries data_;
         MultiDimensionSpec multi_dimension_spec_;
         VariableKind kind_;

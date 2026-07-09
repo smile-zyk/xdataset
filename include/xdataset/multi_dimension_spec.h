@@ -3,6 +3,7 @@
 
 #include "dimension_spec.h"
 #include "multi_index_selector.h"
+#include <functional>
 #include <vector>
 
 namespace xdataset
@@ -10,6 +11,11 @@ namespace xdataset
     class MultiDimensionSpec
     {
     public:
+        using LeafRowVisitor =
+            std::function<void(const std::vector<std::size_t>& multi_index,
+                               const std::vector<std::size_t>& dimension_row_indices,
+                               std::size_t row_flat)>;
+
         MultiDimensionSpec();
         
         explicit MultiDimensionSpec(const std::vector<DimensionSpec>& dims);
@@ -41,6 +47,9 @@ namespace xdataset
 
         // Select dimensions based on selectors: Any retains dimension, Equal drops it, In converts to jagged
         MultiDimensionSpec select(const std::vector<MultiIndexSelector>& selectors) const;
+
+        // Visit each leaf row in row-major order and provide per-dimension source row positions.
+        void for_each_leaf_row(const LeafRowVisitor& visitor) const;
 
     private:
         std::size_t compute_cell_count_from(std::size_t start_dim) const;

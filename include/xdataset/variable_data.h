@@ -1,23 +1,29 @@
 #ifndef VARIABLE_DATA_H
 #define VARIABLE_DATA_H
 
-#include <memory>
+#include <string>
 #include <tsl/ordered_map.h>
 #include "cell_series.h"
-#include "variable_spec.h"
 #include "multi_dimension_spec.h"
-#include "multi_index_selector.h"
+#include "table_data.h"
+#include "variable_spec.h"
 
 namespace xdataset
 {
-    class Block;
+    struct VariableDataCreateInfo
+    {
+        std::string name;
+        CellSeries data;
+        tsl::ordered_map<std::string, CellSeries> indep_datas;
+        MultiDimensionSpec multi_dimension_spec;
+        VariableKind kind = VariableKind::kDependent;
+    };
+
     class VariableData
     {
     public:
-        VariableData(const CellSeries& data = CellSeries());
-        VariableData(CellSeries&& data = CellSeries());
-
-        ~VariableData();
+        explicit VariableData(const VariableDataCreateInfo& info);
+        explicit VariableData(VariableDataCreateInfo&& info);
 
         const CellSeries& data() const
         {
@@ -39,18 +45,19 @@ namespace xdataset
             return kind_;
         }
 
-        std::shared_ptr<VariableData> Clone() const;
-        void ClearBlockReference();
+        const std::string& name() const
+        {
+            return name_;
+        }
+
+        TableData ToTableData() const;
 
     private:
-        friend class Block;
-        void SetBlockReference(const std::shared_ptr<Block>& block);
-
+        std::string name_;
         CellSeries data_;
         tsl::ordered_map<std::string, CellSeries> indep_datas_;
         MultiDimensionSpec multi_dimension_spec_;
         VariableKind kind_;
-        std::weak_ptr<Block> block_;
     };
 } // namespace xdataset
 

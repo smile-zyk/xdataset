@@ -2,6 +2,7 @@
 #define MULTI_INDEX_SELECTOR_H_
 
 #include "xdataset_predefine.h"
+#include <vector>
 
 namespace xdataset
 {

@@ -16,14 +16,35 @@ enable_testing()
 
 add_executable(cell_series_test
 	tests/cell_series_test.cc
-	cell_series.cc
-	variable_spec.cc
-	variable_data.cc
-	block.cc
+	tests/multi_dimension_test.cc
+	tests/block_test.cc
+	tests/variable_data_test.cc
+	src/cell_series.cc
+	src/dimension_spec.cc
+	src/multi_dimension_spec.cc
+	src/multi_index_selector.cc
+	src/variable_spec.cc
+	src/variable_data.cc
+	src/block.cc
+	src/table_data.cc
 )
 
-target_include_directories(cell_series_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(xdataset_playground
+	apps/xdataset_playground/main.cc
+	src/cell_series.cc
+	src/dimension_spec.cc
+	src/multi_dimension_spec.cc
+	src/multi_index_selector.cc
+	src/variable_spec.cc
+	src/variable_data.cc
+	src/block.cc
+	src/table_data.cc
+)
+
+target_include_directories(cell_series_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(xdataset_playground PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(cell_series_test PRIVATE Eigen3::Eigen GTest::gtest_main Boost::headers tsl::ordered_map)
+target_link_libraries(xdataset_playground PRIVATE Eigen3::Eigen Boost::headers tsl::ordered_map)
 
 gtest_discover_tests(cell_series_test)

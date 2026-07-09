@@ -1,6 +1,7 @@
 #include "multi_dimension_spec.h"
 #include <stdexcept>
 #include <algorithm>
+#include <functional>
 
 namespace xdataset
 {
@@ -186,6 +187,69 @@ namespace xdataset
         }
 
         return result;
+    }
+
+    void MultiDimensionSpec::for_each_leaf_row(const LeafRowVisitor& visitor) const
+    {
+        if (!visitor)
+        {
+            return;
+        }
+
+        if (dims_.empty())
+        {
+            visitor(std::vector<std::size_t>(), std::vector<std::size_t>(), 0);
+            return;
+        }
+
+        std::vector<std::size_t> multi_index(dims_.size(), 0);
+        std::vector<std::size_t> source_rows(dims_.size(), 0);
+
+        std::function<void(std::size_t, std::size_t)> walk =
+            [&](std::size_t dim_idx, std::size_t parent_flat)
+        {
+            std::size_t child_count = 0;
+            if (dims_[dim_idx].is_uniform())
+            {
+                child_count = static_cast<std::size_t>(dims_[dim_idx].uniform_size());
+            }
+            else
+            {
+                child_count = dims_[dim_idx].child_width(parent_flat);
+            }
+
+            for (std::size_t idx = 0; idx < child_count; ++idx)
+            {
+                multi_index[dim_idx] = idx;
+
+                std::size_t current_flat = 0;
+                if (dims_[dim_idx].is_uniform())
+                {
+                    const std::size_t size = static_cast<std::size_t>(dims_[dim_idx].uniform_size());
+                    current_flat = parent_flat * size + idx;
+                    source_rows[dim_idx] = idx;
+                }
+                else
+                {
+                    std::size_t start = 0;
+                    std::size_t end = 0;
+                    dims_[dim_idx].child_range(parent_flat, start, end);
+                    (void)end;
+                    current_flat = start + idx;
+                    source_rows[dim_idx] = current_flat;
+                }
+
+                if (dim_idx + 1 < dims_.size())
+                {
+                    walk(dim_idx + 1, current_flat);
+                    continue;
+                }
+
+                visitor(multi_index, source_rows, current_flat);
+            }
+        };
+
+        walk(0, 0);
     }
 
 } // namespace xdataset

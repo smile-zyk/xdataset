@@ -5,26 +5,39 @@
 #include <string>
 #include <vector>
 #include <tsl/ordered_map.h>
+#include "cell_series.h"
+#include "dimension_spec.h"
+#include "table_data.h"
 #include "variable_data.h"
 #include "variable_spec.h"
 
 namespace xdataset
 {
+    struct IndependentVariableCreateInfo
+    {
+        std::string name;
+        CellSeries data;
+        DimensionSpec dimension;
+    };
+
+    struct DependentVariableCreateInfo
+    {
+        std::string name;
+        CellSeries data;
+    };
+
     struct BlockCreateInfo
     {
         std::string name;
-        std::vector<VariableSpec> variable_specs;
+        std::vector<IndependentVariableCreateInfo> independent_variables;
+        std::vector<DependentVariableCreateInfo> dependent_variables;
     };
 
-    class Block : public std::enable_shared_from_this<Block>
+    class Block
     {
     public:
-        explicit Block(const std::string& name);
-        
         explicit Block(const BlockCreateInfo& info);
         explicit Block(BlockCreateInfo&& info);
-
-        ~Block();
 
         const std::string& name() const;
         
@@ -34,17 +47,17 @@ namespace xdataset
         
         const VariableSpec& variable_spec(const std::string& name) const;
 
-        std::shared_ptr<VariableData> GenerateVariableData(const std::string& variable_name);
+        std::shared_ptr<VariableData> GetOrCreateVariableData(const std::string& variable_name);
+        TableData ToTableData();
 
-    protected:
-        void RegisterGeneratedVariableData(const std::shared_ptr<VariableData>& var_data);
-        friend class VariableData; // Allow VariableData to access private members for block reference management
     private:
+        std::shared_ptr<VariableData> CreateVariableData(const VariableSpec& spec);
+
         std::string name_;
         std::vector<std::string> dependents_;
         std::vector<std::string> independents_;
         tsl::ordered_map<std::string, VariableSpec> variable_spec_map_;
-        std::vector<std::shared_ptr<VariableData>> generated_variable_datas_;
+        tsl::ordered_map<std::string, std::shared_ptr<VariableData>> variable_data_cache_;
     };
 }
 
