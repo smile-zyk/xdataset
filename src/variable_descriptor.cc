@@ -1,30 +1,34 @@
-#include "variable_spec.h"
+#include "variable_descriptor.h"
+
 #include <stdexcept>
 
 namespace xdataset
 {
-    VariableSpec::VariableSpec(const std::string& name)
+    VariableDescriptor::VariableDescriptor(const std::string& name)
         : name_(name), data_(), multi_dimension_spec_(), kind_(VariableKind::kDependent)
     {
     }
 
-    VariableSpec::VariableSpec(const VariableSpecCreateInfo& info)
-        : name_(info.name), data_(info.data), 
-          multi_dimension_spec_(info.multi_dimension_spec), kind_(info.kind)
+    VariableDescriptor::VariableDescriptor(const VariableDescriptorCreateInfo& info)
+        : name_(info.name),
+          data_(info.data),
+          multi_dimension_spec_(info.multi_dimension_spec),
+          kind_(info.kind)
     {
         validate();
     }
 
-    VariableSpec::VariableSpec(VariableSpecCreateInfo&& info)
-        : name_(std::move(info.name)), 
-          data_(std::move(info.data)), multi_dimension_spec_(std::move(info.multi_dimension_spec)), kind_(info.kind)
+    VariableDescriptor::VariableDescriptor(VariableDescriptorCreateInfo&& info)
+        : name_(std::move(info.name)),
+          data_(std::move(info.data)),
+          multi_dimension_spec_(std::move(info.multi_dimension_spec)),
+          kind_(info.kind)
     {
         validate();
     }
 
-    void VariableSpec::validate() const
+    void VariableDescriptor::validate() const
     {
-        // Validate shape: if both data and spec are non-empty, they must be consistent
         if (data_.size() > 0 && !multi_dimension_spec_.empty())
         {
             std::size_t expected_count = multi_dimension_spec_.compute_cell_count();
@@ -35,7 +39,6 @@ namespace xdataset
             }
         }
 
-        // Rank must be non-zero for all variable specs.
         if (multi_dimension_spec_.rank() == 0)
         {
             throw std::invalid_argument(

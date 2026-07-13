@@ -21,13 +21,13 @@ namespace xdataset
         VariableKind kind = VariableKind::kDependent;
     };
 
-    class VariableSpec
+    class VariableDescriptor
     {
     public:
-        explicit VariableSpec(const std::string& name);
+        explicit VariableDescriptor(const std::string& name);
         
-        explicit VariableSpec(const VariableSpecCreateInfo& info);
-        explicit VariableSpec(VariableSpecCreateInfo&& info);
+        explicit VariableDescriptor(const VariableSpecCreateInfo& info);
+        explicit VariableDescriptor(VariableSpecCreateInfo&& info);
 
         const std::string& name() const
         {

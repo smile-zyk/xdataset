@@ -1,97 +1,49 @@
 #include "block.h"
 
-#include <complex>
-#include <sstream>
 #include <stdexcept>
 
 namespace xdataset
 {
     namespace
     {
-        void ensure_unique_name(const tsl::ordered_map<std::string, VariableSpec>& spec_map,
+        void ensure_unique_name(const tsl::ordered_map<std::string, VariableDescriptor>& descriptor_map,
                                 const std::string& name)
         {
             if (name.empty())
             {
                 throw std::invalid_argument("variable name must not be empty");
             }
-            if (spec_map.find(name) != spec_map.end())
+            if (descriptor_map.find(name) != descriptor_map.end())
             {
                 throw std::invalid_argument("duplicate variable name in block: " + name);
             }
         }
 
-        std::string FormatMultiIndex(const std::vector<std::size_t>& index)
-        {
-            std::ostringstream oss;
-            oss << "[";
-            for (std::size_t i = 0; i < index.size(); ++i)
-            {
-                if (i > 0)
-                {
-                    oss << ",";
-                }
-                oss << index[i];
-            }
-            oss << "]";
-            return oss.str();
-        }
-
-        template <typename T>
-        std::string NumberToString(const T& value)
-        {
-            std::ostringstream oss;
-            oss << value;
-            return oss.str();
-        }
-
-        std::string ComplexToString(const std::complex<double>& value)
-        {
-            std::ostringstream oss;
-            oss << value.real() << "+" << value.imag() << "i";
-            return oss.str();
-        }
-
-        std::string ScalarAtToString(const CellSeries& series, std::size_t row)
-        {
-            if (series.cell_kind() != CellKind::kScalar)
-            {
-                throw std::logic_error("block table view currently requires scalar CellSeries");
-            }
-
-            switch (series.dtype())
-            {
-                case DTypeTag::kReal:
-                    return NumberToString(series.scalar_at<double>(row));
-                case DTypeTag::kInteger:
-                    return NumberToString(series.scalar_at<int>(row));
-                case DTypeTag::kComplex:
-                    return ComplexToString(series.scalar_at<std::complex<double>>(row));
-                case DTypeTag::kString:
-                    return series.scalar_at<std::string>(row);
-            }
-            throw std::logic_error("unsupported scalar dtype");
-        }
-
     } // namespace
 
     Block::Block(const BlockCreateInfo& info)
-        : name_(info.name), dependents_(), independents_(), variable_spec_map_(), variable_data_cache_()
+                : name_(info.name),
+                    dependents_(),
+                    independents_(),
+                    variable_descriptor_map_(),
+                    variable_cache_(),
+                    table_data_cache_valid_(false),
+                    table_data_cache_()
     {
         std::vector<DimensionSpec> independent_dims;
         independent_dims.reserve(info.independent_variables.size());
 
         for (const auto& independent : info.independent_variables)
         {
-            ensure_unique_name(variable_spec_map_, independent.name);
+            ensure_unique_name(variable_descriptor_map_, independent.name);
 
-            VariableSpecCreateInfo spec_info;
-            spec_info.name = independent.name;
-            spec_info.data = independent.data;
-            spec_info.kind = VariableKind::kIndependent;
-            spec_info.multi_dimension_spec.add_dimension(independent.dimension);
+            VariableDescriptorCreateInfo descriptor_info;
+            descriptor_info.name = independent.name;
+            descriptor_info.data = independent.data;
+            descriptor_info.kind = VariableKind::kIndependent;
+            descriptor_info.multi_dimension_spec.add_dimension(independent.dimension);
 
-            variable_spec_map_.emplace(independent.name, VariableSpec(spec_info));
+            variable_descriptor_map_.emplace(independent.name, VariableDescriptor(descriptor_info));
             independents_.push_back(independent.name);
             independent_dims.push_back(independent.dimension);
         }
@@ -110,15 +62,15 @@ namespace xdataset
 
         for (const auto& dependent : info.dependent_variables)
         {
-            ensure_unique_name(variable_spec_map_, dependent.name);
+            ensure_unique_name(variable_descriptor_map_, dependent.name);
 
-            VariableSpecCreateInfo spec_info;
-            spec_info.name = dependent.name;
-            spec_info.data = dependent.data;
-            spec_info.kind = VariableKind::kDependent;
-            spec_info.multi_dimension_spec = dependent_multi_dim;
+            VariableDescriptorCreateInfo descriptor_info;
+            descriptor_info.name = dependent.name;
+            descriptor_info.data = dependent.data;
+            descriptor_info.kind = VariableKind::kDependent;
+            descriptor_info.multi_dimension_spec = dependent_multi_dim;
 
-            variable_spec_map_.emplace(dependent.name, VariableSpec(spec_info));
+            variable_descriptor_map_.emplace(dependent.name, VariableDescriptor(descriptor_info));
             dependents_.push_back(dependent.name);
         }
     }
@@ -144,31 +96,31 @@ namespace xdataset
         return independents_;
     }
 
-    const VariableSpec& Block::variable_spec(const std::string& name) const
+    const VariableDescriptor& Block::variable_descriptor(const std::string& name) const
     {
-        auto it = variable_spec_map_.find(name);
-        if (it == variable_spec_map_.end())
+        auto it = variable_descriptor_map_.find(name);
+        if (it == variable_descriptor_map_.end())
         {
-            throw std::invalid_argument("variable spec not found: " + name);
+            throw std::invalid_argument("variable descriptor not found: " + name);
         }
         return it->second;
     }
 
-    std::shared_ptr<VariableData> Block::CreateVariableData(const VariableSpec& spec)
+    std::shared_ptr<Variable> Block::CreateVariable(const VariableDescriptor& descriptor)
     {
-        VariableDataCreateInfo info;
-        info.name = spec.name();
-        info.data = spec.data();
-        info.kind = spec.kind();
+        VariableCreateInfo info;
+        info.name = descriptor.name();
+        info.data = descriptor.data();
+        info.kind = descriptor.kind();
 
-        if (spec.kind() == VariableKind::kDependent)
+        if (descriptor.kind() == VariableKind::kDependent)
         {
-            info.multi_dimension_spec = spec.multi_dimension_spec();
+            info.multi_dimension_spec = descriptor.multi_dimension_spec();
             for (const std::string& indep_name : independents_)
             {
-                info.indep_datas.emplace(indep_name, variable_spec(indep_name).data());
+                info.indep_datas.emplace(indep_name, variable_descriptor(indep_name).data());
             }
-            return std::make_shared<VariableData>(std::move(info));
+            return std::make_shared<Variable>(std::move(info));
         }
 
         MultiDimensionSpec composed_multi_dim;
@@ -176,103 +128,126 @@ namespace xdataset
 
         for (const std::string& indep_name : independents_)
         {
-            const VariableSpec& indep_spec = variable_spec(indep_name);
-            const MultiDimensionSpec& indep_dim = indep_spec.multi_dimension_spec();
+            const VariableDescriptor& indep_descriptor = variable_descriptor(indep_name);
+            const MultiDimensionSpec& indep_dim = indep_descriptor.multi_dimension_spec();
             if (indep_dim.rank() != 1 || indep_dim.dims().size() != 1)
             {
                 throw std::logic_error(
-                    "independent VariableSpec must store exactly one dimension");
+                    "independent VariableDescriptor must store exactly one dimension");
             }
 
             composed_multi_dim.add_dimension(indep_dim.dims()[0]);
-            if (indep_name == spec.name())
+            if (indep_name == descriptor.name())
             {
                 found_current_independent = true;
                 break;
             }
 
-            info.indep_datas.emplace(indep_name, indep_spec.data());
+            info.indep_datas.emplace(indep_name, indep_descriptor.data());
         }
 
         if (!found_current_independent)
         {
             throw std::invalid_argument(
-                "independent variable not found in block ordering: " + spec.name());
+                "independent variable not found in block ordering: " + descriptor.name());
         }
 
         info.multi_dimension_spec = composed_multi_dim;
-        return std::make_shared<VariableData>(std::move(info));
+        return std::make_shared<Variable>(std::move(info));
     }
 
-    std::shared_ptr<VariableData> Block::GetOrCreateVariableData(const std::string& variable_name)
+    std::shared_ptr<Variable> Block::GetOrCreateVariable(const std::string& variable_name)
     {
-        auto cached_it = variable_data_cache_.find(variable_name);
-        if (cached_it != variable_data_cache_.end())
+        auto cached_it = variable_cache_.find(variable_name);
+        if (cached_it != variable_cache_.end())
         {
             return cached_it->second;
         }
 
-        const VariableSpec& spec = variable_spec(variable_name);
-        std::shared_ptr<VariableData> var_data = CreateVariableData(spec);
-        if (var_data)
+        const VariableDescriptor& descriptor = variable_descriptor(variable_name);
+        std::shared_ptr<Variable> variable = CreateVariable(descriptor);
+        if (variable)
         {
-            variable_data_cache_[variable_name] = var_data;
+            variable_cache_[variable_name] = variable;
         }
-        return var_data;
+        return variable;
     }
 
-    TableData Block::ToTableData()
+    const TableData& Block::GetOrCreateTableData() const
     {
+        if (table_data_cache_valid_)
+        {
+            return table_data_cache_;
+        }
+
         TableData table;
 
         std::vector<DimensionSpec> dims;
         dims.reserve(independents_.size());
         for (const std::string& indep_name : independents_)
         {
-            table.metadata.headers.push_back(indep_name);
-            const VariableSpec& indep_spec = variable_spec(indep_name);
-            const MultiDimensionSpec& indep_dim = indep_spec.multi_dimension_spec();
+            const VariableDescriptor& indep_descriptor = variable_descriptor(indep_name);
+            const std::vector<std::string> headers =
+                TableData::ExpandHeadersForSeries(indep_name, indep_descriptor.data());
+            table.metadata.headers.insert(
+                table.metadata.headers.end(), headers.begin(), headers.end());
+            const MultiDimensionSpec& indep_dim = indep_descriptor.multi_dimension_spec();
             if (indep_dim.rank() != 1 || indep_dim.dims().size() != 1)
             {
-                throw std::logic_error("independent VariableSpec must store exactly one dimension");
+                throw std::logic_error("independent VariableDescriptor must store exactly one dimension");
             }
             dims.push_back(indep_dim.dims()[0]);
         }
         for (const std::string& dep_name : dependents_)
         {
-            table.metadata.headers.push_back(dep_name);
+            const VariableDescriptor& dep_descriptor = variable_descriptor(dep_name);
+            const std::vector<std::string> headers =
+                TableData::ExpandHeadersForSeries(dep_name, dep_descriptor.data());
+            table.metadata.headers.insert(
+                table.metadata.headers.end(), headers.begin(), headers.end());
         }
 
         if (dims.empty())
         {
-            return table;
+            table_data_cache_ = table;
+            table_data_cache_valid_ = true;
+            return table_data_cache_;
         }
 
         MultiDimensionSpec traversal_spec(dims);
         traversal_spec.for_each_leaf_row(
-            [&](const std::vector<std::size_t>& multi_index,
-                const std::vector<std::size_t>& dimension_row_indices,
-                std::size_t row_flat)
+            [&](const MultiDimensionSpec::LeafRow& leaf_row)
             {
+                const std::vector<std::size_t>& multi_index = leaf_row.multi_index;
+                const std::vector<std::size_t>& dimension_row_indices =
+                    leaf_row.dimension_row_indices;
+                const std::size_t row_flat = leaf_row.row_flat;
+
                 std::vector<std::string> row;
                 row.reserve(table.metadata.headers.size());
 
                 for (std::size_t dim = 0; dim < independents_.size(); ++dim)
                 {
-                    const VariableSpec& indep_spec = variable_spec(independents_[dim]);
-                    row.push_back(ScalarAtToString(indep_spec.data(), dimension_row_indices[dim]));
+                    const VariableDescriptor& indep_descriptor = variable_descriptor(independents_[dim]);
+                    const std::vector<std::string> values =
+                        TableData::CellAtToColumns(indep_descriptor.data(), dimension_row_indices[dim]);
+                    row.insert(row.end(), values.begin(), values.end());
                 }
 
                 for (const std::string& dep_name : dependents_)
                 {
-                    const VariableSpec& dep_spec = variable_spec(dep_name);
-                    row.push_back(ScalarAtToString(dep_spec.data(), row_flat));
+                    const VariableDescriptor& dep_descriptor = variable_descriptor(dep_name);
+                    const std::vector<std::string> values =
+                        TableData::CellAtToColumns(dep_descriptor.data(), row_flat);
+                    row.insert(row.end(), values.begin(), values.end());
                 }
 
                 table.metadata.multi_indices.push_back(multi_index);
                 table.rows.push_back(row);
             });
 
-        return table;
+        table_data_cache_ = std::move(table);
+        table_data_cache_valid_ = true;
+        return table_data_cache_;
     }
 } // namespace xdataset

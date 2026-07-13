@@ -29,19 +29,19 @@ namespace xdataset
         ASSERT_EQ(block.dependents().size(), 1u);
         EXPECT_EQ(block.dependents()[0], "z");
 
-        const VariableSpec& x_spec = block.variable_spec("x");
-        EXPECT_EQ(x_spec.kind(), VariableKind::kIndependent);
-        EXPECT_EQ(x_spec.multi_dimension_spec().rank(), 1u);
-        ASSERT_EQ(x_spec.multi_dimension_spec().dims().size(), 1u);
-        EXPECT_TRUE(x_spec.multi_dimension_spec().dims()[0].is_uniform());
-        EXPECT_EQ(x_spec.multi_dimension_spec().dims()[0].uniform_size(), 2);
+        const VariableDescriptor& x_descriptor = block.variable_descriptor("x");
+        EXPECT_EQ(x_descriptor.kind(), VariableKind::kIndependent);
+        EXPECT_EQ(x_descriptor.multi_dimension_spec().rank(), 1u);
+        ASSERT_EQ(x_descriptor.multi_dimension_spec().dims().size(), 1u);
+        EXPECT_TRUE(x_descriptor.multi_dimension_spec().dims()[0].is_uniform());
+        EXPECT_EQ(x_descriptor.multi_dimension_spec().dims()[0].uniform_size(), 2);
 
-        const VariableSpec& z_spec = block.variable_spec("z");
-        EXPECT_EQ(z_spec.kind(), VariableKind::kDependent);
-        EXPECT_EQ(z_spec.multi_dimension_spec().rank(), 2u);
-        ASSERT_EQ(z_spec.multi_dimension_spec().dims().size(), 2u);
-        EXPECT_EQ(z_spec.multi_dimension_spec().dims()[0].uniform_size(), 2);
-        EXPECT_EQ(z_spec.multi_dimension_spec().dims()[1].uniform_size(), 3);
+        const VariableDescriptor& z_descriptor = block.variable_descriptor("z");
+        EXPECT_EQ(z_descriptor.kind(), VariableKind::kDependent);
+        EXPECT_EQ(z_descriptor.multi_dimension_spec().rank(), 2u);
+        ASSERT_EQ(z_descriptor.multi_dimension_spec().dims().size(), 2u);
+        EXPECT_EQ(z_descriptor.multi_dimension_spec().dims()[0].uniform_size(), 2);
+        EXPECT_EQ(z_descriptor.multi_dimension_spec().dims()[1].uniform_size(), 3);
     }
 
     TEST(BlockConstructorTest, RejectsDependentWithoutIndependent)
@@ -109,23 +109,23 @@ namespace xdataset
         EXPECT_THROW({ Block b(info); }, std::invalid_argument);
     }
 
-    TEST(BlockVariableDataCacheTest, ReturnsSamePointerForCachedVariable)
+    TEST(BlockVariableCacheTest, ReturnsSamePointerForCachedVariable)
     {
         Block block(MakeBaseCreateInfo());
 
-        const std::shared_ptr<VariableData> first = block.GetOrCreateVariableData("z");
-        const std::shared_ptr<VariableData> second = block.GetOrCreateVariableData("z");
+        const std::shared_ptr<Variable> first = block.GetOrCreateVariable("z");
+        const std::shared_ptr<Variable> second = block.GetOrCreateVariable("z");
 
         ASSERT_NE(first, nullptr);
         ASSERT_NE(second, nullptr);
         EXPECT_EQ(first.get(), second.get());
     }
 
-    TEST(BlockVariableDataCacheTest, BuildsIndependentVariableDataWithPrefixDims)
+    TEST(BlockVariableCacheTest, BuildsIndependentVariableWithPrefixDims)
     {
         Block block(MakeBaseCreateInfo());
 
-        const std::shared_ptr<VariableData> x_data = block.GetOrCreateVariableData("x");
+        const std::shared_ptr<Variable> x_data = block.GetOrCreateVariable("x");
         ASSERT_NE(x_data, nullptr);
         EXPECT_EQ(x_data->kind(), VariableKind::kIndependent);
         ASSERT_EQ(x_data->multi_dimension_spec().rank(), 1u);
@@ -133,7 +133,7 @@ namespace xdataset
         EXPECT_EQ(x_data->multi_dimension_spec().dims()[0].uniform_size(), 2);
         EXPECT_EQ(x_data->data().size(), 2u);
 
-        const std::shared_ptr<VariableData> y_data = block.GetOrCreateVariableData("y");
+        const std::shared_ptr<Variable> y_data = block.GetOrCreateVariable("y");
         ASSERT_NE(y_data, nullptr);
         EXPECT_EQ(y_data->kind(), VariableKind::kIndependent);
         ASSERT_EQ(y_data->multi_dimension_spec().rank(), 2u);
@@ -143,11 +143,11 @@ namespace xdataset
         EXPECT_EQ(y_data->data().size(), 3u);
     }
 
-    TEST(BlockVariableDataCacheTest, BuildsDependentVariableDataFromSpec)
+    TEST(BlockVariableCacheTest, BuildsDependentVariableFromDescriptor)
     {
         Block block(MakeBaseCreateInfo());
 
-        const std::shared_ptr<VariableData> z_data = block.GetOrCreateVariableData("z");
+        const std::shared_ptr<Variable> z_data = block.GetOrCreateVariable("z");
         ASSERT_NE(z_data, nullptr);
 
         EXPECT_EQ(z_data->kind(), VariableKind::kDependent);
@@ -158,11 +158,11 @@ namespace xdataset
         EXPECT_EQ(z_data->data().size(), 6u);
     }
 
-    TEST(BlockVariableDataCacheTest, BuildsJaggedVariableDataWithPrefixDims)
+    TEST(BlockVariableCacheTest, BuildsJaggedVariableWithPrefixDims)
     {
         Block block(MakeJaggedCreateInfo());
 
-        const std::shared_ptr<VariableData> y_data = block.GetOrCreateVariableData("y");
+        const std::shared_ptr<Variable> y_data = block.GetOrCreateVariable("y");
         ASSERT_NE(y_data, nullptr);
 
         EXPECT_EQ(y_data->kind(), VariableKind::kIndependent);
@@ -177,11 +177,11 @@ namespace xdataset
         EXPECT_EQ(y_data->data().size(), 3u);
     }
 
-    TEST(BlockVariableDataCacheTest, BuildsInterleavedJaggedVariableDataWithPrefixDims)
+    TEST(BlockVariableCacheTest, BuildsInterleavedJaggedVariableWithPrefixDims)
     {
         Block block(MakeInterleavedCreateInfo());
 
-        const std::shared_ptr<VariableData> z_data = block.GetOrCreateVariableData("z");
+        const std::shared_ptr<Variable> z_data = block.GetOrCreateVariable("z");
         ASSERT_NE(z_data, nullptr);
 
         EXPECT_EQ(z_data->kind(), VariableKind::kIndependent);
@@ -201,7 +201,7 @@ namespace xdataset
     TEST(BlockTableDataTest, AggregatesAllVariablesIntoOneTable)
     {
         Block block(MakeValueRichCreateInfo());
-        const TableData table = block.ToTableData();
+        const TableData& table = block.GetOrCreateTableData();
 
         ASSERT_EQ(table.metadata.headers.size(), 3u);
         EXPECT_EQ(table.metadata.headers[0], "x");
@@ -222,14 +222,14 @@ namespace xdataset
         EXPECT_EQ(table.rows[5][2], "105");
 
         const std::string csv = table.ToCsv();
-        EXPECT_NE(csv.find("multi_index,x,y,z"), std::string::npos);
+        EXPECT_NE(csv.find(",x,y,z"), std::string::npos);
         EXPECT_NE(csv.find("\"[1,2]\",20,3,105"), std::string::npos);
     }
 
     TEST(BlockTableDataTest, AggregatesJaggedVariablesIntoOneTable)
     {
         Block block(MakeJaggedCreateInfo());
-        const TableData table = block.ToTableData();
+        const TableData& table = block.GetOrCreateTableData();
 
         ASSERT_EQ(table.metadata.headers.size(), 3u);
         EXPECT_EQ(table.metadata.headers[0], "x");
@@ -249,14 +249,14 @@ namespace xdataset
         EXPECT_EQ(table.rows[2], std::vector<std::string>({"20", "3", "102"}));
 
         const std::string csv = table.ToCsv();
-        EXPECT_NE(csv.find("multi_index,x,y,z"), std::string::npos);
+        EXPECT_NE(csv.find(",x,y,z"), std::string::npos);
         EXPECT_NE(csv.find("\"[1,1]\",20,3,102"), std::string::npos);
     }
 
     TEST(BlockTableDataTest, AggregatesInterleavedJaggedVariablesIntoOneTable)
     {
         Block block(MakeInterleavedCreateInfo());
-        const TableData table = block.ToTableData();
+        const TableData& table = block.GetOrCreateTableData();
 
         ASSERT_EQ(table.metadata.headers.size(), 4u);
         EXPECT_EQ(table.metadata.headers[0], "x");
@@ -286,7 +286,7 @@ namespace xdataset
         EXPECT_EQ(table.rows[5], std::vector<std::string>({"20", "3", "200", "1005"}));
 
         const std::string csv = table.ToCsv();
-        EXPECT_NE(csv.find("multi_index,x,y,z,w"), std::string::npos);
+        EXPECT_NE(csv.find(",x,y,z,w"), std::string::npos);
         EXPECT_NE(csv.find("\"[1,1,1]\",20,3,200,1005"), std::string::npos);
     }
 } // namespace xdataset

@@ -155,38 +155,122 @@ namespace xdataset
         return compute_cell_count_from(0);
     }
 
-    MultiDimensionSpec MultiDimensionSpec::select(const std::vector<MultiIndexSelector>& selectors) const
+    MultiDimensionSpec::SelectionProjection MultiDimensionSpec::project_selection(
+        const std::vector<MultiIndexSelector>& selectors) const
     {
         if (selectors.size() != dims_.size())
         {
             throw std::invalid_argument("number of selectors must match rank");
         }
 
-        MultiDimensionSpec result;
+        struct RetainedDimStats
+        {
+            std::vector<std::vector<std::size_t> > parent_keys;
+            std::vector<std::vector<std::size_t> > children_per_parent;
+        };
+
+        std::vector<std::size_t> retained_dims;
+        retained_dims.reserve(selectors.size());
         for (std::size_t d = 0; d < selectors.size(); ++d)
         {
-            const MultiIndexSelector& selector = selectors[d];
-            
-            if (selector.is_any())
+            if (!selectors[d].is_equal())
             {
-                // Retain the original dimension
-                result.add_dimension(dims_[d]);
-            }
-            else if (selector.is_equal())
-            {
-                // Drop this dimension (skip it)
-                // No action needed, just continue to next dimension
-            }
-            else if (selector.is_in())
-            {
-                // Convert to jagged dimension with sizes equal to number of selected indices
-                const std::vector<Index>& indices = selector.in_values();
-                std::vector<Index> sizes(indices.size(), 1);
-                result.add_jagged(sizes);
+                retained_dims.push_back(d);
             }
         }
 
-        return result;
+        std::vector<RetainedDimStats> stats(retained_dims.size());
+
+        auto find_parent_index = [](const std::vector<std::vector<std::size_t> >& keys,
+                                    const std::vector<std::size_t>& key) -> std::size_t
+        {
+            for (std::size_t i = 0; i < keys.size(); ++i)
+            {
+                if (keys[i] == key)
+                {
+                    return i;
+                }
+            }
+            return keys.size();
+        };
+
+        SelectionProjection projection;
+        projection.retained_dims = retained_dims;
+
+        for_each_leaf_row(
+            [&](const LeafRow& leaf_row)
+        {
+            const std::vector<std::size_t>& multi_index = leaf_row.multi_index;
+            for (std::size_t d = 0; d < selectors.size(); ++d)
+            {
+                if (!selectors[d].matches(static_cast<Index>(multi_index[d])))
+                {
+                    return;
+                }
+            }
+
+            projection.selected_rows.push_back(leaf_row);
+
+            for (std::size_t r = 0; r < retained_dims.size(); ++r)
+            {
+                const std::size_t d = retained_dims[r];
+                std::vector<std::size_t> parent_key(multi_index.begin(), multi_index.begin() + static_cast<std::ptrdiff_t>(d));
+
+                std::size_t pidx = find_parent_index(stats[r].parent_keys, parent_key);
+                if (pidx == stats[r].parent_keys.size())
+                {
+                    stats[r].parent_keys.push_back(parent_key);
+                    stats[r].children_per_parent.push_back(std::vector<std::size_t>());
+                    pidx = stats[r].parent_keys.size() - 1;
+                }
+
+                std::vector<std::size_t>& children = stats[r].children_per_parent[pidx];
+                if (std::find(children.begin(), children.end(), multi_index[d]) == children.end())
+                {
+                    children.push_back(multi_index[d]);
+                }
+            }
+        });
+
+        MultiDimensionSpec result;
+        for (std::size_t r = 0; r < retained_dims.size(); ++r)
+        {
+            const RetainedDimStats& s = stats[r];
+            if (s.children_per_parent.empty())
+            {
+                result.add_uniform(0);
+                continue;
+            }
+
+            std::vector<Index> counts;
+            counts.reserve(s.children_per_parent.size());
+            for (std::size_t i = 0; i < s.children_per_parent.size(); ++i)
+            {
+                counts.push_back(static_cast<Index>(s.children_per_parent[i].size()));
+            }
+
+            bool same_count = true;
+            for (std::size_t i = 1; i < counts.size(); ++i)
+            {
+                if (counts[i] != counts[0])
+                {
+                    same_count = false;
+                    break;
+                }
+            }
+
+            if (same_count)
+            {
+                result.add_uniform(counts[0]);
+            }
+            else
+            {
+                result.add_jagged(counts);
+            }
+        }
+
+        projection.projected_dims = result.dims();
+        return projection;
     }
 
     void MultiDimensionSpec::for_each_leaf_row(const LeafRowVisitor& visitor) const
@@ -198,7 +282,8 @@ namespace xdataset
 
         if (dims_.empty())
         {
-            visitor(std::vector<std::size_t>(), std::vector<std::size_t>(), 0);
+            LeafRow leaf_row;
+            visitor(leaf_row);
             return;
         }
 
@@ -245,7 +330,11 @@ namespace xdataset
                     continue;
                 }
 
-                visitor(multi_index, source_rows, current_flat);
+                LeafRow leaf_row;
+                leaf_row.multi_index = multi_index;
+                leaf_row.dimension_row_indices = source_rows;
+                leaf_row.row_flat = current_flat;
+                visitor(leaf_row);
             }
         };
 

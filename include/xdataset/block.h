@@ -3,13 +3,14 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 #include <tsl/ordered_map.h>
+#include <vector>
+
 #include "cell_series.h"
 #include "dimension_spec.h"
 #include "table_data.h"
-#include "variable_data.h"
-#include "variable_spec.h"
+#include "variable.h"
+#include "variable_descriptor.h"
 
 namespace xdataset
 {
@@ -45,19 +46,21 @@ namespace xdataset
         
         const std::vector<std::string>& independents() const;
         
-        const VariableSpec& variable_spec(const std::string& name) const;
+        const VariableDescriptor& variable_descriptor(const std::string& name) const;
 
-        std::shared_ptr<VariableData> GetOrCreateVariableData(const std::string& variable_name);
-        TableData ToTableData();
+        std::shared_ptr<Variable> GetOrCreateVariable(const std::string& variable_name);
+        const TableData& GetOrCreateTableData() const;
 
     private:
-        std::shared_ptr<VariableData> CreateVariableData(const VariableSpec& spec);
+        std::shared_ptr<Variable> CreateVariable(const VariableDescriptor& descriptor);
 
         std::string name_;
         std::vector<std::string> dependents_;
         std::vector<std::string> independents_;
-        tsl::ordered_map<std::string, VariableSpec> variable_spec_map_;
-        tsl::ordered_map<std::string, std::shared_ptr<VariableData>> variable_data_cache_;
+        tsl::ordered_map<std::string, VariableDescriptor> variable_descriptor_map_;
+        tsl::ordered_map<std::string, std::shared_ptr<Variable>> variable_cache_;
+        mutable bool table_data_cache_valid_ = false;
+        mutable TableData table_data_cache_;
     };
 }
 

@@ -18,13 +18,13 @@ add_executable(cell_series_test
 	tests/cell_series_test.cc
 	tests/multi_dimension_test.cc
 	tests/block_test.cc
-	tests/variable_data_test.cc
+	tests/variable_test.cc
 	src/cell_series.cc
 	src/dimension_spec.cc
 	src/multi_dimension_spec.cc
 	src/multi_index_selector.cc
-	src/variable_spec.cc
-	src/variable_data.cc
+	src/variable_descriptor.cc
+	src/variable.cc
 	src/block.cc
 	src/table_data.cc
 )
@@ -35,8 +35,8 @@ add_executable(xdataset_playground
 	src/dimension_spec.cc
 	src/multi_dimension_spec.cc
 	src/multi_index_selector.cc
-	src/variable_spec.cc
-	src/variable_data.cc
+	src/variable_descriptor.cc
+	src/variable.cc
 	src/block.cc
 	src/table_data.cc
 )

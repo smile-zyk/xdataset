@@ -30,13 +30,11 @@ namespace xdataset
         std::vector<std::size_t> row_flats;
 
         spec.for_each_leaf_row(
-            [&](const std::vector<std::size_t>& multi_index,
-                const std::vector<std::size_t>& dimension_rows,
-                std::size_t row_flat)
+            [&](const MultiDimensionSpec::LeafRow& leaf_row)
             {
-                multi_indices.push_back(multi_index);
-                dimension_row_indices.push_back(dimension_rows);
-                row_flats.push_back(row_flat);
+                multi_indices.push_back(leaf_row.multi_index);
+                dimension_row_indices.push_back(leaf_row.dimension_row_indices);
+                row_flats.push_back(leaf_row.row_flat);
             });
 
         ASSERT_EQ(multi_indices.size(), 3u);
@@ -66,13 +64,11 @@ namespace xdataset
         std::vector<std::size_t> row_flats;
 
         spec.for_each_leaf_row(
-            [&](const std::vector<std::size_t>& multi_index,
-                const std::vector<std::size_t>& dimension_rows,
-                std::size_t row_flat)
+            [&](const MultiDimensionSpec::LeafRow& leaf_row)
             {
-                multi_indices.push_back(multi_index);
-                dimension_row_indices.push_back(dimension_rows);
-                row_flats.push_back(row_flat);
+                multi_indices.push_back(leaf_row.multi_index);
+                dimension_row_indices.push_back(leaf_row.dimension_row_indices);
+                row_flats.push_back(leaf_row.row_flat);
             });
 
         ASSERT_EQ(multi_indices.size(), 6u);
@@ -104,7 +100,7 @@ namespace xdataset
         EXPECT_EQ(row_flats[5], 5u);
     }
 
-    TEST(MultiDimensionSpecTest, SelectKeepsAndDropsDimensions)
+    TEST(MultiDimensionSpecTest, ProjectSelectionKeepsAndDropsDimensions)
     {
         MultiDimensionSpec spec;
         spec.add_uniform(2).add_uniform(3).add_uniform(4);
@@ -114,15 +110,15 @@ namespace xdataset
         selectors.push_back(MultiIndexSelector::Equal(1));
         selectors.push_back(MultiIndexSelector::In({0, 2}));
 
-        const MultiDimensionSpec selected = spec.select(selectors);
+        const MultiDimensionSpec::SelectionProjection projection =
+            spec.project_selection(selectors);
+        const MultiDimensionSpec selected(projection.projected_dims);
 
         EXPECT_EQ(selected.rank(), 2u);
         ASSERT_EQ(selected.dims().size(), 2u);
         EXPECT_TRUE(selected.dims()[0].is_uniform());
-        EXPECT_TRUE(selected.dims()[1].is_jagged());
+        EXPECT_TRUE(selected.dims()[1].is_uniform());
         EXPECT_EQ(selected.dims()[0].uniform_size(), 2);
-        ASSERT_EQ(selected.dims()[1].jagged_sizes().size(), 2u);
-        EXPECT_EQ(selected.dims()[1].jagged_sizes()[0], 1);
-        EXPECT_EQ(selected.dims()[1].jagged_sizes()[1], 1);
+        EXPECT_EQ(selected.dims()[1].uniform_size(), 2);
     }
 } // namespace xdataset

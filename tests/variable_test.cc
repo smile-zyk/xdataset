@@ -72,7 +72,6 @@ namespace xdataset
 
         ASSERT_EQ(table.rows.size(), 3u);
         ASSERT_EQ(table.metadata.multi_indices.size(), 3u);
-
         EXPECT_EQ(table.metadata.multi_indices[0], std::vector<std::size_t>({0u, 0u}));
         EXPECT_EQ(table.rows[0], std::vector<std::string>({"10", "1"}));
 
@@ -311,5 +310,55 @@ namespace xdataset
         ASSERT_NE(indep2, nullptr);
         EXPECT_EQ(indep2->name(), "y");
         EXPECT_EQ(indep2->multi_dimension_spec().rank(), 2u);
+    }
+
+    TEST(VariableSelectTest, DependentSelectReturnsCompleteVariable)
+    {
+        Block block(MakeInterleavedCreateInfo());
+        std::shared_ptr<Variable> w_data = block.GetOrCreateVariable("w");
+        ASSERT_NE(w_data, nullptr);
+
+        std::vector<MultiIndexSelector> selectors;
+        selectors.push_back(MultiIndexSelector::Equal(1));
+        selectors.push_back(MultiIndexSelector::Any());
+        selectors.push_back(MultiIndexSelector::In(std::vector<Index>{0, 1}));
+
+        std::shared_ptr<Variable> selected = w_data->select(selectors);
+        ASSERT_NE(selected, nullptr);
+        EXPECT_EQ(selected->kind(), VariableKind::kDependent);
+        EXPECT_EQ(selected->multi_dimension_spec().rank(), 2u);
+
+        const TableData& table = selected->GetOrCreateTableData();
+        ASSERT_EQ(table.metadata.headers.size(), 3u);
+        EXPECT_EQ(table.metadata.headers[0], "y");
+        EXPECT_EQ(table.metadata.headers[1], "z");
+        EXPECT_EQ(table.metadata.headers[2], "data");
+
+        ASSERT_EQ(table.rows.size(), 4u);
+        EXPECT_EQ(table.rows[0], std::vector<std::string>({"1", "100", "1002"}));
+        EXPECT_EQ(table.rows[3], std::vector<std::string>({"2", "200", "1005"}));
+    }
+
+    TEST(VariableSelectTest, IndependentSelectSupportsEqualOnSelfDimension)
+    {
+        Block block(MakeJaggedCreateInfo());
+        std::shared_ptr<Variable> y_data = block.GetOrCreateVariable("y");
+        ASSERT_NE(y_data, nullptr);
+
+        std::vector<MultiIndexSelector> selectors;
+        selectors.push_back(MultiIndexSelector::Any());
+        selectors.push_back(MultiIndexSelector::Equal(1));
+
+        std::shared_ptr<Variable> selected = y_data->select(selectors);
+        ASSERT_NE(selected, nullptr);
+        EXPECT_EQ(selected->kind(), VariableKind::kIndependent);
+
+        const TableData& table = selected->GetOrCreateTableData();
+        ASSERT_EQ(table.metadata.headers.size(), 2u);
+        EXPECT_EQ(table.metadata.headers[0], "x");
+        EXPECT_EQ(table.metadata.headers[1], "y");
+
+        ASSERT_EQ(table.rows.size(), 1u);
+        EXPECT_EQ(table.rows[0], std::vector<std::string>({"20", "3"}));
     }
 } // namespace xdataset
