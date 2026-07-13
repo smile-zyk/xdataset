@@ -328,6 +328,9 @@ namespace xdataset
         EXPECT_EQ(selected->kind(), VariableKind::kDependent);
         EXPECT_EQ(selected->multi_dimension_spec().rank(), 2u);
 
+        EXPECT_EQ(selected->multi_dimension_spec().dims()[0].as_uniform()->size, 2u);
+        EXPECT_EQ(selected->multi_dimension_spec().dims()[1].as_uniform()->size, 2u);
+
         const TableData& table = selected->GetOrCreateTableData();
         ASSERT_EQ(table.metadata.headers.size(), 3u);
         EXPECT_EQ(table.metadata.headers[0], "y");
@@ -339,8 +342,49 @@ namespace xdataset
         EXPECT_EQ(table.rows[3], std::vector<std::string>({"2", "200", "1005"}));
     }
 
+    TEST(VariableSelectTest, DependentSelectProducesJaggedResultWhenInnerDimCollapsed)
+    {
+        Block block(MakeInterleavedCreateInfo());
+        std::shared_ptr<Variable> w_data = block.GetOrCreateVariable("w");
+        ASSERT_NE(w_data, nullptr);
+
+        // Collapse z (Uniform(2)) with Equal(0); retain x (Uniform(2)) and y (Jagged({1,2})).
+        std::vector<MultiIndexSelector> selectors;
+        selectors.push_back(MultiIndexSelector::Any());
+        selectors.push_back(MultiIndexSelector::Any());
+        selectors.push_back(MultiIndexSelector::Equal(0));
+
+        std::shared_ptr<Variable> selected = w_data->select(selectors);
+        ASSERT_NE(selected, nullptr);
+        EXPECT_EQ(selected->kind(), VariableKind::kDependent);
+        EXPECT_EQ(selected->multi_dimension_spec().rank(), 2u);
+
+        EXPECT_NE(selected->multi_dimension_spec().dims()[0].as_uniform(), nullptr);
+        EXPECT_EQ(selected->multi_dimension_spec().dims()[0].as_uniform()->size, 2u);
+
+        EXPECT_NE(selected->multi_dimension_spec().dims()[1].as_jagged(), nullptr);
+        const auto* jagged = selected->multi_dimension_spec().dims()[1].as_jagged();
+        ASSERT_EQ(jagged->sizes.size(), 2u);
+        EXPECT_EQ(jagged->sizes[0], 1);
+        EXPECT_EQ(jagged->sizes[1], 2);
+
+        const TableData& table = selected->GetOrCreateTableData();
+        ASSERT_EQ(table.metadata.headers.size(), 3u);
+        EXPECT_EQ(table.metadata.headers[0], "x");
+        EXPECT_EQ(table.metadata.headers[1], "y");
+        EXPECT_EQ(table.metadata.headers[2], "data");
+
+        ASSERT_EQ(table.rows.size(), 3u);
+        EXPECT_EQ(table.rows[0], std::vector<std::string>({"10", "1", "1000"}));
+        EXPECT_EQ(table.rows[1], std::vector<std::string>({"20", "2", "1002"}));
+        EXPECT_EQ(table.rows[2], std::vector<std::string>({"20", "3", "1004"}));
+    }
+
     TEST(VariableSelectTest, IndependentSelectSupportsEqualOnSelfDimension)
     {
+        // for independent variable
+        // Equal on self dimension should remain independent
+
         Block block(MakeJaggedCreateInfo());
         std::shared_ptr<Variable> y_data = block.GetOrCreateVariable("y");
         ASSERT_NE(y_data, nullptr);
@@ -360,5 +404,20 @@ namespace xdataset
 
         ASSERT_EQ(table.rows.size(), 1u);
         EXPECT_EQ(table.rows[0], std::vector<std::string>({"20", "3"}));
+
+        selectors.clear();
+        selectors.push_back(MultiIndexSelector::Equal(0));
+        selectors.push_back(MultiIndexSelector::Equal(1));
+
+        selected = y_data->select(selectors);
+        ASSERT_NE(selected, nullptr);
+        EXPECT_EQ(selected->kind(), VariableKind::kIndependent);
+
+        const TableData& table2 = selected->GetOrCreateTableData();
+        ASSERT_EQ(table2.metadata.headers.size(), 1u);
+        EXPECT_EQ(table2.metadata.headers[0], "y");
+
+        ASSERT_EQ(table2.rows.size(), 1u);
+        EXPECT_EQ(table2.rows[0], std::vector<std::string>({"3"}));
     }
 } // namespace xdataset

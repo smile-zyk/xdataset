@@ -18,13 +18,6 @@ namespace xdataset
             std::size_t row_flat = 0;
         };
 
-        struct SelectionProjection
-        {
-            std::vector<DimensionSpec> projected_dims;
-            std::vector<std::size_t> retained_dims;
-            std::vector<LeafRow> selected_rows;
-        };
-
         using LeafRowVisitor = std::function<void(const LeafRow& leaf_row)>;
 
         MultiDimensionSpec();
@@ -55,9 +48,6 @@ namespace xdataset
 
         // Compute total cell count based on current dimensions
         std::size_t compute_cell_count() const;
-
-        // Build one-pass projection including projected dimensions and selected leaf-row metadata.
-        SelectionProjection project_selection(const std::vector<MultiIndexSelector>& selectors) const;
 
         // Visit each leaf row in row-major order and provide per-dimension source row positions.
         void for_each_leaf_row(const LeafRowVisitor& visitor) const;
