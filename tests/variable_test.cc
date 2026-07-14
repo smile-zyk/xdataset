@@ -457,4 +457,81 @@ namespace xdataset
         ASSERT_EQ(table2.rows.size(), 1u);
         EXPECT_EQ(table2.rows[0], std::vector<std::string>({"3"}));
     }
+
+    TEST(VariableAtTest, VectorAtEqualReturnsScalarAndKeepsRowsAndDims)
+    {
+        VariableCreateInfo info;
+        info.name = "v";
+        info.kind = VariableKind::kDependent;
+        info.data = CellSeries::Vectors<double>(2, 3);
+        info.data.vector_at<double>(0) << 1.0, 2.0, 3.0;
+        info.data.vector_at<double>(1) << 4.0, 5.0, 6.0;
+        info.indep_datas["x"] = CellSeries::ScalarsFrom<double>({10.0, 20.0});
+        info.multi_dimension_spec = MultiDimensionSpec(
+            std::vector<DimensionSpec>{DimensionSpec::Uniform(2)});
+
+        Variable v(info);
+        std::shared_ptr<Variable> selected =
+            v.at({MultiIndexSelector::Equal(1)});
+
+        ASSERT_NE(selected, nullptr);
+        EXPECT_EQ(selected->data().cell_kind(), CellKind::kScalar);
+        EXPECT_EQ(selected->data().size(), 2u);
+        EXPECT_EQ(selected->data().scalar_at<double>(0), 2.0);
+        EXPECT_EQ(selected->data().scalar_at<double>(1), 5.0);
+        EXPECT_EQ(selected->multi_dimension_spec().rank(), v.multi_dimension_spec().rank());
+
+        const TableData& table = selected->GetOrCreateTableData();
+        ASSERT_EQ(table.rows.size(), 2u);
+        EXPECT_EQ(table.rows[0], std::vector<std::string>({"10", "2"}));
+        EXPECT_EQ(table.rows[1], std::vector<std::string>({"20", "5"}));
+    }
+
+    TEST(VariableAtTest, MatrixAtEqualAndInReturnsVectorAndKeepsRowsAndDims)
+    {
+        VariableCreateInfo info;
+        info.name = "m";
+        info.kind = VariableKind::kDependent;
+        info.data = CellSeries::Matrices<int>(2, 2, 3);
+        info.data.matrix_at<int>(0) << 1, 2, 3,
+                                      4, 5, 6;
+        info.data.matrix_at<int>(1) << 7, 8, 9,
+                                      10, 11, 12;
+        info.indep_datas["x"] = CellSeries::ScalarsFrom<double>({10.0, 20.0});
+        info.multi_dimension_spec = MultiDimensionSpec(
+            std::vector<DimensionSpec>{DimensionSpec::Uniform(2)});
+
+        Variable m(info);
+        std::shared_ptr<Variable> selected = m.at(
+            {MultiIndexSelector::Equal(1), MultiIndexSelector::In({0, 2})});
+
+        ASSERT_NE(selected, nullptr);
+        EXPECT_EQ(selected->data().cell_kind(), CellKind::kVector);
+        ASSERT_EQ(selected->data().cell_shape().size(), 1u);
+        EXPECT_EQ(selected->data().cell_shape()[0], 2);
+        EXPECT_EQ(selected->data().size(), 2u);
+        EXPECT_EQ(selected->data().vector_at<int>(0)(0), 4);
+        EXPECT_EQ(selected->data().vector_at<int>(0)(1), 6);
+        EXPECT_EQ(selected->data().vector_at<int>(1)(0), 10);
+        EXPECT_EQ(selected->data().vector_at<int>(1)(1), 12);
+        EXPECT_EQ(selected->multi_dimension_spec().rank(), m.multi_dimension_spec().rank());
+    }
+
+    TEST(VariableAtTest, ScalarAtIsInvalid)
+    {
+        VariableCreateInfo info;
+        info.name = "s";
+        info.kind = VariableKind::kDependent;
+        info.data = CellSeries::ScalarsFrom<double>({1.0, 2.0});
+        info.indep_datas["x"] = CellSeries::ScalarsFrom<double>({10.0, 20.0});
+        info.multi_dimension_spec = MultiDimensionSpec(
+            std::vector<DimensionSpec>{DimensionSpec::Uniform(2)});
+
+        Variable s(info);
+        EXPECT_THROW(
+            {
+                s.at({MultiIndexSelector::Any()});
+            },
+            std::logic_error);
+    }
 } // namespace xdataset
