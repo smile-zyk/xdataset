@@ -1,4 +1,5 @@
 #include "dimension_spec.h"
+#include <cstddef>
 #include <stdexcept>
 
 namespace xdataset
@@ -13,7 +14,7 @@ namespace xdataset
         return DimensionSpec(UniformDim(size));
     }
 
-    DimensionSpec DimensionSpec::Jagged(const std::vector<Index>& sizes)
+    DimensionSpec DimensionSpec::Jagged(const std::vector<std::size_t>& sizes)
     {
         for (std::size_t i = 0; i < sizes.size(); ++i)
         {
@@ -69,7 +70,7 @@ namespace xdataset
         return u->size;
     }
 
-    const std::vector<Index>& DimensionSpec::jagged_sizes() const
+    const std::vector<std::size_t>& DimensionSpec::jagged_sizes() const
     {
         const JaggedDim* j = as_jagged();
         if (!j)

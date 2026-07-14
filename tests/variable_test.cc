@@ -338,8 +338,45 @@ namespace xdataset
         EXPECT_EQ(table.metadata.headers[2], "data");
 
         ASSERT_EQ(table.rows.size(), 4u);
-        EXPECT_EQ(table.rows[0], std::vector<std::string>({"1", "100", "1002"}));
-        EXPECT_EQ(table.rows[3], std::vector<std::string>({"2", "200", "1005"}));
+        EXPECT_EQ(table.rows[0], std::vector<std::string>({"2", "100", "1002"}));
+        EXPECT_EQ(table.rows[3], std::vector<std::string>({"3", "200", "1005"}));
+    }
+
+    TEST(VariableSelectTest, DependentSelectKeepsSparseIndependentRows)
+    {
+        BlockCreateInfo info;
+        info.name = "sparse-select";
+        info.independent_variables.push_back(
+            IndependentVariableCreateInfo{
+                "x",
+                MakeScalarSeriesFrom({10.0, 20.0, 30.0, 40.0}),
+                DimensionSpec::Uniform(4)});
+        info.dependent_variables.push_back(
+            DependentVariableCreateInfo{
+                "z",
+                MakeScalarSeriesFrom({100.0, 200.0, 300.0, 400.0})});
+
+        Block block(info);
+        std::shared_ptr<Variable> z_data = block.GetOrCreateVariable("z");
+        ASSERT_NE(z_data, nullptr);
+
+        std::vector<MultiIndexSelector> selectors;
+        selectors.push_back(MultiIndexSelector::In(std::vector<Index>{1, 3}));
+
+        std::shared_ptr<Variable> selected = z_data->select(selectors);
+        ASSERT_NE(selected, nullptr);
+        EXPECT_EQ(selected->kind(), VariableKind::kDependent);
+        EXPECT_EQ(selected->multi_dimension_spec().rank(), 1u);
+        EXPECT_EQ(selected->multi_dimension_spec().dims()[0].as_uniform()->size, 2u);
+
+        const TableData& table = selected->GetOrCreateTableData();
+        ASSERT_EQ(table.metadata.headers.size(), 2u);
+        EXPECT_EQ(table.metadata.headers[0], "x");
+        EXPECT_EQ(table.metadata.headers[1], "data");
+
+        ASSERT_EQ(table.rows.size(), 2u);
+        EXPECT_EQ(table.rows[0], std::vector<std::string>({"20", "200"}));
+        EXPECT_EQ(table.rows[1], std::vector<std::string>({"40", "400"}));
     }
 
     TEST(VariableSelectTest, DependentSelectProducesJaggedResultWhenInnerDimCollapsed)
@@ -406,7 +443,7 @@ namespace xdataset
         EXPECT_EQ(table.rows[0], std::vector<std::string>({"20", "3"}));
 
         selectors.clear();
-        selectors.push_back(MultiIndexSelector::Equal(0));
+        selectors.push_back(MultiIndexSelector::Equal(1));
         selectors.push_back(MultiIndexSelector::Equal(1));
 
         selected = y_data->select(selectors);

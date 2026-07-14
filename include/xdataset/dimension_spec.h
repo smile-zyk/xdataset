@@ -3,25 +3,26 @@
 
 #include "xdataset_predefine.h"
 #include <boost/variant.hpp>
+#include <cstddef>
 #include <vector>
 
 namespace xdataset
 {
     struct UniformDim
     {
-        Index size;
+        std::size_t size;
         
         UniformDim() : size(0) {}
-        explicit UniformDim(Index s) : size(s) {}
+        explicit UniformDim(std::size_t s) : size(s) {}
     };
 
     struct JaggedDim
     {
-        std::vector<Index> sizes;
+        std::vector<std::size_t> sizes;
         std::vector<std::size_t> prefix_sum;
         
         JaggedDim() {}
-        explicit JaggedDim(const std::vector<Index>& s) : sizes(s)
+        explicit JaggedDim(const std::vector<std::size_t>& s) : sizes(s)
         {
             compute_prefix_sum();
         }
@@ -42,7 +43,7 @@ namespace xdataset
     {
     public:
         static DimensionSpec Uniform(Index size);
-        static DimensionSpec Jagged(const std::vector<Index>& sizes);
+        static DimensionSpec Jagged(const std::vector<std::size_t>& sizes);
 
         // Type checking
         bool is_uniform() const;
@@ -54,7 +55,7 @@ namespace xdataset
 
         // Convenient getters (throws if wrong type)
         Index uniform_size() const;
-        const std::vector<Index>& jagged_sizes() const;
+        const std::vector<std::size_t>& jagged_sizes() const;
         const std::vector<std::size_t>& prefix_sum() const;
         
         // Number of elements at this level (uniform: size, jagged: sizes.size())

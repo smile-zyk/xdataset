@@ -1,8 +1,12 @@
 #include "variable.h"
+#include "cell_series.h"
+#include "multi_dimension_spec.h"
+#include "variable_descriptor.h"
 
 #include <algorithm>
-#include <functional>
+#include <map>
 #include <stdexcept>
+#include <tsl/ordered_map.h>
 #include <vector>
 
 namespace xdataset
@@ -18,68 +22,6 @@ namespace xdataset
             }
             return index_series;
         }
-
-        std::vector<std::size_t> BuildSelectedChildIndices(
-            const MultiIndexSelector& selector,
-            std::size_t width)
-        {
-            std::vector<std::size_t> selected;
-
-            if (selector.is_any())
-            {
-                selected.reserve(width);
-                for (std::size_t i = 0; i < width; ++i)
-                {
-                    selected.push_back(i);
-                }
-                return selected;
-            }
-
-            if (selector.is_equal())
-            {
-                const Index value = selector.equal_value();
-                if (value >= 0 && static_cast<std::size_t>(value) < width)
-                {
-                    selected.push_back(static_cast<std::size_t>(value));
-                }
-                return selected;
-            }
-
-            const std::vector<Index>& values = selector.in_values();
-            selected.reserve(values.size());
-            for (Index value : values)
-            {
-                if (value >= 0 && static_cast<std::size_t>(value) < width)
-                {
-                    selected.push_back(static_cast<std::size_t>(value));
-                }
-            }
-            return selected;
-        }
-
-        std::size_t RowCountForDimension(const DimensionSpec& dim)
-        {
-            if (dim.is_uniform())
-            {
-                return static_cast<std::size_t>(dim.uniform_size());
-            }
-            return dim.prefix_sum().empty() ? 0u : dim.prefix_sum().back();
-        }
-
-        CellSeries MakeEmptyLike(const CellSeries& series)
-        {
-            return CellSeries(series.cell_kind(), series.dtype(), series.cell_shape());
-        }
-
-        CellSeries HeadOrEmpty(const CellSeries& source, std::size_t count)
-        {
-            if (count > source.size())
-            {
-                throw std::out_of_range("selected independent row count exceeds source size");
-            }
-            return source.iloc(0, count);
-        }
-
     } // namespace
 
     Variable::Variable(const VariableCreateInfo& info)
@@ -156,42 +98,42 @@ namespace xdataset
 
         multi_dimension_spec_.for_each_leaf_row(
             [&](const MultiDimensionSpec::LeafRow& leaf_row)
-        {
-            const std::vector<std::size_t>& multi_index = leaf_row.multi_index;
-            const std::vector<std::size_t>& dimension_row_indices =
-                leaf_row.dimension_row_indices;
-            const std::size_t row_flat = leaf_row.row_flat;
-
-            std::vector<std::string> row;
-            row.reserve(table.metadata.headers.size());
-
-            for (std::size_t dim = 0; dim < indep_columns.size(); ++dim)
             {
-                const CellSeries* indep_series = indep_columns[dim].second;
-                const std::size_t src_row = dimension_row_indices[dim];
-                if (src_row >= indep_series->size())
-                {
-                    throw std::out_of_range("expanded independent row index out of bounds");
-                }
-                const std::vector<std::string> values =
-                    TableData::CellAtToColumns(*indep_series, src_row);
-                row.insert(row.end(), values.begin(), values.end());
-            }
+                const std::vector<std::size_t>& multi_index = leaf_row.multi_index;
+                const std::vector<std::size_t>& dimension_row_indices =
+                    leaf_row.dimension_row_indices;
+                const std::size_t row_flat = leaf_row.row_flat;
 
-            if (kind_ == VariableKind::kDependent)
-            {
-                if (row_flat >= data_.size())
-                {
-                    throw std::out_of_range("dependent data row index out of bounds");
-                }
-                const std::vector<std::string> values =
-                    TableData::CellAtToColumns(data_, row_flat);
-                row.insert(row.end(), values.begin(), values.end());
-            }
+                std::vector<std::string> row;
+                row.reserve(table.metadata.headers.size());
 
-            table.metadata.multi_indices.push_back(multi_index);
-            table.rows.push_back(row);
-        });
+                for (std::size_t dim = 0; dim < indep_columns.size(); ++dim)
+                {
+                    const CellSeries* indep_series = indep_columns[dim].second;
+                    const std::size_t src_row = dimension_row_indices[dim];
+                    if (src_row >= indep_series->size())
+                    {
+                        throw std::out_of_range("expanded independent row index out of bounds");
+                    }
+                    const std::vector<std::string> values =
+                        TableData::CellAtToColumns(*indep_series, src_row);
+                    row.insert(row.end(), values.begin(), values.end());
+                }
+
+                if (kind_ == VariableKind::kDependent)
+                {
+                    if (row_flat >= data_.size())
+                    {
+                        throw std::out_of_range("dependent data row index out of bounds");
+                    }
+                    const std::vector<std::string> values =
+                        TableData::CellAtToColumns(data_, row_flat);
+                    row.insert(row.end(), values.begin(), values.end());
+                }
+
+                table.metadata.multi_indices.push_back(multi_index);
+                table.rows.push_back(row);
+            });
 
         table_data_cache_ = std::move(table);
         table_data_cache_valid_ = true;
@@ -316,47 +258,91 @@ namespace xdataset
             throw std::invalid_argument("selector count exceeds variable rank");
         }
 
-        std::vector<MultiIndexSelector> normalized_selectors = selectors;
-        while (normalized_selectors.size() < rank)
+        // `selectors` may be shorter than rank: normalize it by prepending Any and
+        // keeping the user-provided selectors at the end, so short selectors only
+        // constrain the trailing dimensions by default.
+        std::vector<MultiIndexSelector> actual_selectors;
+        actual_selectors.reserve(rank);
+        if (selectors.size() < rank)
         {
-            normalized_selectors.push_back(MultiIndexSelector::Any());
+            actual_selectors.insert(
+                actual_selectors.end(), rank - selectors.size(), MultiIndexSelector::Any());
         }
+        actual_selectors.insert(actual_selectors.end(), selectors.begin(), selectors.end());
 
         const std::size_t self_dim = rank - 1;
-        std::vector<bool> keep_dim(rank, true);
+        std::vector<bool> is_dim_retain(rank, true);
         for (std::size_t source_dim = 0; source_dim < rank; ++source_dim)
         {
-            const bool is_equal_selector = normalized_selectors[source_dim].is_equal();
+            const bool is_equal_selector = actual_selectors[source_dim].is_equal();
+            // For an Independent variable, the last dimension represents its own data column,
+            // so we keep that dimension even when it is selected by equality.
             const bool is_independent_self =
                 (kind_ == VariableKind::kIndependent) && (source_dim == self_dim);
-            keep_dim[source_dim] = !is_equal_selector || is_independent_self;
+            is_dim_retain[source_dim] = !is_equal_selector || is_independent_self;
         }
 
-        std::vector<int> source_dim_to_selected_dim(rank, -1);
-        std::size_t selected_rank = 0;
-        for (std::size_t source_dim = 0; source_dim < rank; ++source_dim)
+        struct SelectionDimensionInformation
         {
-            if (keep_dim[source_dim])
+            bool is_jagged = false;
+            std::vector<Index> source_rows;
+            std::vector<std::size_t> child_counts;
+        };
+
+        // key is source dimension index, value is SelectionDimensionInformation
+        std::map<Index, SelectionDimensionInformation> selection_info;
+
+        // for dependent variable, record source data selected row
+        std::vector<Index> selected_row_indices;
+
+        // TODO implement selection logic for dependent and independent variables, updating
+        // selection_info and selected_row_indices accordingly
+        auto get_selected_indices = [](const MultiIndexSelector& selector,
+                                       std::size_t width) -> std::vector<Index>
+        {
+            std::vector<Index> selected;
+
+            if (selector.is_any())
             {
-                source_dim_to_selected_dim[source_dim] = static_cast<int>(selected_rank);
-                ++selected_rank;
+                selected.reserve(width);
+                for (std::size_t i = 0; i < width; ++i)
+                {
+                    selected.push_back(i);
+                }
+                return selected;
             }
-        }
 
-        const std::vector<DimensionSpec>& source_dims = multi_dimension_spec_.dims();
-        std::vector<std::vector<Index>> selected_dim_child_counts(selected_rank);
-        std::vector<std::size_t> selected_data_rows;
+            if (selector.is_equal())
+            {
+                const Index value = selector.equal_value();
+                if (value >= 0 && static_cast<std::size_t>(value) < width)
+                {
+                    selected.push_back(static_cast<std::size_t>(value));
+                }
+                return selected;
+            }
 
-        std::function<void(std::size_t, std::size_t)> walk =
-            [&](std::size_t dim_idx, std::size_t parent_flat)
+            const std::vector<Index>& values = selector.in_values();
+            selected.reserve(values.size());
+            for (Index value : values)
+            {
+                if (value >= 0 && static_cast<std::size_t>(value) < width)
+                {
+                    selected.push_back(static_cast<std::size_t>(value));
+                }
+            }
+            return selected;
+        };
+
+        std::function<void(Index, Index)> walk = [&](Index dim_idx, Index parent_flat)
         {
             if (dim_idx == rank)
             {
-                selected_data_rows.push_back(parent_flat);
+                selected_row_indices.push_back(parent_flat);
                 return;
             }
 
-            const DimensionSpec& dim = source_dims[dim_idx];
+            const DimensionSpec& dim = multi_dimension_spec_.dim(dim_idx);
             std::size_t width = 0;
             if (dim.is_uniform())
             {
@@ -367,14 +353,30 @@ namespace xdataset
                 width = dim.child_width(parent_flat);
             }
 
-            const std::vector<std::size_t> selected_children =
-                BuildSelectedChildIndices(normalized_selectors[dim_idx], width);
+            const std::vector<Index> selected_children =
+                get_selected_indices(actual_selectors[dim_idx], width);
 
-            const int selected_dim_idx = source_dim_to_selected_dim[dim_idx];
-            if (selected_dim_idx >= 0)
+            selection_info[dim_idx].child_counts.push_back(
+                static_cast<std::size_t>(selected_children.size()));
+            selection_info[dim_idx].is_jagged = !dim.is_uniform();
+
+            if (selection_info[dim_idx].is_jagged)
             {
-                selected_dim_child_counts[static_cast<std::size_t>(selected_dim_idx)].push_back(
-                    static_cast<Index>(selected_children.size()));
+                for (Index child : selected_children)
+                {
+                    std::size_t start = 0;
+                    std::size_t end = 0;
+                    dim.child_range(parent_flat, start, end);
+                    Index source_row = start + child;
+                    selection_info[dim_idx].source_rows.push_back(source_row);
+                }
+            }
+            else
+            {
+                if (selection_info[dim_idx].source_rows.empty())
+                {
+                    selection_info[dim_idx].source_rows = selected_children;
+                }
             }
 
             for (std::size_t child : selected_children)
@@ -400,70 +402,84 @@ namespace xdataset
 
         walk(0, 0);
 
-        std::vector<DimensionSpec> selected_dims;
-        selected_dims.reserve(selected_rank);
-        for (std::size_t i = 0; i < selected_rank; ++i)
+        MultiDimensionSpec selected_multi_dim;
+        for (std::size_t i = 0; i < rank; ++i)
         {
-            const std::vector<Index>& counts = selected_dim_child_counts[i];
+            if (!is_dim_retain[i])
+            {
+                continue;
+            }
+
+            const std::vector<std::size_t>& counts = selection_info[i].child_counts;
             if (counts.empty())
             {
-                selected_dims.push_back(DimensionSpec::Uniform(0));
+                selected_multi_dim.add_uniform(0);
                 continue;
             }
 
-            const Index first = counts.front();
-            const bool all_same =
-                std::all_of(
-                    counts.begin(),
-                    counts.end(),
-                    [&](Index value)
-                {
-                    return value == first;
-                });
-
-            if (all_same)
+            if (selection_info[i].is_jagged)
             {
-                selected_dims.push_back(DimensionSpec::Uniform(first));
-                continue;
+                if (counts.size() == 1)
+                {
+                    selected_multi_dim.add_uniform(counts.front());
+                }
+                else
+                {
+                    selected_multi_dim.add_jagged(counts);
+                }
             }
-
-            selected_dims.push_back(DimensionSpec::Jagged(counts));
+            else
+            {
+                selected_multi_dim.add_uniform(counts.front());
+            }
         }
 
         VariableCreateInfo info;
         info.name = name_;
         info.kind = kind_;
-        info.multi_dimension_spec = MultiDimensionSpec(selected_dims);
-
-        CellSeries selected_data = MakeEmptyLike(data_);
-        for (std::size_t source_row : selected_data_rows)
+        info.multi_dimension_spec = selected_multi_dim;
+        CellSeries selected_data = CellSeries(data_.cell_kind(), data_.dtype(), data_.cell_shape());
+        if (kind_ == VariableKind::kDependent)
         {
-            selected_data.append_from(data_, source_row);
+            for (const Index& source_row : selected_row_indices)
+            {
+                selected_data.append_from(data_, source_row);
+            }
+            info.data = std::move(selected_data);
         }
-        info.data = std::move(selected_data);
-
-        std::size_t source_dim_idx = 0;
-        for (const auto& item : indep_datas_)
+        else if (kind_ == VariableKind::kIndependent)
         {
-            if (source_dim_idx >= rank)
+            const auto& source_rows = selection_info[self_dim].source_rows;
+            for (std::size_t source_row : source_rows)
             {
-                throw std::logic_error("independent data count exceeds variable rank");
+                selected_data.append_from(data_, source_row);
+            }
+            info.data = std::move(selected_data);
+        }
+
+        for (std::size_t source_dim_idx = 0; source_dim_idx < rank; ++source_dim_idx)
+        {
+            if (!is_dim_retain[source_dim_idx])
+            {
+                continue;
             }
 
-            if (keep_dim[source_dim_idx])
-            {
-                const int selected_dim_idx = source_dim_to_selected_dim[source_dim_idx];
-                if (selected_dim_idx < 0)
-                {
-                    throw std::logic_error("kept dimension index mapping is invalid");
-                }
+            const bool is_independent_self =
+                (kind_ == VariableKind::kIndependent) && (source_dim_idx == self_dim);
 
-                const std::size_t selected_rows =
-                    RowCountForDimension(selected_dims[static_cast<std::size_t>(selected_dim_idx)]);
-                info.indep_datas.emplace(item.first, HeadOrEmpty(item.second, selected_rows));
+            if (is_independent_self)
+            {
+                continue;
             }
 
-            ++source_dim_idx;
+            const auto& source_rows = selection_info[source_dim_idx].source_rows;
+
+            const std::string& indep_name = std::next(indep_datas_.begin(), source_dim_idx)->first;
+            const CellSeries& indep_series = indep_datas_.at(indep_name);
+            for (std::size_t source_row : source_rows)
+            {
+                info.indep_datas[indep_name].append_from(indep_series, source_row);
+            }
         }
 
         return std::make_shared<Variable>(std::move(info));

@@ -100,25 +100,4 @@ namespace xdataset
         EXPECT_EQ(row_flats[5], 5u);
     }
 
-    TEST(MultiDimensionSpecTest, ProjectSelectionKeepsAndDropsDimensions)
-    {
-        MultiDimensionSpec spec;
-        spec.add_uniform(2).add_uniform(3).add_uniform(4);
-
-        std::vector<MultiIndexSelector> selectors;
-        selectors.push_back(MultiIndexSelector::Any());
-        selectors.push_back(MultiIndexSelector::Equal(1));
-        selectors.push_back(MultiIndexSelector::In({0, 2}));
-
-        const MultiDimensionSpec::SelectionProjection projection =
-            spec.project_selection(selectors);
-        const MultiDimensionSpec selected(projection.projected_dims);
-
-        EXPECT_EQ(selected.rank(), 2u);
-        ASSERT_EQ(selected.dims().size(), 2u);
-        EXPECT_TRUE(selected.dims()[0].is_uniform());
-        EXPECT_TRUE(selected.dims()[1].is_uniform());
-        EXPECT_EQ(selected.dims()[0].uniform_size(), 2);
-        EXPECT_EQ(selected.dims()[1].uniform_size(), 2);
-    }
 } // namespace xdataset

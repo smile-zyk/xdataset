@@ -15,13 +15,13 @@ namespace xdataset
     {
     }
 
-    MultiDimensionSpec& MultiDimensionSpec::add_uniform(Index size)
+    MultiDimensionSpec& MultiDimensionSpec::add_uniform(std::size_t size)
     {
         dims_.push_back(DimensionSpec::Uniform(size));
         return *this;
     }
 
-    MultiDimensionSpec& MultiDimensionSpec::add_jagged(const std::vector<Index>& sizes)
+    MultiDimensionSpec& MultiDimensionSpec::add_jagged(const std::vector<std::size_t>& sizes)
     {
         std::size_t expected_count = compute_cell_count();
         if (sizes.size() != expected_count)
@@ -56,6 +56,15 @@ namespace xdataset
     const std::vector<DimensionSpec>& MultiDimensionSpec::dims() const
     {
         return dims_;
+    }
+
+    const DimensionSpec& MultiDimensionSpec::dim(std::size_t index) const
+    {
+        if (index >= dims_.size())
+        {
+            throw std::out_of_range("dimension index out of range");
+        }
+        return dims_[index];
     }
 
     void MultiDimensionSpec::set_dimensions(const std::vector<DimensionSpec>& dims)

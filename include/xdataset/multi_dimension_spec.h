@@ -2,7 +2,6 @@
 #define MULTI_DIMENSION_SPEC_H
 
 #include "dimension_spec.h"
-#include "multi_index_selector.h"
 #include <functional>
 #include <vector>
 
@@ -24,9 +23,9 @@ namespace xdataset
         
         explicit MultiDimensionSpec(const std::vector<DimensionSpec>& dims);
 
-        MultiDimensionSpec& add_uniform(Index size);
+        MultiDimensionSpec& add_uniform(std::size_t size);
         
-        MultiDimensionSpec& add_jagged(const std::vector<Index>& sizes);
+        MultiDimensionSpec& add_jagged(const std::vector<std::size_t>& sizes);
         
         MultiDimensionSpec& add_dimension(const DimensionSpec& dim);
 
@@ -37,6 +36,8 @@ namespace xdataset
         bool empty() const;
         
         const std::vector<DimensionSpec>& dims() const;
+
+        const DimensionSpec& dim(std::size_t index) const;
 
         void set_dimensions(const std::vector<DimensionSpec>& dims);
 
