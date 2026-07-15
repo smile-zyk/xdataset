@@ -14,7 +14,7 @@ include(GoogleTest)
 
 enable_testing()
 
-add_executable(cell_series_test
+add_executable(xdataset_test
 	tests/cell_series_test.cc
 	tests/multi_dimension_test.cc
 	tests/block_test.cc
@@ -41,10 +41,10 @@ add_executable(xdataset_playground
 	src/table_data.cc
 )
 
-target_include_directories(cell_series_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(xdataset_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(xdataset_playground PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(cell_series_test PRIVATE Eigen3::Eigen GTest::gtest_main Boost::headers tsl::ordered_map)
+target_link_libraries(xdataset_test PRIVATE Eigen3::Eigen GTest::gtest_main Boost::headers tsl::ordered_map)
 target_link_libraries(xdataset_playground PRIVATE Eigen3::Eigen Boost::headers tsl::ordered_map)
 
-gtest_discover_tests(cell_series_test)
+gtest_discover_tests(xdataset_test)

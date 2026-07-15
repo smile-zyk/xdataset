@@ -3,6 +3,7 @@
 #include "multi_dimension_spec.h"
 #include "variable_descriptor.h"
 
+#include <functional>
 #include <map>
 #include <stdexcept>
 #include <tsl/ordered_map.h>
@@ -20,232 +21,6 @@ namespace xdataset
                 index_series.scalar_at<int>(i) = static_cast<int>(i);
             }
             return index_series;
-        }
-
-        std::vector<Index> ResolveSelectedIndices(
-            const MultiIndexSelector& selector,
-            Index width)
-        {
-            if (width < 0)
-            {
-                throw std::logic_error("selector width must be non-negative");
-            }
-
-            std::vector<Index> selected;
-            if (selector.is_any())
-            {
-                selected.reserve(static_cast<std::size_t>(width));
-                for (Index i = 0; i < width; ++i)
-                {
-                    selected.push_back(i);
-                }
-                return selected;
-            }
-
-            if (selector.is_equal())
-            {
-                const Index value = selector.equal_value();
-                if (value < 0 || value >= width)
-                {
-                    throw std::out_of_range("equal selector index out of range");
-                }
-                selected.push_back(value);
-                return selected;
-            }
-
-            const std::vector<Index>& values = selector.in_values();
-            selected.reserve(values.size());
-            for (Index value : values)
-            {
-                if (value < 0 || value >= width)
-                {
-                    throw std::out_of_range("in selector index out of range");
-                }
-                selected.push_back(value);
-            }
-            return selected;
-        }
-
-        template <typename T>
-        CellSeries AtVectorNumeric(
-            const CellSeries& source,
-            const std::vector<Index>& selected,
-            bool reduce_to_scalar)
-        {
-            if (reduce_to_scalar)
-            {
-                CellSeries out = CellSeries::Scalars<T>(source.size());
-                for (std::size_t row = 0; row < source.size(); ++row)
-                {
-                    out.scalar_at<T>(row) = source.vector_elem<T>(row, selected[0]);
-                }
-                return out;
-            }
-
-            CellSeries out = CellSeries::Vectors<T>(
-                source.size(), static_cast<Index>(selected.size()));
-            for (std::size_t row = 0; row < source.size(); ++row)
-            {
-                auto out_vec = out.vector_at<T>(row);
-                for (std::size_t i = 0; i < selected.size(); ++i)
-                {
-                    out_vec(static_cast<Index>(i)) = source.vector_elem<T>(row, selected[i]);
-                }
-            }
-            return out;
-        }
-
-        CellSeries AtVectorString(
-            const CellSeries& source,
-            const std::vector<Index>& selected,
-            bool reduce_to_scalar)
-        {
-            if (reduce_to_scalar)
-            {
-                CellSeries out = CellSeries::Scalars<std::string>(source.size());
-                for (std::size_t row = 0; row < source.size(); ++row)
-                {
-                    out.scalar_at<std::string>(row) =
-                        source.vector_elem_string(row, selected[0]);
-                }
-                return out;
-            }
-
-            CellSeries out = CellSeries::Vectors<std::string>(
-                source.size(), static_cast<Index>(selected.size()));
-            for (std::size_t row = 0; row < source.size(); ++row)
-            {
-                auto& out_vec = out.vector_at<std::string>(row);
-                for (std::size_t i = 0; i < selected.size(); ++i)
-                {
-                    out_vec(static_cast<Index>(i)) =
-                        source.vector_elem_string(row, selected[i]);
-                }
-            }
-            return out;
-        }
-
-        template <typename T>
-        CellSeries AtMatrixNumeric(
-            const CellSeries& source,
-            const std::vector<Index>& selected_rows,
-            const std::vector<Index>& selected_cols,
-            bool row_reduce,
-            bool col_reduce)
-        {
-            if (row_reduce && col_reduce)
-            {
-                CellSeries out = CellSeries::Scalars<T>(source.size());
-                for (std::size_t row = 0; row < source.size(); ++row)
-                {
-                    out.scalar_at<T>(row) =
-                        source.matrix_elem<T>(row, selected_rows[0], selected_cols[0]);
-                }
-                return out;
-            }
-
-            if (row_reduce || col_reduce)
-            {
-                const bool select_columns = row_reduce;
-                const std::vector<Index>& remaining =
-                    select_columns ? selected_cols : selected_rows;
-
-                CellSeries out =
-                    CellSeries::Vectors<T>(source.size(), static_cast<Index>(remaining.size()));
-
-                for (std::size_t row = 0; row < source.size(); ++row)
-                {
-                    auto out_vec = out.vector_at<T>(row);
-                    for (std::size_t i = 0; i < remaining.size(); ++i)
-                    {
-                        const Index r = row_reduce ? selected_rows[0] : remaining[i];
-                        const Index c = row_reduce ? remaining[i] : selected_cols[0];
-                        out_vec(static_cast<Index>(i)) = source.matrix_elem<T>(row, r, c);
-                    }
-                }
-
-                return out;
-            }
-
-            CellSeries out = CellSeries::Matrices<T>(
-                source.size(),
-                static_cast<Index>(selected_rows.size()),
-                static_cast<Index>(selected_cols.size()));
-
-            for (std::size_t row = 0; row < source.size(); ++row)
-            {
-                auto out_mat = out.matrix_at<T>(row);
-                for (std::size_t r = 0; r < selected_rows.size(); ++r)
-                {
-                    for (std::size_t c = 0; c < selected_cols.size(); ++c)
-                    {
-                        out_mat(static_cast<Index>(r), static_cast<Index>(c)) =
-                            source.matrix_elem<T>(row, selected_rows[r], selected_cols[c]);
-                    }
-                }
-            }
-            return out;
-        }
-
-        CellSeries AtMatrixString(
-            const CellSeries& source,
-            const std::vector<Index>& selected_rows,
-            const std::vector<Index>& selected_cols,
-            bool row_reduce,
-            bool col_reduce)
-        {
-            if (row_reduce && col_reduce)
-            {
-                CellSeries out = CellSeries::Scalars<std::string>(source.size());
-                for (std::size_t row = 0; row < source.size(); ++row)
-                {
-                    out.scalar_at<std::string>(row) =
-                        source.matrix_elem_string(row, selected_rows[0], selected_cols[0]);
-                }
-                return out;
-            }
-
-            if (row_reduce || col_reduce)
-            {
-                const bool select_columns = row_reduce;
-                const std::vector<Index>& remaining =
-                    select_columns ? selected_cols : selected_rows;
-
-                CellSeries out = CellSeries::Vectors<std::string>(
-                    source.size(), static_cast<Index>(remaining.size()));
-
-                for (std::size_t row = 0; row < source.size(); ++row)
-                {
-                    auto& out_vec = out.vector_at<std::string>(row);
-                    for (std::size_t i = 0; i < remaining.size(); ++i)
-                    {
-                        const Index r = row_reduce ? selected_rows[0] : remaining[i];
-                        const Index c = row_reduce ? remaining[i] : selected_cols[0];
-                        out_vec(static_cast<Index>(i)) = source.matrix_elem_string(row, r, c);
-                    }
-                }
-
-                return out;
-            }
-
-            CellSeries out = CellSeries::Matrices<std::string>(
-                source.size(),
-                static_cast<Index>(selected_rows.size()),
-                static_cast<Index>(selected_cols.size()));
-
-            for (std::size_t row = 0; row < source.size(); ++row)
-            {
-                auto& out_mat = out.matrix_at<std::string>(row);
-                for (std::size_t r = 0; r < selected_rows.size(); ++r)
-                {
-                    for (std::size_t c = 0; c < selected_cols.size(); ++c)
-                    {
-                        out_mat(static_cast<Index>(r), static_cast<Index>(c)) =
-                            source.matrix_elem_string(row, selected_rows[r], selected_cols[c]);
-                    }
-                }
-            }
-            return out;
         }
     } // namespace
 
@@ -484,28 +259,8 @@ namespace xdataset
                 throw std::invalid_argument("vector at requires exactly one selector");
             }
 
-            const Index width = data_.cell_shape()[0];
-            const std::vector<Index> selected =
-                ResolveSelectedIndices(selectors[0], width);
-            const bool reduce_to_scalar = selectors[0].is_equal();
-
-            if (data_.dtype() == DTypeTag::kReal)
-            {
-                info.data = AtVectorNumeric<double>(data_, selected, reduce_to_scalar);
-            }
-            else if (data_.dtype() == DTypeTag::kInteger)
-            {
-                info.data = AtVectorNumeric<int>(data_, selected, reduce_to_scalar);
-            }
-            else if (data_.dtype() == DTypeTag::kComplex)
-            {
-                info.data = AtVectorNumeric<std::complex<double> >(
-                    data_, selected, reduce_to_scalar);
-            }
-            else
-            {
-                info.data = AtVectorString(data_, selected, reduce_to_scalar);
-            }
+            const std::vector<Index> selected = selectors[0].resolve(data_.cell_shape()[0]);
+            info.data = data_.at(selected, selectors[0].is_equal());
 
             return std::make_shared<Variable>(std::move(info));
         }
@@ -515,34 +270,13 @@ namespace xdataset
             throw std::invalid_argument("matrix at requires exactly two selectors");
         }
 
-        const std::vector<Index> shape = data_.cell_shape();
-        const std::vector<Index> selected_rows =
-            ResolveSelectedIndices(selectors[0], shape[0]);
-        const std::vector<Index> selected_cols =
-            ResolveSelectedIndices(selectors[1], shape[1]);
-        const bool row_reduce = selectors[0].is_equal();
-        const bool col_reduce = selectors[1].is_equal();
-
-        if (data_.dtype() == DTypeTag::kReal)
-        {
-            info.data = AtMatrixNumeric<double>(
-                data_, selected_rows, selected_cols, row_reduce, col_reduce);
-        }
-        else if (data_.dtype() == DTypeTag::kInteger)
-        {
-            info.data = AtMatrixNumeric<int>(
-                data_, selected_rows, selected_cols, row_reduce, col_reduce);
-        }
-        else if (data_.dtype() == DTypeTag::kComplex)
-        {
-            info.data = AtMatrixNumeric<std::complex<double> >(
-                data_, selected_rows, selected_cols, row_reduce, col_reduce);
-        }
-        else
-        {
-            info.data = AtMatrixString(
-                data_, selected_rows, selected_cols, row_reduce, col_reduce);
-        }
+        const std::vector<Index> selected_rows = selectors[0].resolve(data_.cell_shape()[0]);
+        const std::vector<Index> selected_cols = selectors[1].resolve(data_.cell_shape()[1]);
+        info.data = data_.at(
+            selected_rows,
+            selected_cols,
+            selectors[0].is_equal(),
+            selectors[1].is_equal());
 
         return std::make_shared<Variable>(std::move(info));
     }
@@ -598,45 +332,6 @@ namespace xdataset
         // for dependent variable, record source data selected row
         std::vector<Index> selected_row_indices;
 
-        // TODO implement selection logic for dependent and independent variables, updating
-        // selection_info and selected_row_indices accordingly
-        auto get_selected_indices = [](const MultiIndexSelector& selector,
-                                       std::size_t width) -> std::vector<Index>
-        {
-            std::vector<Index> selected;
-
-            if (selector.is_any())
-            {
-                selected.reserve(width);
-                for (std::size_t i = 0; i < width; ++i)
-                {
-                    selected.push_back(i);
-                }
-                return selected;
-            }
-
-            if (selector.is_equal())
-            {
-                const Index value = selector.equal_value();
-                if (value >= 0 && static_cast<std::size_t>(value) < width)
-                {
-                    selected.push_back(static_cast<std::size_t>(value));
-                }
-                return selected;
-            }
-
-            const std::vector<Index>& values = selector.in_values();
-            selected.reserve(values.size());
-            for (Index value : values)
-            {
-                if (value >= 0 && static_cast<std::size_t>(value) < width)
-                {
-                    selected.push_back(static_cast<std::size_t>(value));
-                }
-            }
-            return selected;
-        };
-
         std::function<void(Index, Index)> walk = [&](Index dim_idx, Index parent_flat)
         {
             if (dim_idx == rank)
@@ -657,7 +352,7 @@ namespace xdataset
             }
 
             const std::vector<Index> selected_children =
-                get_selected_indices(actual_selectors[dim_idx], width);
+                actual_selectors[dim_idx].resolve(static_cast<Index>(width));
 
             selection_info[dim_idx].child_counts.push_back(
                 static_cast<std::size_t>(selected_children.size()));

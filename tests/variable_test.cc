@@ -342,6 +342,35 @@ namespace xdataset
         EXPECT_EQ(table.rows[3], std::vector<std::string>({"3", "200", "1005"}));
     }
 
+    TEST(VariableSelectTest, DependentSelectRejectsOutOfRangeIndices)
+    {
+        Block block(MakeInterleavedCreateInfo());
+        std::shared_ptr<Variable> w_data = block.GetOrCreateVariable("w");
+        ASSERT_NE(w_data, nullptr);
+
+        EXPECT_THROW(
+            {
+                w_data->select({MultiIndexSelector::In(std::vector<Index>{0, 2})});
+            },
+            std::out_of_range);
+    }
+
+    TEST(VariableSelectTest, DependentSelectRejectsOutOfRangeIndicesOnRaggedDimension)
+    {
+        Block block(MakeInterleavedCreateInfo());
+        std::shared_ptr<Variable> w_data = block.GetOrCreateVariable("w");
+        ASSERT_NE(w_data, nullptr);
+
+        EXPECT_THROW(
+            {
+                w_data->select(
+                    {MultiIndexSelector::Any(),
+                     MultiIndexSelector::In(std::vector<Index>{2}),
+                     MultiIndexSelector::Any()});
+            },
+            std::out_of_range);
+    }
+
     TEST(VariableSelectTest, DependentSelectKeepsSparseIndependentRows)
     {
         BlockCreateInfo info;
@@ -417,10 +446,9 @@ namespace xdataset
         EXPECT_EQ(table.rows[2], std::vector<std::string>({"20", "3", "1004"}));
     }
 
-    TEST(VariableSelectTest, IndependentSelectSupportsEqualOnSelfDimension)
+    TEST(VariableSelectTest, IndependentSelectRejectsOutOfRangeEqualOnSelfDimension)
     {
-        // for independent variable
-        // Equal on self dimension should remain independent
+        // For ragged independent variables, equal selection must still be in range.
 
         Block block(MakeJaggedCreateInfo());
         std::shared_ptr<Variable> y_data = block.GetOrCreateVariable("y");
@@ -430,32 +458,21 @@ namespace xdataset
         selectors.push_back(MultiIndexSelector::Any());
         selectors.push_back(MultiIndexSelector::Equal(1));
 
-        std::shared_ptr<Variable> selected = y_data->select(selectors);
-        ASSERT_NE(selected, nullptr);
-        EXPECT_EQ(selected->kind(), VariableKind::kIndependent);
-
-        const TableData& table = selected->GetOrCreateTableData();
-        ASSERT_EQ(table.metadata.headers.size(), 2u);
-        EXPECT_EQ(table.metadata.headers[0], "x");
-        EXPECT_EQ(table.metadata.headers[1], "y");
-
-        ASSERT_EQ(table.rows.size(), 1u);
-        EXPECT_EQ(table.rows[0], std::vector<std::string>({"20", "3"}));
+        EXPECT_THROW(
+            {
+                y_data->select(selectors);
+            },
+            std::out_of_range);
 
         selectors.clear();
+        selectors.push_back(MultiIndexSelector::Equal(0));
         selectors.push_back(MultiIndexSelector::Equal(1));
-        selectors.push_back(MultiIndexSelector::Equal(1));
 
-        selected = y_data->select(selectors);
-        ASSERT_NE(selected, nullptr);
-        EXPECT_EQ(selected->kind(), VariableKind::kIndependent);
-
-        const TableData& table2 = selected->GetOrCreateTableData();
-        ASSERT_EQ(table2.metadata.headers.size(), 1u);
-        EXPECT_EQ(table2.metadata.headers[0], "y");
-
-        ASSERT_EQ(table2.rows.size(), 1u);
-        EXPECT_EQ(table2.rows[0], std::vector<std::string>({"3"}));
+        EXPECT_THROW(
+            {
+                y_data->select(selectors);
+            },
+            std::out_of_range);
     }
 
     TEST(VariableAtTest, VectorAtEqualReturnsScalarAndKeepsRowsAndDims)

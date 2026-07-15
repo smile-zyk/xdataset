@@ -7,7 +7,7 @@ namespace xdataset
 {
     using namespace test_helpers;
 
-    TEST(VariableTableDataTest, IndependentTableExpandsPrefixDimensions)
+    TEST(TableDataTest, IndependentTableExpandsPrefixDimensions)
     {
         Block block(MakeValueRichCreateInfo());
         std::shared_ptr<Variable> y_data = block.GetOrCreateVariable("y");
@@ -31,7 +31,7 @@ namespace xdataset
         EXPECT_EQ(table.rows[3][1], "1");
     }
 
-    TEST(VariableTableDataTest, DependentTableContainsDataColumnAndCsv)
+    TEST(TableDataTest, DependentTableContainsDataColumnAndCsv)
     {
         Block block(MakeValueRichCreateInfo());
         std::shared_ptr<Variable> z_data = block.GetOrCreateVariable("z");
@@ -59,7 +59,7 @@ namespace xdataset
         EXPECT_NE(csv.find("\"[1,2]\",20,3,105"), std::string::npos);
     }
 
-    TEST(VariableTableDataTest, JaggedIndependentTableExpandsPrefixDimensions)
+    TEST(TableDataTest, JaggedIndependentTableExpandsPrefixDimensions)
     {
         Block block(MakeJaggedCreateInfo());
         std::shared_ptr<Variable> y_data = block.GetOrCreateVariable("y");
@@ -87,7 +87,7 @@ namespace xdataset
         EXPECT_NE(csv.find("\"[1,1]\",20,3"), std::string::npos);
     }
 
-    TEST(VariableTableDataTest, JaggedDependentTableContainsDataColumnAndCsv)
+    TEST(TableDataTest, JaggedDependentTableContainsDataColumnAndCsv)
     {
         Block block(MakeJaggedCreateInfo());
         std::shared_ptr<Variable> z_data = block.GetOrCreateVariable("z");
@@ -116,7 +116,7 @@ namespace xdataset
         EXPECT_NE(csv.find("\"[1,1]\",20,3,102"), std::string::npos);
     }
 
-    TEST(VariableTableDataTest, InterleavedJaggedIndependentTableExpandsPrefixDimensions)
+    TEST(TableDataTest, InterleavedJaggedIndependentTableExpandsPrefixDimensions)
     {
         Block block(MakeInterleavedCreateInfo());
         std::shared_ptr<Variable> z_data = block.GetOrCreateVariable("z");
@@ -154,7 +154,7 @@ namespace xdataset
         EXPECT_NE(csv.find("\"[1,1,1]\",20,3,200"), std::string::npos);
     }
 
-    TEST(VariableTableDataTest, InterleavedJaggedDependentTableContainsDataColumnAndCsv)
+    TEST(TableDataTest, InterleavedJaggedDependentTableContainsDataColumnAndCsv)
     {
         Block block(MakeInterleavedCreateInfo());
         std::shared_ptr<Variable> w_data = block.GetOrCreateVariable("w");

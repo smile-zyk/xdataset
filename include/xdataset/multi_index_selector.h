@@ -26,6 +26,7 @@ namespace xdataset
         bool is_in() const;
         Index equal_value() const;
         const std::vector<Index>& in_values() const;
+        std::vector<Index> resolve(Index width) const;
         bool matches(Index idx) const;
 
     private:

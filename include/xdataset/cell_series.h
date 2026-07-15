@@ -1348,7 +1348,246 @@ public:
         return Cell::Matrix(matrix_at<std::string>(i));
     }
 
+    CellSeries at(const std::vector<Index>& selected, bool reduce_to_scalar = false) const {
+        if (kind_ == CellKind::kScalar) {
+            throw std::logic_error("at is invalid for scalar data");
+        }
+
+        if (kind_ == CellKind::kVector) {
+            if (reduce_to_scalar) {
+                if (selected.size() != 1) {
+                    throw std::invalid_argument("scalar vector at requires exactly one index");
+                }
+
+                if (dtype_ == DTypeTag::kReal) {
+                    CellSeries out = CellSeries::Scalars<double>(size());
+                    for (std::size_t row = 0; row < size(); ++row) {
+                        out.scalar_at<double>(row) = vector_elem<double>(row, selected[0]);
+                    }
+                    return out;
+                }
+                if (dtype_ == DTypeTag::kInteger) {
+                    CellSeries out = CellSeries::Scalars<int>(size());
+                    for (std::size_t row = 0; row < size(); ++row) {
+                        out.scalar_at<int>(row) = vector_elem<int>(row, selected[0]);
+                    }
+                    return out;
+                }
+                if (dtype_ == DTypeTag::kComplex) {
+                    CellSeries out = CellSeries::Scalars<std::complex<double> >(size());
+                    for (std::size_t row = 0; row < size(); ++row) {
+                        out.scalar_at<std::complex<double> >(row) =
+                            vector_elem<std::complex<double> >(row, selected[0]);
+                    }
+                    return out;
+                }
+
+                CellSeries out = CellSeries::Scalars<std::string>(size());
+                for (std::size_t row = 0; row < size(); ++row) {
+                    out.scalar_at<std::string>(row) = vector_elem_string(row, selected[0]);
+                }
+                return out;
+            }
+
+            if (dtype_ == DTypeTag::kReal) {
+                return at_vector_numeric_impl<double>(selected);
+            }
+            if (dtype_ == DTypeTag::kInteger) {
+                return at_vector_numeric_impl<int>(selected);
+            }
+            if (dtype_ == DTypeTag::kComplex) {
+                return at_vector_numeric_impl<std::complex<double> >(selected);
+            }
+            return at_vector_string_impl(selected);
+        }
+
+        throw std::invalid_argument("vector at requires vector data");
+    }
+
+    CellSeries at(
+        const std::vector<Index>& selected_rows,
+        const std::vector<Index>& selected_cols,
+        bool row_reduce = false,
+        bool col_reduce = false) const {
+        if (kind_ == CellKind::kScalar) {
+            throw std::logic_error("at is invalid for scalar data");
+        }
+
+        if (kind_ == CellKind::kVector) {
+            throw std::invalid_argument("matrix at requires matrix data");
+        }
+
+        if (row_reduce && col_reduce) {
+            if (selected_rows.size() != 1 || selected_cols.size() != 1) {
+                throw std::invalid_argument("scalar matrix at requires exactly one row and one column index");
+            }
+
+            if (dtype_ == DTypeTag::kReal) {
+                CellSeries out = CellSeries::Scalars<double>(size());
+                for (std::size_t row = 0; row < size(); ++row) {
+                    out.scalar_at<double>(row) =
+                        matrix_elem<double>(row, selected_rows[0], selected_cols[0]);
+                }
+                return out;
+            }
+            if (dtype_ == DTypeTag::kInteger) {
+                CellSeries out = CellSeries::Scalars<int>(size());
+                for (std::size_t row = 0; row < size(); ++row) {
+                    out.scalar_at<int>(row) =
+                        matrix_elem<int>(row, selected_rows[0], selected_cols[0]);
+                }
+                return out;
+            }
+            if (dtype_ == DTypeTag::kComplex) {
+                CellSeries out = CellSeries::Scalars<std::complex<double> >(size());
+                for (std::size_t row = 0; row < size(); ++row) {
+                    out.scalar_at<std::complex<double> >(row) =
+                        matrix_elem<std::complex<double> >(row, selected_rows[0], selected_cols[0]);
+                }
+                return out;
+            }
+
+            CellSeries out = CellSeries::Scalars<std::string>(size());
+            for (std::size_t row = 0; row < size(); ++row) {
+                out.scalar_at<std::string>(row) =
+                    matrix_elem_string(row, selected_rows[0], selected_cols[0]);
+            }
+            return out;
+        }
+
+        if (row_reduce || col_reduce) {
+            const bool select_columns = row_reduce;
+            const std::vector<Index>& remaining = select_columns ? selected_cols : selected_rows;
+
+            if (dtype_ == DTypeTag::kReal) {
+                CellSeries out = CellSeries::Vectors<double>(size(), static_cast<Index>(remaining.size()));
+                for (std::size_t row = 0; row < size(); ++row) {
+                    auto out_vec = out.vector_at<double>(row);
+                    for (std::size_t i = 0; i < remaining.size(); ++i) {
+                        const Index r = row_reduce ? selected_rows[0] : remaining[i];
+                        const Index c = row_reduce ? remaining[i] : selected_cols[0];
+                        out_vec(static_cast<Index>(i)) = matrix_elem<double>(row, r, c);
+                    }
+                }
+                return out;
+            }
+            if (dtype_ == DTypeTag::kInteger) {
+                CellSeries out = CellSeries::Vectors<int>(size(), static_cast<Index>(remaining.size()));
+                for (std::size_t row = 0; row < size(); ++row) {
+                    auto out_vec = out.vector_at<int>(row);
+                    for (std::size_t i = 0; i < remaining.size(); ++i) {
+                        const Index r = row_reduce ? selected_rows[0] : remaining[i];
+                        const Index c = row_reduce ? remaining[i] : selected_cols[0];
+                        out_vec(static_cast<Index>(i)) = matrix_elem<int>(row, r, c);
+                    }
+                }
+                return out;
+            }
+            if (dtype_ == DTypeTag::kComplex) {
+                CellSeries out = CellSeries::Vectors<std::complex<double> >(
+                    size(), static_cast<Index>(remaining.size()));
+                for (std::size_t row = 0; row < size(); ++row) {
+                    auto out_vec = out.vector_at<std::complex<double> >(row);
+                    for (std::size_t i = 0; i < remaining.size(); ++i) {
+                        const Index r = row_reduce ? selected_rows[0] : remaining[i];
+                        const Index c = row_reduce ? remaining[i] : selected_cols[0];
+                        out_vec(static_cast<Index>(i)) = matrix_elem<std::complex<double> >(row, r, c);
+                    }
+                }
+                return out;
+            }
+
+            CellSeries out = CellSeries::Vectors<std::string>(size(), static_cast<Index>(remaining.size()));
+            for (std::size_t row = 0; row < size(); ++row) {
+                auto& out_vec = out.vector_at<std::string>(row);
+                for (std::size_t i = 0; i < remaining.size(); ++i) {
+                    const Index r = row_reduce ? selected_rows[0] : remaining[i];
+                    const Index c = row_reduce ? remaining[i] : selected_cols[0];
+                    out_vec(static_cast<Index>(i)) = matrix_elem_string(row, r, c);
+                }
+            }
+            return out;
+        }
+
+        if (dtype_ == DTypeTag::kReal) {
+            return at_matrix_numeric_impl<double>(selected_rows, selected_cols);
+        }
+        if (dtype_ == DTypeTag::kInteger) {
+            return at_matrix_numeric_impl<int>(selected_rows, selected_cols);
+        }
+        if (dtype_ == DTypeTag::kComplex) {
+            return at_matrix_numeric_impl<std::complex<double> >(selected_rows, selected_cols);
+        }
+        return at_matrix_string_impl(selected_rows, selected_cols);
+    }
+
 private:
+    template <typename T>
+    CellSeries at_vector_numeric_impl(const std::vector<Index>& selected) const {
+        CellSeries out = CellSeries::Vectors<T>(size(), static_cast<Index>(selected.size()));
+        for (std::size_t row = 0; row < size(); ++row) {
+            auto out_vec = out.vector_at<T>(row);
+            for (std::size_t i = 0; i < selected.size(); ++i) {
+                out_vec(static_cast<Index>(i)) = vector_elem<T>(row, selected[i]);
+            }
+        }
+        return out;
+    }
+
+    CellSeries at_vector_string_impl(const std::vector<Index>& selected) const {
+        CellSeries out = CellSeries::Vectors<std::string>(size(), static_cast<Index>(selected.size()));
+        for (std::size_t row = 0; row < size(); ++row) {
+            auto out_vec = out.vector_at<std::string>(row);
+            for (std::size_t i = 0; i < selected.size(); ++i) {
+                out_vec(static_cast<Index>(i)) = vector_elem_string(row, selected[i]);
+            }
+        }
+        return out;
+    }
+
+    template <typename T>
+    CellSeries at_matrix_numeric_impl(
+        const std::vector<Index>& selected_rows,
+        const std::vector<Index>& selected_cols) const {
+
+        CellSeries out = CellSeries::Matrices<T>(
+            size(),
+            static_cast<Index>(selected_rows.size()),
+            static_cast<Index>(selected_cols.size()));
+
+        for (std::size_t row = 0; row < size(); ++row) {
+            auto out_mat = out.matrix_at<T>(row);
+            for (std::size_t r = 0; r < selected_rows.size(); ++r) {
+                for (std::size_t c = 0; c < selected_cols.size(); ++c) {
+                    out_mat(static_cast<Index>(r), static_cast<Index>(c)) =
+                        matrix_elem<T>(row, selected_rows[r], selected_cols[c]);
+                }
+            }
+        }
+        return out;
+    }
+
+    CellSeries at_matrix_string_impl(
+        const std::vector<Index>& selected_rows,
+        const std::vector<Index>& selected_cols) const {
+
+        CellSeries out = CellSeries::Matrices<std::string>(
+            size(),
+            static_cast<Index>(selected_rows.size()),
+            static_cast<Index>(selected_cols.size()));
+
+        for (std::size_t row = 0; row < size(); ++row) {
+            auto& out_mat = out.matrix_at<std::string>(row);
+            for (std::size_t r = 0; r < selected_rows.size(); ++r) {
+                for (std::size_t c = 0; c < selected_cols.size(); ++c) {
+                    out_mat(static_cast<Index>(r), static_cast<Index>(c)) =
+                        matrix_elem_string(row, selected_rows[r], selected_cols[c]);
+                }
+            }
+        }
+        return out;
+    }
+
     static void validate_schema(CellKind kind, const std::vector<Index>& shape) {
         if (kind == CellKind::kScalar) {
             if (!shape.empty()) throw std::invalid_argument("scalar schema must have empty shape");

@@ -1,8 +1,27 @@
 #include "multi_index_selector.h"
 #include <algorithm>
+#include <stdexcept>
+#include <string>
 
 namespace xdataset
 {
+    namespace
+    {
+        const char* SelectorKindName(MultiIndexSelector::Kind kind)
+        {
+            switch (kind)
+            {
+            case MultiIndexSelector::kAny:
+                return "Any";
+            case MultiIndexSelector::kEqual:
+                return "Equal";
+            case MultiIndexSelector::kIn:
+                return "In";
+            }
+
+            return "Unknown";
+        }
+    } // namespace
 
     MultiIndexSelector MultiIndexSelector::Any()
     {
@@ -93,6 +112,54 @@ namespace xdataset
             throw std::logic_error("in_values() is only valid for in selectors");
         }
         return values_;
+    }
+
+    std::vector<Index> MultiIndexSelector::resolve(Index width) const
+    {
+        if (width < 0)
+        {
+            throw std::logic_error(
+                std::string("selector width must be non-negative: kind=") +
+                SelectorKindName(kind_) + ", width=" + std::to_string(width));
+        }
+
+        std::vector<Index> selected;
+        if (is_any())
+        {
+            selected.reserve(static_cast<std::size_t>(width));
+            for (Index i = 0; i < width; ++i)
+            {
+                selected.push_back(i);
+            }
+            return selected;
+        }
+
+        if (is_equal())
+        {
+            const Index value = equal_value();
+            if (value < 0 || value >= width)
+            {
+                throw std::out_of_range(
+                    std::string("equal selector index out of range: value=") +
+                    std::to_string(value) + ", width=" + std::to_string(width));
+            }
+            selected.push_back(value);
+            return selected;
+        }
+
+        const std::vector<Index>& values = in_values();
+        selected.reserve(values.size());
+        for (Index value : values)
+        {
+            if (value < 0 || value >= width)
+            {
+                throw std::out_of_range(
+                    std::string("in selector index out of range: value=") +
+                    std::to_string(value) + ", width=" + std::to_string(width));
+            }
+            selected.push_back(value);
+        }
+        return selected;
     }
 
     bool MultiIndexSelector::matches(Index idx) const
