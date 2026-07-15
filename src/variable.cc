@@ -29,9 +29,7 @@ namespace xdataset
           data_(info.data),
           indep_datas_(info.indep_datas),
           multi_dimension_spec_(info.multi_dimension_spec),
-          kind_(info.kind),
-          table_data_cache_valid_(false),
-          table_data_cache_()
+          kind_(info.kind)
     {
     }
 
@@ -40,104 +38,17 @@ namespace xdataset
           data_(std::move(info.data)),
           indep_datas_(std::move(info.indep_datas)),
           multi_dimension_spec_(std::move(info.multi_dimension_spec)),
-          kind_(info.kind),
-          table_data_cache_valid_(false),
-          table_data_cache_()
+          kind_(info.kind)
     {
     }
 
-    const TableData& Variable::GetOrCreateTableData() const
+    const GridModel& Variable::grid_model() const
     {
-        if (table_data_cache_valid_)
+        if (!grid_model_cache_)
         {
-            return table_data_cache_;
+            grid_model_cache_.reset(new VariableGridModel(*this));
         }
-
-        if (multi_dimension_spec_.empty())
-        {
-            throw std::logic_error("variable table view requires non-empty dimensions");
-        }
-
-        TableData table;
-
-        std::vector<std::pair<std::string, const CellSeries*>> indep_columns;
-        indep_columns.reserve(indep_datas_.size() + 1);
-
-        for (const auto& item : indep_datas_)
-        {
-            indep_columns.push_back(std::make_pair(item.first, &item.second));
-            const std::vector<std::string> headers =
-                TableData::ExpandHeadersForSeries(item.first, item.second);
-            table.metadata.headers.insert(
-                table.metadata.headers.end(), headers.begin(), headers.end());
-        }
-
-        if (kind_ == VariableKind::kIndependent)
-        {
-            const std::string self_name = name_.empty() ? "self" : name_;
-            indep_columns.push_back(std::make_pair(self_name, &data_));
-            const std::vector<std::string> headers =
-                TableData::ExpandHeadersForSeries(self_name, data_);
-            table.metadata.headers.insert(
-                table.metadata.headers.end(), headers.begin(), headers.end());
-        }
-
-        if (kind_ == VariableKind::kDependent)
-        {
-            const std::vector<std::string> headers =
-                TableData::ExpandHeadersForSeries("data", data_);
-            table.metadata.headers.insert(
-                table.metadata.headers.end(), headers.begin(), headers.end());
-        }
-
-        const std::size_t rank = multi_dimension_spec_.rank();
-        if (indep_columns.size() != rank)
-        {
-            throw std::logic_error("independent columns count must match MultiDimensionSpec rank");
-        }
-
-        multi_dimension_spec_.for_each_leaf_row(
-            [&](const MultiDimensionSpec::LeafRow& leaf_row)
-            {
-                const std::vector<std::size_t>& multi_index = leaf_row.multi_index;
-                const std::vector<std::size_t>& dimension_row_indices =
-                    leaf_row.dimension_row_indices;
-                const std::size_t row_flat = leaf_row.row_flat;
-
-                std::vector<std::string> row;
-                row.reserve(table.metadata.headers.size());
-
-                for (std::size_t dim = 0; dim < indep_columns.size(); ++dim)
-                {
-                    const CellSeries* indep_series = indep_columns[dim].second;
-                    const std::size_t src_row = dimension_row_indices[dim];
-                    if (src_row >= indep_series->size())
-                    {
-                        throw std::out_of_range("expanded independent row index out of bounds");
-                    }
-                    const std::vector<std::string> values =
-                        TableData::CellAtToColumns(*indep_series, src_row);
-                    row.insert(row.end(), values.begin(), values.end());
-                }
-
-                if (kind_ == VariableKind::kDependent)
-                {
-                    if (row_flat >= data_.size())
-                    {
-                        throw std::out_of_range("dependent data row index out of bounds");
-                    }
-                    const std::vector<std::string> values =
-                        TableData::CellAtToColumns(data_, row_flat);
-                    row.insert(row.end(), values.begin(), values.end());
-                }
-
-                table.metadata.multi_indices.push_back(multi_index);
-                table.rows.push_back(row);
-            });
-
-        table_data_cache_ = std::move(table);
-        table_data_cache_valid_ = true;
-        return table_data_cache_;
+        return *grid_model_cache_;
     }
 
     std::shared_ptr<Variable> Variable::indep(Index index) const

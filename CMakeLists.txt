@@ -19,6 +19,7 @@ add_executable(xdataset_test
 	tests/multi_dimension_test.cc
 	tests/block_test.cc
 	tests/variable_test.cc
+	tests/grid_model_test.cc
 	src/cell_series.cc
 	src/dimension_spec.cc
 	src/multi_dimension_spec.cc
@@ -26,7 +27,7 @@ add_executable(xdataset_test
 	src/variable_descriptor.cc
 	src/variable.cc
 	src/block.cc
-	src/table_data.cc
+	src/grid_model.cc
 )
 
 add_executable(xdataset_playground
@@ -38,7 +39,7 @@ add_executable(xdataset_playground
 	src/variable_descriptor.cc
 	src/variable.cc
 	src/block.cc
-	src/table_data.cc
+	src/grid_model.cc
 )
 
 target_include_directories(xdataset_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})

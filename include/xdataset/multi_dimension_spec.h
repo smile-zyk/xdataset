@@ -53,8 +53,10 @@ namespace xdataset
         // Visit each leaf row in row-major order and provide per-dimension source row positions.
         void for_each_leaf_row(const LeafRowVisitor& visitor) const;
 
+        // Visit leaf rows whose flat index falls in [start_flat_row, end_flat_row).
+        void for_each_leaf_row(const LeafRowVisitor& visitor, std::size_t start_flat_row, std::size_t end_flat_row) const;
+
     private:
-        std::size_t compute_cell_count_from(std::size_t start_dim) const;
         std::vector<DimensionSpec> dims_;
     };
 } // namespace xdataset

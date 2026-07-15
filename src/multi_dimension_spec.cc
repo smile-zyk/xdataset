@@ -94,9 +94,9 @@ namespace xdataset
             }
             else
             {
-                // For jagged dimension: use prefix sum to index into next level
+                // For jagged dimension: flat is the parent row index, child is multi_index[d]
                 const std::vector<std::size_t>& prefix = dims_[d].prefix_sum();
-                flat = prefix[multi_index[d]];
+                flat = prefix[flat] + multi_index[d];
             }
         }
         return flat;
@@ -120,31 +120,28 @@ namespace xdataset
         {
             if (dims_[d].is_uniform())
             {
-                const std::size_t stride = compute_cell_count_from(d + 1);
-                result[d] = residual / stride;
-                residual = residual % stride;
+                const std::size_t size = static_cast<std::size_t>(dims_[d].as_uniform()->size);
+                result[d] = residual % size;
+                residual = residual / size;
             }
             else
             {
-                // For jagged: binary search in prefix sum
+                // For jagged: binary search in prefix sum to find the parent row,
+                // then compute the child index within that parent.
                 const std::vector<std::size_t>& prefix = dims_[d].prefix_sum();
                 auto it = std::upper_bound(prefix.begin(), prefix.end(), residual);
-                result[d] = static_cast<std::size_t>((it - prefix.begin()) - 1);
-                residual = residual - prefix[result[d]];
+                std::size_t parent_row = static_cast<std::size_t>(it - prefix.begin()) - 1;
+                result[d] = residual - prefix[parent_row];
+                residual = parent_row;
             }
         }
         return result;
     }
 
-    std::size_t MultiDimensionSpec::compute_cell_count_from(std::size_t start_dim) const
+    std::size_t MultiDimensionSpec::compute_cell_count() const
     {
-        if (start_dim >= dims_.size())
-        {
-            return 1;
-        }
-
         std::size_t count = 1;
-        for (std::size_t i = start_dim; i < dims_.size(); ++i)
+        for (std::size_t i = 0; i < dims_.size(); ++i)
         {
             if (dims_[i].is_uniform())
             {
@@ -159,16 +156,26 @@ namespace xdataset
         return count;
     }
 
-    std::size_t MultiDimensionSpec::compute_cell_count() const
+    void MultiDimensionSpec::for_each_leaf_row(const LeafRowVisitor& visitor) const
     {
-        return compute_cell_count_from(0);
+        for_each_leaf_row(visitor, 0, compute_cell_count());
     }
 
-    void MultiDimensionSpec::for_each_leaf_row(const LeafRowVisitor& visitor) const
+    void MultiDimensionSpec::for_each_leaf_row(const LeafRowVisitor& visitor, std::size_t start_flat_row, std::size_t end_flat_row) const
     {
         if (!visitor)
         {
             return;
+        }
+
+        const std::size_t total = compute_cell_count();
+        if (start_flat_row >= end_flat_row || start_flat_row >= total)
+        {
+            return;
+        }
+        if (end_flat_row > total)
+        {
+            end_flat_row = total;
         }
 
         if (dims_.empty())
@@ -178,58 +185,39 @@ namespace xdataset
             return;
         }
 
-        std::vector<std::size_t> multi_index(dims_.size(), 0);
-        std::vector<std::size_t> source_rows(dims_.size(), 0);
+        const std::size_t rank = dims_.size();
+        LeafRow leaf_row;
+        leaf_row.multi_index.resize(rank);
+        leaf_row.dimension_row_indices.resize(rank, 0);
 
-        std::function<void(std::size_t, std::size_t)> walk =
-            [&](std::size_t dim_idx, std::size_t parent_flat)
+        for (std::size_t flat = start_flat_row; flat < end_flat_row; ++flat)
         {
-            std::size_t child_count = 0;
-            if (dims_[dim_idx].is_uniform())
-            {
-                child_count = static_cast<std::size_t>(dims_[dim_idx].uniform_size());
-            }
-            else
-            {
-                child_count = dims_[dim_idx].child_width(parent_flat);
-            }
+            leaf_row.multi_index = multi_index(flat);
+            leaf_row.row_flat = flat;
 
-            for (std::size_t idx = 0; idx < child_count; ++idx)
+            // Compute dimension_row_indices in a single O(rank) pass.
+            std::size_t parent_flat = 0;
+            for (std::size_t d = 0; d < rank; ++d)
             {
-                multi_index[dim_idx] = idx;
-
-                std::size_t current_flat = 0;
-                if (dims_[dim_idx].is_uniform())
+                if (dims_[d].is_uniform())
                 {
-                    const std::size_t size = static_cast<std::size_t>(dims_[dim_idx].uniform_size());
-                    current_flat = parent_flat * size + idx;
-                    source_rows[dim_idx] = idx;
+                    leaf_row.dimension_row_indices[d] = leaf_row.multi_index[d];
+                    parent_flat = parent_flat * static_cast<std::size_t>(dims_[d].uniform_size())
+                        + leaf_row.multi_index[d];
                 }
                 else
                 {
                     std::size_t start = 0;
                     std::size_t end = 0;
-                    dims_[dim_idx].child_range(parent_flat, start, end);
+                    dims_[d].child_range(parent_flat, start, end);
                     (void)end;
-                    current_flat = start + idx;
-                    source_rows[dim_idx] = current_flat;
+                    leaf_row.dimension_row_indices[d] = start + leaf_row.multi_index[d];
+                    parent_flat = start + leaf_row.multi_index[d];
                 }
-
-                if (dim_idx + 1 < dims_.size())
-                {
-                    walk(dim_idx + 1, current_flat);
-                    continue;
-                }
-
-                LeafRow leaf_row;
-                leaf_row.multi_index = multi_index;
-                leaf_row.dimension_row_indices = source_rows;
-                leaf_row.row_flat = current_flat;
-                visitor(leaf_row);
             }
-        };
 
-        walk(0, 0);
+            visitor(leaf_row);
+        }
     }
 
 } // namespace xdataset

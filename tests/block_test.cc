@@ -1,10 +1,10 @@
-#include "block_test_helpers.h"
+#include "block_fixtures.h"
 
 #include <gtest/gtest.h>
 
 namespace xdataset
 {
-    using namespace test_helpers;
+    using namespace block_fixtures;
 
     TEST(BlockConstructorTest, BuildsSpecsFromIndependentAndDependentRules)
     {
@@ -198,95 +198,235 @@ namespace xdataset
         EXPECT_EQ(z_data->data().size(), 2u);
     }
 
-    TEST(BlockTableDataTest, AggregatesAllVariablesIntoOneTable)
+    TEST(BlockGridModelTest, AggregatesAllVariablesIntoOneTable)
     {
         Block block(MakeValueRichCreateInfo());
-        const TableData& table = block.GetOrCreateTableData();
+        const GridModel& table = block.grid_model();
 
-        ASSERT_EQ(table.metadata.headers.size(), 3u);
-        EXPECT_EQ(table.metadata.headers[0], "x");
-        EXPECT_EQ(table.metadata.headers[1], "y");
-        EXPECT_EQ(table.metadata.headers[2], "z");
+        ASSERT_EQ(table.headers().size(), 3u);
+        EXPECT_EQ(table.headers()[0], "x");
+        EXPECT_EQ(table.headers()[1], "y");
+        EXPECT_EQ(table.headers()[2], "z");
 
-        ASSERT_EQ(table.rows.size(), 6u);
-        ASSERT_EQ(table.metadata.multi_indices.size(), 6u);
-        EXPECT_EQ(table.metadata.multi_indices[0][0], 0u);
-        EXPECT_EQ(table.metadata.multi_indices[0][1], 0u);
-        EXPECT_EQ(table.rows[0][0], "10");
-        EXPECT_EQ(table.rows[0][1], "1");
-        EXPECT_EQ(table.rows[0][2], "100");
-        EXPECT_EQ(table.metadata.multi_indices[5][0], 1u);
-        EXPECT_EQ(table.metadata.multi_indices[5][1], 2u);
-        EXPECT_EQ(table.rows[5][0], "20");
-        EXPECT_EQ(table.rows[5][1], "3");
-        EXPECT_EQ(table.rows[5][2], "105");
+        ASSERT_EQ(table.row_count(), 6u);
+        EXPECT_EQ(table.GetRow(0).multi_index[0], 0u);
+        EXPECT_EQ(table.GetRow(0).multi_index[1], 0u);
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "10");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "1");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[2]), "100");
+        EXPECT_EQ(table.GetRow(5).multi_index[0], 1u);
+        EXPECT_EQ(table.GetRow(5).multi_index[1], 2u);
+        EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[0]), "20");
+        EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[1]), "3");
+        EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[2]), "105");
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y,z"), std::string::npos);
         EXPECT_NE(csv.find("\"[1,2]\",20,3,105"), std::string::npos);
     }
 
-    TEST(BlockTableDataTest, AggregatesJaggedVariablesIntoOneTable)
+    TEST(BlockGridModelTest, AggregatesJaggedVariablesIntoOneTable)
     {
         Block block(MakeJaggedCreateInfo());
-        const TableData& table = block.GetOrCreateTableData();
+        const GridModel& table = block.grid_model();
 
-        ASSERT_EQ(table.metadata.headers.size(), 3u);
-        EXPECT_EQ(table.metadata.headers[0], "x");
-        EXPECT_EQ(table.metadata.headers[1], "y");
-        EXPECT_EQ(table.metadata.headers[2], "z");
+        ASSERT_EQ(table.headers().size(), 3u);
+        EXPECT_EQ(table.headers()[0], "x");
+        EXPECT_EQ(table.headers()[1], "y");
+        EXPECT_EQ(table.headers()[2], "z");
 
-        ASSERT_EQ(table.rows.size(), 3u);
-        ASSERT_EQ(table.metadata.multi_indices.size(), 3u);
+        ASSERT_EQ(table.row_count(), 3u);
 
-        EXPECT_EQ(table.metadata.multi_indices[0], std::vector<std::size_t>({0u, 0u}));
-        EXPECT_EQ(table.rows[0], std::vector<std::string>({"10", "1", "100"}));
+        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<std::size_t>({0u, 0u}));
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "10");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "1");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[2]), "100");
 
-        EXPECT_EQ(table.metadata.multi_indices[1], std::vector<std::size_t>({1u, 0u}));
-        EXPECT_EQ(table.rows[1], std::vector<std::string>({"20", "2", "101"}));
+        EXPECT_EQ(table.GetRow(1).multi_index, std::vector<std::size_t>({1u, 0u}));
+        EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[0]), "20");
+        EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[1]), "2");
+        EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[2]), "101");
 
-        EXPECT_EQ(table.metadata.multi_indices[2], std::vector<std::size_t>({1u, 1u}));
-        EXPECT_EQ(table.rows[2], std::vector<std::string>({"20", "3", "102"}));
+        EXPECT_EQ(table.GetRow(2).multi_index, std::vector<std::size_t>({1u, 1u}));
+        EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[0]), "20");
+        EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[1]), "3");
+        EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[2]), "102");
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y,z"), std::string::npos);
         EXPECT_NE(csv.find("\"[1,1]\",20,3,102"), std::string::npos);
     }
 
-    TEST(BlockTableDataTest, AggregatesInterleavedJaggedVariablesIntoOneTable)
+    TEST(BlockGridModelTest, AggregatesInterleavedJaggedVariablesIntoOneTable)
     {
         Block block(MakeInterleavedCreateInfo());
-        const TableData& table = block.GetOrCreateTableData();
+        const GridModel& table = block.grid_model();
 
-        ASSERT_EQ(table.metadata.headers.size(), 4u);
-        EXPECT_EQ(table.metadata.headers[0], "x");
-        EXPECT_EQ(table.metadata.headers[1], "y");
-        EXPECT_EQ(table.metadata.headers[2], "z");
-        EXPECT_EQ(table.metadata.headers[3], "w");
+        ASSERT_EQ(table.headers().size(), 4u);
+        EXPECT_EQ(table.headers()[0], "x");
+        EXPECT_EQ(table.headers()[1], "y");
+        EXPECT_EQ(table.headers()[2], "z");
+        EXPECT_EQ(table.headers()[3], "w");
 
-        ASSERT_EQ(table.rows.size(), 6u);
-        ASSERT_EQ(table.metadata.multi_indices.size(), 6u);
+        ASSERT_EQ(table.row_count(), 6u);
 
-        EXPECT_EQ(table.metadata.multi_indices[0], std::vector<std::size_t>({0u, 0u, 0u}));
-        EXPECT_EQ(table.rows[0], std::vector<std::string>({"10", "1", "100", "1000"}));
+        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<std::size_t>({0u, 0u, 0u}));
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "10");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "1");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[2]), "100");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[3]), "1000");
 
-        EXPECT_EQ(table.metadata.multi_indices[1], std::vector<std::size_t>({0u, 0u, 1u}));
-        EXPECT_EQ(table.rows[1], std::vector<std::string>({"10", "1", "200", "1001"}));
+        EXPECT_EQ(table.GetRow(1).multi_index, std::vector<std::size_t>({0u, 0u, 1u}));
+        EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[0]), "10");
+        EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[1]), "1");
+        EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[2]), "200");
+        EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[3]), "1001");
 
-        EXPECT_EQ(table.metadata.multi_indices[2], std::vector<std::size_t>({1u, 0u, 0u}));
-        EXPECT_EQ(table.rows[2], std::vector<std::string>({"20", "2", "100", "1002"}));
+        EXPECT_EQ(table.GetRow(2).multi_index, std::vector<std::size_t>({1u, 0u, 0u}));
+        EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[0]), "20");
+        EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[1]), "2");
+        EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[2]), "100");
+        EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[3]), "1002");
 
-        EXPECT_EQ(table.metadata.multi_indices[3], std::vector<std::size_t>({1u, 0u, 1u}));
-        EXPECT_EQ(table.rows[3], std::vector<std::string>({"20", "2", "200", "1003"}));
+        EXPECT_EQ(table.GetRow(3).multi_index, std::vector<std::size_t>({1u, 0u, 1u}));
+        EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[0]), "20");
+        EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[1]), "2");
+        EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[2]), "200");
+        EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[3]), "1003");
 
-        EXPECT_EQ(table.metadata.multi_indices[4], std::vector<std::size_t>({1u, 1u, 0u}));
-        EXPECT_EQ(table.rows[4], std::vector<std::string>({"20", "3", "100", "1004"}));
+        EXPECT_EQ(table.GetRow(4).multi_index, std::vector<std::size_t>({1u, 1u, 0u}));
+        EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[0]), "20");
+        EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[1]), "3");
+        EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[2]), "100");
+        EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[3]), "1004");
 
-        EXPECT_EQ(table.metadata.multi_indices[5], std::vector<std::size_t>({1u, 1u, 1u}));
-        EXPECT_EQ(table.rows[5], std::vector<std::string>({"20", "3", "200", "1005"}));
+        EXPECT_EQ(table.GetRow(5).multi_index, std::vector<std::size_t>({1u, 1u, 1u}));
+        EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[0]), "20");
+        EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[1]), "3");
+        EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[2]), "200");
+        EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[3]), "1005");
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y,z,w"), std::string::npos);
         EXPECT_NE(csv.find("\"[1,1,1]\",20,3,200,1005"), std::string::npos);
+    }
+
+    // =========================================================================
+    // New fixtures: string, multi-dep, single-dim, vector, matrix
+    // =========================================================================
+
+    TEST(BlockGridModelTest, AggregatesStringTypedVariables)
+    {
+        Block block(MakeStringTypedCreateInfo());
+        const GridModel& table = block.grid_model();
+
+        ASSERT_EQ(table.headers().size(), 3u);
+        EXPECT_EQ(table.headers()[0], "sx");
+        EXPECT_EQ(table.headers()[1], "sy");
+        EXPECT_EQ(table.headers()[2], "sz");
+
+        ASSERT_EQ(table.row_count(), 4u);
+
+        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<std::size_t>({0u, 0u}));
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "alpha");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "one");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[2]), "A");
+
+        EXPECT_EQ(table.GetRow(3).multi_index, std::vector<std::size_t>({1u, 1u}));
+        EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[0]), "beta");
+        EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[1]), "two");
+        EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[2]), "D");
+
+        const std::string csv = table.ToCsv();
+        EXPECT_NE(csv.find("sx,sy,sz"), std::string::npos);
+        EXPECT_NE(csv.find("\"[1,1]\",beta,two,D"), std::string::npos);
+    }
+
+    TEST(BlockGridModelTest, ThreeDimsWithMultipleDependents)
+    {
+        Block block(MakeThreeDimMultiDepCreateInfo());
+        const GridModel& table = block.grid_model();
+
+        ASSERT_EQ(table.headers().size(), 5u);
+        EXPECT_EQ(table.headers()[0], "a");
+        EXPECT_EQ(table.headers()[1], "b");
+        EXPECT_EQ(table.headers()[2], "c");
+        EXPECT_EQ(table.headers()[3], "p");
+        EXPECT_EQ(table.headers()[4], "q");
+
+        EXPECT_EQ(table.row_count(), 24u);
+    }
+
+    TEST(BlockGridModelTest, SingleIndependentBehavesCorrectly)
+    {
+        Block block(MakeSingleIndependentCreateInfo());
+        const GridModel& table = block.grid_model();
+
+        ASSERT_EQ(table.headers().size(), 2u);
+        EXPECT_EQ(table.headers()[0], "x");
+        EXPECT_EQ(table.headers()[1], "z");
+
+        ASSERT_EQ(table.row_count(), 3u);
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "10");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "100");
+        EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[0]), "30");
+        EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[1]), "300");
+    }
+
+    TEST(BlockGridModelTest, VectorCellColumnsAreExpanded)
+    {
+        Block block(MakeVectorCellCreateInfo());
+        const GridModel& table = block.grid_model();
+
+        ASSERT_EQ(table.headers().size(), 5u);
+        EXPECT_EQ(table.headers()[0], "x");
+        EXPECT_EQ(table.headers()[1], "y");
+        EXPECT_EQ(table.headers()[2], "vecs(1)");
+        EXPECT_EQ(table.headers()[3], "vecs(2)");
+        EXPECT_EQ(table.headers()[4], "vecs(3)");
+
+        ASSERT_EQ(table.row_count(), 4u);
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "10");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "1");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[2]), "1");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[3]), "2");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[4]), "3");
+    }
+
+    TEST(BlockGridModelTest, MatrixCellColumnsAreExpanded)
+    {
+        Block block(MakeMatrixCellCreateInfo());
+        const GridModel& table = block.grid_model();
+
+        ASSERT_EQ(table.headers().size(), 6u);
+        EXPECT_EQ(table.headers()[0], "x");
+        EXPECT_EQ(table.headers()[1], "y");
+        EXPECT_EQ(table.headers()[2], "mats(1,1)");
+        EXPECT_EQ(table.headers()[3], "mats(1,2)");
+        EXPECT_EQ(table.headers()[4], "mats(2,1)");
+        EXPECT_EQ(table.headers()[5], "mats(2,2)");
+
+        ASSERT_EQ(table.row_count(), 4u);
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "10");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "1");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[2]), "1");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[3]), "2");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[4]), "3");
+        EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[5]), "4");
+    }
+
+    TEST(BlockVariableCacheTest, MultiDependentVariablesAreBuiltCorrectly)
+    {
+        Block block(MakeThreeDimMultiDepCreateInfo());
+        const std::shared_ptr<Variable> a = block.GetOrCreateVariable("a");
+        const std::shared_ptr<Variable> p = block.GetOrCreateVariable("p");
+        const std::shared_ptr<Variable> q = block.GetOrCreateVariable("q");
+
+        EXPECT_EQ(a->kind(), VariableKind::kIndependent);
+        EXPECT_EQ(a->multi_dimension_spec().rank(), 1u);
+        EXPECT_EQ(p->kind(), VariableKind::kDependent);
+        EXPECT_EQ(p->multi_dimension_spec().rank(), 3u);
+        EXPECT_EQ(q->kind(), VariableKind::kDependent);
+        EXPECT_EQ(q->multi_dimension_spec().rank(), 3u);
     }
 } // namespace xdataset

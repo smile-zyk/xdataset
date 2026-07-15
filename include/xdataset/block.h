@@ -8,7 +8,7 @@
 
 #include "cell_series.h"
 #include "dimension_spec.h"
-#include "table_data.h"
+#include "grid_model.h"
 #include "variable.h"
 #include "variable_descriptor.h"
 
@@ -49,7 +49,7 @@ namespace xdataset
         const VariableDescriptor& variable_descriptor(const std::string& name) const;
 
         std::shared_ptr<Variable> GetOrCreateVariable(const std::string& variable_name);
-        const TableData& GetOrCreateTableData() const;
+        const GridModel& grid_model() const;
 
     private:
         std::shared_ptr<Variable> CreateVariable(const VariableDescriptor& descriptor);
@@ -59,8 +59,7 @@ namespace xdataset
         std::vector<std::string> independents_;
         tsl::ordered_map<std::string, VariableDescriptor> variable_descriptor_map_;
         tsl::ordered_map<std::string, std::shared_ptr<Variable>> variable_cache_;
-        mutable bool table_data_cache_valid_ = false;
-        mutable TableData table_data_cache_;
+        mutable std::unique_ptr<GridModel> grid_model_cache_;
     };
 }
 

@@ -26,9 +26,7 @@ namespace xdataset
                     dependents_(),
                     independents_(),
                     variable_descriptor_map_(),
-                    variable_cache_(),
-                    table_data_cache_valid_(false),
-                    table_data_cache_()
+                    variable_cache_()
     {
         std::vector<DimensionSpec> independent_dims;
         independent_dims.reserve(info.independent_variables.size());
@@ -173,81 +171,12 @@ namespace xdataset
         return variable;
     }
 
-    const TableData& Block::GetOrCreateTableData() const
+    const GridModel& Block::grid_model() const
     {
-        if (table_data_cache_valid_)
+        if (!grid_model_cache_)
         {
-            return table_data_cache_;
+            grid_model_cache_.reset(new BlockGridModel(*this));
         }
-
-        TableData table;
-
-        std::vector<DimensionSpec> dims;
-        dims.reserve(independents_.size());
-        for (const std::string& indep_name : independents_)
-        {
-            const VariableDescriptor& indep_descriptor = variable_descriptor(indep_name);
-            const std::vector<std::string> headers =
-                TableData::ExpandHeadersForSeries(indep_name, indep_descriptor.data());
-            table.metadata.headers.insert(
-                table.metadata.headers.end(), headers.begin(), headers.end());
-            const MultiDimensionSpec& indep_dim = indep_descriptor.multi_dimension_spec();
-            if (indep_dim.rank() != 1 || indep_dim.dims().size() != 1)
-            {
-                throw std::logic_error("independent VariableDescriptor must store exactly one dimension");
-            }
-            dims.push_back(indep_dim.dims()[0]);
-        }
-        for (const std::string& dep_name : dependents_)
-        {
-            const VariableDescriptor& dep_descriptor = variable_descriptor(dep_name);
-            const std::vector<std::string> headers =
-                TableData::ExpandHeadersForSeries(dep_name, dep_descriptor.data());
-            table.metadata.headers.insert(
-                table.metadata.headers.end(), headers.begin(), headers.end());
-        }
-
-        if (dims.empty())
-        {
-            table_data_cache_ = table;
-            table_data_cache_valid_ = true;
-            return table_data_cache_;
-        }
-
-        MultiDimensionSpec traversal_spec(dims);
-        traversal_spec.for_each_leaf_row(
-            [&](const MultiDimensionSpec::LeafRow& leaf_row)
-            {
-                const std::vector<std::size_t>& multi_index = leaf_row.multi_index;
-                const std::vector<std::size_t>& dimension_row_indices =
-                    leaf_row.dimension_row_indices;
-                const std::size_t row_flat = leaf_row.row_flat;
-
-                std::vector<std::string> row;
-                row.reserve(table.metadata.headers.size());
-
-                for (std::size_t dim = 0; dim < independents_.size(); ++dim)
-                {
-                    const VariableDescriptor& indep_descriptor = variable_descriptor(independents_[dim]);
-                    const std::vector<std::string> values =
-                        TableData::CellAtToColumns(indep_descriptor.data(), dimension_row_indices[dim]);
-                    row.insert(row.end(), values.begin(), values.end());
-                }
-
-                for (const std::string& dep_name : dependents_)
-                {
-                    const VariableDescriptor& dep_descriptor = variable_descriptor(dep_name);
-                    const std::vector<std::string> values =
-                        TableData::CellAtToColumns(dep_descriptor.data(), row_flat);
-                    row.insert(row.end(), values.begin(), values.end());
-                }
-
-                table.metadata.multi_indices.push_back(multi_index);
-                table.rows.push_back(row);
-            });
-
-        table_data_cache_ = std::move(table);
-        table_data_cache_valid_ = true;
-        return table_data_cache_;
+        return *grid_model_cache_;
     }
 } // namespace xdataset

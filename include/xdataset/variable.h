@@ -7,9 +7,9 @@
 #include <vector>
 
 #include "cell_series.h"
+#include "grid_model.h"
 #include "multi_dimension_spec.h"
 #include "multi_index_selector.h"
-#include "table_data.h"
 #include "variable_descriptor.h"
 
 namespace xdataset
@@ -49,7 +49,12 @@ namespace xdataset
             return name_;
         }
 
-        const TableData& GetOrCreateTableData() const;
+        const GridModel& grid_model() const;
+
+        const tsl::ordered_map<std::string, CellSeries>& indep_datas() const
+        {
+            return indep_datas_;
+        }
 
         std::shared_ptr<Variable> indep(Index index = 1) const;
 
@@ -65,8 +70,7 @@ namespace xdataset
         tsl::ordered_map<std::string, CellSeries> indep_datas_;
         MultiDimensionSpec multi_dimension_spec_;
         VariableKind kind_;
-        mutable bool table_data_cache_valid_ = false;
-        mutable TableData table_data_cache_;
+        mutable std::unique_ptr<GridModel> grid_model_cache_;
     };
 } // namespace xdataset
 
