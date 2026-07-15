@@ -1,5 +1,6 @@
 #include "variable.h"
 #include "cell_series.h"
+#include "dimension_spec.h"
 #include "multi_dimension_spec.h"
 #include "variable_descriptor.h"
 
@@ -392,5 +393,69 @@ namespace xdataset
         }
 
         return std::make_shared<Variable>(std::move(info));
+    }
+
+    // ── Static factory methods ─────────────────────────────────────────────────
+
+    std::shared_ptr<Variable> Variable::CreateIndependent(
+        std::string name,
+        CellSeries data)
+    {
+        const Index size = static_cast<Index>(data.size());
+        VariableCreateInfo vinfo;
+        vinfo.name = std::move(name);
+        vinfo.data = std::move(data);
+        vinfo.multi_dimension_spec = MultiDimensionSpec({DimensionSpec::Uniform(size)});
+        vinfo.kind = VariableKind::kIndependent;
+        return std::make_shared<Variable>(std::move(vinfo));
+    }
+
+    std::shared_ptr<Variable> Variable::CreateDependent(
+        std::string name,
+        CellSeries data,
+        const std::vector<std::shared_ptr<Variable>>& indep_variables)
+    {
+        if (indep_variables.empty())
+        {
+            throw std::invalid_argument(
+                "CreateDependent: indep_variables must not be empty");
+        }
+
+        tsl::ordered_map<std::string, CellSeries> indep_datas;
+        std::vector<DimensionSpec> indep_dimensions;
+
+        for (const auto& var : indep_variables)
+        {
+            if (!var)
+            {
+                throw std::invalid_argument(
+                    "CreateDependent: null indep_variable in list");
+            }
+            if (var->kind() != VariableKind::kIndependent)
+            {
+                throw std::invalid_argument(
+                    "CreateDependent: variable '" + var->name() +
+                    "' is not an independent variable");
+            }
+
+            indep_datas[var->name()] = var->data();
+
+            const std::vector<DimensionSpec>& dims = var->multi_dimension_spec().dims();
+            if (dims.empty())
+            {
+                throw std::logic_error(
+                    "CreateDependent: independent variable '" + var->name() +
+                    "' has no dimensions");
+            }
+            indep_dimensions.push_back(dims.back());
+        }
+
+        VariableCreateInfo vinfo;
+        vinfo.name = std::move(name);
+        vinfo.data = std::move(data);
+        vinfo.indep_datas = std::move(indep_datas);
+        vinfo.multi_dimension_spec = MultiDimensionSpec(std::move(indep_dimensions));
+        vinfo.kind = VariableKind::kDependent;
+        return std::make_shared<Variable>(std::move(vinfo));
     }
 } // namespace xdataset
