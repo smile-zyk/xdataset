@@ -19,13 +19,13 @@ namespace xdataset
         EXPECT_EQ(table.headers()[1], "y");
 
         ASSERT_EQ(table.row_count(), 6u);
-        EXPECT_EQ(table.GetRow(0).multi_index[0], 0u);
-        EXPECT_EQ(table.GetRow(0).multi_index[1], 0u);
+        EXPECT_EQ(table.GetRow(0).multi_index[0], 0);
+        EXPECT_EQ(table.GetRow(0).multi_index[1], 0);
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "10");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "1");
 
-        EXPECT_EQ(table.GetRow(3).multi_index[0], 1u);
-        EXPECT_EQ(table.GetRow(3).multi_index[1], 0u);
+        EXPECT_EQ(table.GetRow(3).multi_index[0], 1);
+        EXPECT_EQ(table.GetRow(3).multi_index[1], 0);
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[1]), "1");
     }
@@ -43,13 +43,13 @@ namespace xdataset
         EXPECT_EQ(table.headers()[2], "data");
 
         ASSERT_EQ(table.row_count(), 6u);
-        EXPECT_EQ(table.GetRow(0).multi_index[0], 0u);
-        EXPECT_EQ(table.GetRow(0).multi_index[1], 0u);
+        EXPECT_EQ(table.GetRow(0).multi_index[0], 0);
+        EXPECT_EQ(table.GetRow(0).multi_index[1], 0);
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "10");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "1");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[2]), "100");
-        EXPECT_EQ(table.GetRow(5).multi_index[0], 1u);
-        EXPECT_EQ(table.GetRow(5).multi_index[1], 2u);
+        EXPECT_EQ(table.GetRow(5).multi_index[0], 1);
+        EXPECT_EQ(table.GetRow(5).multi_index[1], 2);
         EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[2]), "105");
 
         const std::string csv = table.ToCsv();
@@ -69,15 +69,15 @@ namespace xdataset
         EXPECT_EQ(table.headers()[1], "y");
 
         ASSERT_EQ(table.row_count(), 3u);
-        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<std::size_t>({0u, 0u}));
+        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<Index>({0, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "10");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "1");
 
-        EXPECT_EQ(table.GetRow(1).multi_index, std::vector<std::size_t>({1u, 0u}));
+        EXPECT_EQ(table.GetRow(1).multi_index, std::vector<Index>({1, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[1]), "2");
 
-        EXPECT_EQ(table.GetRow(2).multi_index, std::vector<std::size_t>({1u, 1u}));
+        EXPECT_EQ(table.GetRow(2).multi_index, std::vector<Index>({1, 1}));
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[1]), "3");
 
@@ -100,17 +100,17 @@ namespace xdataset
 
         ASSERT_EQ(table.row_count(), 3u);
 
-        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<std::size_t>({0u, 0u}));
+        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<Index>({0, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "10");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "1");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[2]), "100");
 
-        EXPECT_EQ(table.GetRow(1).multi_index, std::vector<std::size_t>({1u, 0u}));
+        EXPECT_EQ(table.GetRow(1).multi_index, std::vector<Index>({1, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[1]), "2");
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[2]), "101");
 
-        EXPECT_EQ(table.GetRow(2).multi_index, std::vector<std::size_t>({1u, 1u}));
+        EXPECT_EQ(table.GetRow(2).multi_index, std::vector<Index>({1, 1}));
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[1]), "3");
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[2]), "102");
@@ -134,32 +134,32 @@ namespace xdataset
 
         ASSERT_EQ(table.row_count(), 6u);
 
-        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<std::size_t>({0u, 0u, 0u}));
+        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<Index>({0, 0, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "10");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "1");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[2]), "100");
 
-        EXPECT_EQ(table.GetRow(1).multi_index, std::vector<std::size_t>({0u, 0u, 1u}));
+        EXPECT_EQ(table.GetRow(1).multi_index, std::vector<Index>({0, 0, 1}));
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[0]), "10");
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[1]), "1");
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[2]), "200");
 
-        EXPECT_EQ(table.GetRow(2).multi_index, std::vector<std::size_t>({1u, 0u, 0u}));
+        EXPECT_EQ(table.GetRow(2).multi_index, std::vector<Index>({1, 0, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[1]), "2");
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[2]), "100");
 
-        EXPECT_EQ(table.GetRow(3).multi_index, std::vector<std::size_t>({1u, 0u, 1u}));
+        EXPECT_EQ(table.GetRow(3).multi_index, std::vector<Index>({1, 0, 1}));
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[1]), "2");
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[2]), "200");
 
-        EXPECT_EQ(table.GetRow(4).multi_index, std::vector<std::size_t>({1u, 1u, 0u}));
+        EXPECT_EQ(table.GetRow(4).multi_index, std::vector<Index>({1, 1, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[1]), "3");
         EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[2]), "100");
 
-        EXPECT_EQ(table.GetRow(5).multi_index, std::vector<std::size_t>({1u, 1u, 1u}));
+        EXPECT_EQ(table.GetRow(5).multi_index, std::vector<Index>({1, 1, 1}));
         EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[1]), "3");
         EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[2]), "200");
@@ -184,37 +184,37 @@ namespace xdataset
 
         ASSERT_EQ(table.row_count(), 6u);
 
-        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<std::size_t>({0u, 0u, 0u}));
+        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<Index>({0, 0, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "10");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "1");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[2]), "100");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[3]), "1000");
 
-        EXPECT_EQ(table.GetRow(1).multi_index, std::vector<std::size_t>({0u, 0u, 1u}));
+        EXPECT_EQ(table.GetRow(1).multi_index, std::vector<Index>({0, 0, 1}));
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[0]), "10");
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[1]), "1");
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[2]), "200");
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[3]), "1001");
 
-        EXPECT_EQ(table.GetRow(2).multi_index, std::vector<std::size_t>({1u, 0u, 0u}));
+        EXPECT_EQ(table.GetRow(2).multi_index, std::vector<Index>({1, 0, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[1]), "2");
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[2]), "100");
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[3]), "1002");
 
-        EXPECT_EQ(table.GetRow(3).multi_index, std::vector<std::size_t>({1u, 0u, 1u}));
+        EXPECT_EQ(table.GetRow(3).multi_index, std::vector<Index>({1, 0, 1}));
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[1]), "2");
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[2]), "200");
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[3]), "1003");
 
-        EXPECT_EQ(table.GetRow(4).multi_index, std::vector<std::size_t>({1u, 1u, 0u}));
+        EXPECT_EQ(table.GetRow(4).multi_index, std::vector<Index>({1, 1, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[1]), "3");
         EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[2]), "100");
         EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[3]), "1004");
 
-        EXPECT_EQ(table.GetRow(5).multi_index, std::vector<std::size_t>({1u, 1u, 1u}));
+        EXPECT_EQ(table.GetRow(5).multi_index, std::vector<Index>({1, 1, 1}));
         EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[1]), "3");
         EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[2]), "200");
@@ -250,6 +250,9 @@ namespace xdataset
         EXPECT_EQ(by_name->multi_dimension_spec().rank(), indep1->multi_dimension_spec().rank());
     }
 
+    // IndependentIndepOneReturnsIndexSeries â€?indep(1) on an Independent returns
+    // a dimension-level index series (multi_index.back()).  For z (3rd indep, 3 dims
+    // U2 x J{1,2} x U2, 6 rows), the index cycles 0,1,0,1,0,1.
     TEST(VariableIndepTest, IndependentIndepOneReturnsIndexSeries)
     {
         Block block(MakeInterleavedCreateInfo());
@@ -260,19 +263,18 @@ namespace xdataset
         ASSERT_NE(self_indep, nullptr);
         EXPECT_EQ(self_indep->name(), "z");
         EXPECT_EQ(self_indep->kind(), VariableKind::kIndependent);
-        ASSERT_EQ(self_indep->data().size(), z_data->data().size());
-        for (std::size_t i = 0; i < self_indep->data().size(); ++i)
-        {
-            EXPECT_EQ(self_indep->data().scalar_at<int>(i), static_cast<int>(i));
-        }
+        EXPECT_EQ(self_indep->data().size(), 6u);   // expanded product
+
+        // Index series: last-dim cycle 0,1 repeating
+        const int expected[] = {0, 1, 0, 1, 0, 1};
+        for (std::size_t i = 0; i < 6; ++i)
+            EXPECT_EQ(self_indep->data().scalar_at<int>(i), expected[i]);
 
         std::shared_ptr<Variable> from_name = z_data->indep("z");
         ASSERT_NE(from_name, nullptr);
         ASSERT_EQ(from_name->data().size(), self_indep->data().size());
-        for (std::size_t i = 0; i < from_name->data().size(); ++i)
-        {
+        for (std::size_t i = 0; i < 6; ++i)
             EXPECT_EQ(from_name->data().scalar_at<int>(i), self_indep->data().scalar_at<int>(i));
-        }
 
         std::shared_ptr<Variable> indep2 = z_data->indep(2);
         ASSERT_NE(indep2, nullptr);
@@ -348,12 +350,12 @@ namespace xdataset
         BlockCreateInfo info;
         info.name = "sparse-select";
         info.independent_variables.push_back(
-            IndependentVariableCreateInfo{
+            IndependentVariableInfo{
                 "x",
                 MakeScalarSeriesFrom({10.0, 20.0, 30.0, 40.0}),
                 DimensionSpec::Uniform(4)});
         info.dependent_variables.push_back(
-            DependentVariableCreateInfo{
+            DependentVariableInfo{
                 "z",
                 MakeScalarSeriesFrom({100.0, 200.0, 300.0, 400.0})});
 

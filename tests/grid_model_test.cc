@@ -76,11 +76,11 @@ namespace xdataset
         int call_count = 0;
         TestGridModel model;
         model.Configure({"v"}, 100,
-            [&](std::size_t start, std::size_t end) -> std::vector<GridRow>
+            [&](Index start, Index end) -> std::vector<GridRow>
             {
                 ++call_count;
                 std::vector<GridRow> rows;
-                for (std::size_t i = start; i < end; ++i)
+                for (Index i = start; i < end; ++i)
                 {
                     GridRow r;
                     r.multi_index = {i};
@@ -104,11 +104,11 @@ namespace xdataset
         int call_count = 0;
         TestGridModel model;
         model.Configure({"v"}, 10,
-            [&](std::size_t start, std::size_t end) -> std::vector<GridRow>
+            [&](Index start, Index end) -> std::vector<GridRow>
             {
                 ++call_count;
                 std::vector<GridRow> rows;
-                for (std::size_t i = start; i < end; ++i)
+                for (Index i = start; i < end; ++i)
                 {
                     GridRow r;
                     r.multi_index = {i};
@@ -127,7 +127,7 @@ namespace xdataset
     {
         TestGridModel model;
         model.Configure({"x", "y"}, 5,
-            [](std::size_t, std::size_t) -> std::vector<GridRow> { return {}; });
+            [](Index, Index) -> std::vector<GridRow> { return {}; });
         EXPECT_EQ(model.row_count(), 5u);
         ASSERT_EQ(model.headers().size(), 2u);
         EXPECT_EQ(model.headers()[0], "x");
@@ -164,7 +164,7 @@ namespace xdataset
     {
         TestGridModel model;
         model.Configure({"a"}, 1,
-            [](std::size_t, std::size_t) -> std::vector<GridRow> { return {}; });
+            [](Index, Index) -> std::vector<GridRow> { return {}; });
         EXPECT_THROW(model.WriteToCsv(""), std::invalid_argument);
     }
 

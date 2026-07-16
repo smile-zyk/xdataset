@@ -68,11 +68,11 @@ namespace xdataset
             BlockCreateInfo info;
             info.name = "demo";
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"x", MakeScalarSeries(2), DimensionSpec::Uniform(2)});
+                IndependentVariableInfo{"x", MakeScalarSeries(2), DimensionSpec::Uniform(2)});
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"y", MakeScalarSeries(3), DimensionSpec::Uniform(3)});
+                IndependentVariableInfo{"y", MakeScalarSeries(3), DimensionSpec::Uniform(3)});
             info.dependent_variables.push_back(
-                DependentVariableCreateInfo{"z", MakeScalarSeries(6)});
+                DependentVariableInfo{"z", MakeScalarSeries(6)});
             return info;
         }
 
@@ -81,11 +81,11 @@ namespace xdataset
             BlockCreateInfo info;
             info.name = "demo-values";
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Uniform(2)});
+                IndependentVariableInfo{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Uniform(2)});
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"y", MakeScalarSeriesFrom({1.0, 2.0, 3.0}), DimensionSpec::Uniform(3)});
+                IndependentVariableInfo{"y", MakeScalarSeriesFrom({1.0, 2.0, 3.0}), DimensionSpec::Uniform(3)});
             info.dependent_variables.push_back(
-                DependentVariableCreateInfo{"z", MakeScalarSeriesFrom({100.0, 101.0, 102.0, 103.0, 104.0, 105.0})});
+                DependentVariableInfo{"z", MakeScalarSeriesFrom({100.0, 101.0, 102.0, 103.0, 104.0, 105.0})});
             return info;
         }
 
@@ -95,15 +95,15 @@ namespace xdataset
             BlockCreateInfo info;
             info.name = "demo-3d-multidep";
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"a", MakeScalarSeriesFrom({1.0, 2.0}), DimensionSpec::Uniform(2)});
+                IndependentVariableInfo{"a", MakeScalarSeriesFrom({1.0, 2.0}), DimensionSpec::Uniform(2)});
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"b", MakeScalarSeriesFrom({10.0, 20.0, 30.0}), DimensionSpec::Uniform(3)});
+                IndependentVariableInfo{"b", MakeScalarSeriesFrom({10.0, 20.0, 30.0}), DimensionSpec::Uniform(3)});
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"c", MakeScalarSeriesFrom({100.0, 200.0, 300.0, 400.0}), DimensionSpec::Uniform(4)});
+                IndependentVariableInfo{"c", MakeScalarSeriesFrom({100.0, 200.0, 300.0, 400.0}), DimensionSpec::Uniform(4)});
             info.dependent_variables.push_back(
-                DependentVariableCreateInfo{"p", MakeScalarSeries(2 * 3 * 4)});
+                DependentVariableInfo{"p", MakeScalarSeries(2 * 3 * 4)});
             info.dependent_variables.push_back(
-                DependentVariableCreateInfo{"q", MakeScalarSeries(2 * 3 * 4)});
+                DependentVariableInfo{"q", MakeScalarSeries(2 * 3 * 4)});
             return info;
         }
 
@@ -113,9 +113,9 @@ namespace xdataset
             BlockCreateInfo info;
             info.name = "demo-single";
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"x", MakeScalarSeriesFrom({10.0, 20.0, 30.0}), DimensionSpec::Uniform(3)});
+                IndependentVariableInfo{"x", MakeScalarSeriesFrom({10.0, 20.0, 30.0}), DimensionSpec::Uniform(3)});
             info.dependent_variables.push_back(
-                DependentVariableCreateInfo{"z", MakeScalarSeriesFrom({100.0, 200.0, 300.0})});
+                DependentVariableInfo{"z", MakeScalarSeriesFrom({100.0, 200.0, 300.0})});
             return info;
         }
 
@@ -132,16 +132,16 @@ namespace xdataset
             xs.scalar_at<std::string>(0) = "alpha";
             xs.scalar_at<std::string>(1) = "beta";
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"sx", std::move(xs), DimensionSpec::Uniform(2)});
+                IndependentVariableInfo{"sx", std::move(xs), DimensionSpec::Uniform(2)});
 
             CellSeries ys = CellSeries::Scalars<std::string>(2);
             ys.scalar_at<std::string>(0) = "one";
             ys.scalar_at<std::string>(1) = "two";
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"sy", std::move(ys), DimensionSpec::Uniform(2)});
+                IndependentVariableInfo{"sy", std::move(ys), DimensionSpec::Uniform(2)});
 
             info.dependent_variables.push_back(
-                DependentVariableCreateInfo{"sz",
+                DependentVariableInfo{"sz",
                     MakeStringScalarSeriesFrom({"A", "B", "C", "D"})});
             return info;
         }
@@ -155,11 +155,11 @@ namespace xdataset
             BlockCreateInfo info;
             info.name = "demo-vectors";
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Uniform(2)});
+                IndependentVariableInfo{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Uniform(2)});
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"y", MakeScalarSeriesFrom({1.0, 2.0}), DimensionSpec::Uniform(2)});
+                IndependentVariableInfo{"y", MakeScalarSeriesFrom({1.0, 2.0}), DimensionSpec::Uniform(2)});
             info.dependent_variables.push_back(
-                DependentVariableCreateInfo{"vecs", MakeVectorSeries(4, 3)});
+                DependentVariableInfo{"vecs", MakeVectorSeries(4, 3)});
             return info;
         }
 
@@ -168,11 +168,11 @@ namespace xdataset
             BlockCreateInfo info;
             info.name = "demo-matrices";
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Uniform(2)});
+                IndependentVariableInfo{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Uniform(2)});
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"y", MakeScalarSeriesFrom({1.0, 2.0}), DimensionSpec::Uniform(2)});
+                IndependentVariableInfo{"y", MakeScalarSeriesFrom({1.0, 2.0}), DimensionSpec::Uniform(2)});
             info.dependent_variables.push_back(
-                DependentVariableCreateInfo{"mats", MakeMatrixSeries(4, 2, 2)});
+                DependentVariableInfo{"mats", MakeMatrixSeries(4, 2, 2)});
             return info;
         }
 
@@ -185,11 +185,11 @@ namespace xdataset
             BlockCreateInfo info;
             info.name = "demo-jagged";
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Uniform(2)});
+                IndependentVariableInfo{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Uniform(2)});
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"y", MakeScalarSeriesFrom({1.0, 2.0, 3.0}), DimensionSpec::Jagged({1, 2})});
+                IndependentVariableInfo{"y", MakeScalarSeriesFrom({1.0, 2.0, 3.0}), DimensionSpec::Jagged({1, 2})});
             info.dependent_variables.push_back(
-                DependentVariableCreateInfo{"z", MakeScalarSeriesFrom({100.0, 101.0, 102.0})});
+                DependentVariableInfo{"z", MakeScalarSeriesFrom({100.0, 101.0, 102.0})});
             return info;
         }
 
@@ -198,13 +198,13 @@ namespace xdataset
             BlockCreateInfo info;
             info.name = "demo-interleaved";
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Uniform(2)});
+                IndependentVariableInfo{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Uniform(2)});
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"y", MakeScalarSeriesFrom({1.0, 2.0, 3.0}), DimensionSpec::Jagged({1, 2})});
+                IndependentVariableInfo{"y", MakeScalarSeriesFrom({1.0, 2.0, 3.0}), DimensionSpec::Jagged({1, 2})});
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"z", MakeScalarSeriesFrom({100.0, 200.0}), DimensionSpec::Uniform(2)});
+                IndependentVariableInfo{"z", MakeScalarSeriesFrom({100.0, 200.0}), DimensionSpec::Uniform(2)});
             info.dependent_variables.push_back(
-                DependentVariableCreateInfo{"w", MakeScalarSeriesFrom({1000.0, 1001.0, 1002.0, 1003.0, 1004.0, 1005.0})});
+                DependentVariableInfo{"w", MakeScalarSeriesFrom({1000.0, 1001.0, 1002.0, 1003.0, 1004.0, 1005.0})});
             return info;
         }
 
@@ -214,11 +214,11 @@ namespace xdataset
             BlockCreateInfo info;
             info.name = "demo-jagged-vectors";
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Uniform(2)});
+                IndependentVariableInfo{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Uniform(2)});
             info.independent_variables.push_back(
-                IndependentVariableCreateInfo{"y", MakeScalarSeriesFrom({1.0, 2.0, 3.0}), DimensionSpec::Jagged({1, 2})});
+                IndependentVariableInfo{"y", MakeScalarSeriesFrom({1.0, 2.0, 3.0}), DimensionSpec::Jagged({1, 2})});
             info.dependent_variables.push_back(
-                DependentVariableCreateInfo{"v", MakeVectorSeries(3, 2)});
+                DependentVariableInfo{"v", MakeVectorSeries(3, 2)});
             return info;
         }
     } // namespace block_fixtures

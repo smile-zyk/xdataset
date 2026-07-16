@@ -24,7 +24,6 @@ add_executable(xdataset_test
 	src/dimension_spec.cc
 	src/multi_dimension_spec.cc
 	src/multi_index_selector.cc
-	src/variable_descriptor.cc
 	src/variable.cc
 	src/block.cc
 	src/grid_model.cc
@@ -36,7 +35,6 @@ add_executable(xdataset_playground
 	src/dimension_spec.cc
 	src/multi_dimension_spec.cc
 	src/multi_index_selector.cc
-	src/variable_descriptor.cc
 	src/variable.cc
 	src/block.cc
 	src/grid_model.cc

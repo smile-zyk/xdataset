@@ -3,6 +3,10 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Playground CSV output
+output/
+.vscode/
+
 # C extensions
 *.so
 

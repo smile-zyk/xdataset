@@ -11,9 +11,9 @@ namespace xdataset
         BlockCreateInfo info;
         info.name = "demo";
 
-        IndependentVariableCreateInfo x{"x", MakeScalarSeries(2), DimensionSpec::Uniform(2)};
-        IndependentVariableCreateInfo y{"y", MakeScalarSeries(3), DimensionSpec::Uniform(3)};
-        DependentVariableCreateInfo z{"z", MakeScalarSeries(6)};
+        IndependentVariableInfo x{"x", MakeScalarSeries(2), DimensionSpec::Uniform(2)};
+        IndependentVariableInfo y{"y", MakeScalarSeries(3), DimensionSpec::Uniform(3)};
+        DependentVariableInfo z{"z", MakeScalarSeries(6)};
 
         info.independent_variables.push_back(x);
         info.independent_variables.push_back(y);
@@ -29,19 +29,13 @@ namespace xdataset
         ASSERT_EQ(block.dependents().size(), 1u);
         EXPECT_EQ(block.dependents()[0], "z");
 
-        const VariableDescriptor& x_descriptor = block.variable_descriptor("x");
-        EXPECT_EQ(x_descriptor.kind(), VariableKind::kIndependent);
-        EXPECT_EQ(x_descriptor.multi_dimension_spec().rank(), 1u);
-        ASSERT_EQ(x_descriptor.multi_dimension_spec().dims().size(), 1u);
-        EXPECT_TRUE(x_descriptor.multi_dimension_spec().dims()[0].is_uniform());
-        EXPECT_EQ(x_descriptor.multi_dimension_spec().dims()[0].uniform_size(), 2);
+        const IndependentVariableInfo& x_info = block.independent_variable("x");
+        EXPECT_EQ(x_info.name, "x");
+        EXPECT_TRUE(x_info.dimension.is_uniform());
+        EXPECT_EQ(x_info.dimension.uniform_size(), 2u);
 
-        const VariableDescriptor& z_descriptor = block.variable_descriptor("z");
-        EXPECT_EQ(z_descriptor.kind(), VariableKind::kDependent);
-        EXPECT_EQ(z_descriptor.multi_dimension_spec().rank(), 2u);
-        ASSERT_EQ(z_descriptor.multi_dimension_spec().dims().size(), 2u);
-        EXPECT_EQ(z_descriptor.multi_dimension_spec().dims()[0].uniform_size(), 2);
-        EXPECT_EQ(z_descriptor.multi_dimension_spec().dims()[1].uniform_size(), 3);
+        // z is dependent — independent_variable("z") should throw
+        EXPECT_THROW({ block.independent_variable("z"); }, std::invalid_argument);
     }
 
     TEST(BlockConstructorTest, RejectsDependentWithoutIndependent)
@@ -49,7 +43,7 @@ namespace xdataset
         BlockCreateInfo info;
         info.name = "demo";
 
-        DependentVariableCreateInfo z{"z", MakeScalarSeries(1)};
+        DependentVariableInfo z{"z", MakeScalarSeries(1)};
         info.dependent_variables.push_back(z);
 
         EXPECT_THROW({ Block b(info); }, std::invalid_argument);
@@ -60,8 +54,8 @@ namespace xdataset
         BlockCreateInfo info;
         info.name = "demo";
 
-        IndependentVariableCreateInfo x{"same", MakeScalarSeries(2), DimensionSpec::Uniform(2)};
-        DependentVariableCreateInfo z{"same", MakeScalarSeries(2)};
+        IndependentVariableInfo x{"same", MakeScalarSeries(2), DimensionSpec::Uniform(2)};
+        DependentVariableInfo z{"same", MakeScalarSeries(2)};
 
         info.independent_variables.push_back(x);
         info.dependent_variables.push_back(z);
@@ -74,7 +68,7 @@ namespace xdataset
         BlockCreateInfo info;
         info.name = "demo";
 
-        IndependentVariableCreateInfo x{"", MakeScalarSeries(2), DimensionSpec::Uniform(2)};
+        IndependentVariableInfo x{"", MakeScalarSeries(2), DimensionSpec::Uniform(2)};
 
         info.independent_variables.push_back(x);
 
@@ -86,9 +80,9 @@ namespace xdataset
         BlockCreateInfo info;
         info.name = "demo";
 
-        IndependentVariableCreateInfo x{"x", MakeScalarSeries(2), DimensionSpec::Uniform(2)};
-        IndependentVariableCreateInfo y{"y", MakeScalarSeries(3), DimensionSpec::Uniform(3)};
-        DependentVariableCreateInfo z{"z", MakeScalarSeries(5)};
+        IndependentVariableInfo x{"x", MakeScalarSeries(2), DimensionSpec::Uniform(2)};
+        IndependentVariableInfo y{"y", MakeScalarSeries(3), DimensionSpec::Uniform(3)};
+        DependentVariableInfo z{"z", MakeScalarSeries(5)};
 
         info.independent_variables.push_back(x);
         info.independent_variables.push_back(y);
@@ -102,7 +96,7 @@ namespace xdataset
         BlockCreateInfo info;
         info.name = "demo";
 
-        IndependentVariableCreateInfo x{"x", MakeScalarSeries(3), DimensionSpec::Uniform(2)};
+        IndependentVariableInfo x{"x", MakeScalarSeries(3), DimensionSpec::Uniform(2)};
 
         info.independent_variables.push_back(x);
 
@@ -140,7 +134,7 @@ namespace xdataset
         ASSERT_EQ(y_data->multi_dimension_spec().dims().size(), 2u);
         EXPECT_EQ(y_data->multi_dimension_spec().dims()[0].uniform_size(), 2);
         EXPECT_EQ(y_data->multi_dimension_spec().dims()[1].uniform_size(), 3);
-        EXPECT_EQ(y_data->data().size(), 3u);
+        EXPECT_EQ(y_data->data().size(), 6u);   // expanded: 2*3
     }
 
     TEST(BlockVariableCacheTest, BuildsDependentVariableFromDescriptor)
@@ -195,7 +189,7 @@ namespace xdataset
         EXPECT_EQ(z_data->multi_dimension_spec().dims()[1].jagged_sizes()[0], 1);
         EXPECT_EQ(z_data->multi_dimension_spec().dims()[1].jagged_sizes()[1], 2);
         EXPECT_EQ(z_data->multi_dimension_spec().dims()[2].uniform_size(), 2);
-        EXPECT_EQ(z_data->data().size(), 2u);
+        EXPECT_EQ(z_data->data().size(), 6u);   // expanded: 2*3 [jagged 1+2=3 rows * 2]
     }
 
     TEST(BlockGridModelTest, AggregatesAllVariablesIntoOneTable)
@@ -237,17 +231,17 @@ namespace xdataset
 
         ASSERT_EQ(table.row_count(), 3u);
 
-        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<std::size_t>({0u, 0u}));
+        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<Index>({0, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "10");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "1");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[2]), "100");
 
-        EXPECT_EQ(table.GetRow(1).multi_index, std::vector<std::size_t>({1u, 0u}));
+        EXPECT_EQ(table.GetRow(1).multi_index, std::vector<Index>({1, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[1]), "2");
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[2]), "101");
 
-        EXPECT_EQ(table.GetRow(2).multi_index, std::vector<std::size_t>({1u, 1u}));
+        EXPECT_EQ(table.GetRow(2).multi_index, std::vector<Index>({1, 1}));
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[1]), "3");
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[2]), "102");
@@ -270,37 +264,37 @@ namespace xdataset
 
         ASSERT_EQ(table.row_count(), 6u);
 
-        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<std::size_t>({0u, 0u, 0u}));
+        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<Index>({0, 0, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "10");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "1");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[2]), "100");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[3]), "1000");
 
-        EXPECT_EQ(table.GetRow(1).multi_index, std::vector<std::size_t>({0u, 0u, 1u}));
+        EXPECT_EQ(table.GetRow(1).multi_index, std::vector<Index>({0, 0, 1}));
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[0]), "10");
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[1]), "1");
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[2]), "200");
         EXPECT_EQ(GridFieldToString(table.GetRow(1).fields[3]), "1001");
 
-        EXPECT_EQ(table.GetRow(2).multi_index, std::vector<std::size_t>({1u, 0u, 0u}));
+        EXPECT_EQ(table.GetRow(2).multi_index, std::vector<Index>({1, 0, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[1]), "2");
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[2]), "100");
         EXPECT_EQ(GridFieldToString(table.GetRow(2).fields[3]), "1002");
 
-        EXPECT_EQ(table.GetRow(3).multi_index, std::vector<std::size_t>({1u, 0u, 1u}));
+        EXPECT_EQ(table.GetRow(3).multi_index, std::vector<Index>({1, 0, 1}));
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[1]), "2");
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[2]), "200");
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[3]), "1003");
 
-        EXPECT_EQ(table.GetRow(4).multi_index, std::vector<std::size_t>({1u, 1u, 0u}));
+        EXPECT_EQ(table.GetRow(4).multi_index, std::vector<Index>({1, 1, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[1]), "3");
         EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[2]), "100");
         EXPECT_EQ(GridFieldToString(table.GetRow(4).fields[3]), "1004");
 
-        EXPECT_EQ(table.GetRow(5).multi_index, std::vector<std::size_t>({1u, 1u, 1u}));
+        EXPECT_EQ(table.GetRow(5).multi_index, std::vector<Index>({1, 1, 1}));
         EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[0]), "20");
         EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[1]), "3");
         EXPECT_EQ(GridFieldToString(table.GetRow(5).fields[2]), "200");
@@ -327,12 +321,12 @@ namespace xdataset
 
         ASSERT_EQ(table.row_count(), 4u);
 
-        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<std::size_t>({0u, 0u}));
+        EXPECT_EQ(table.GetRow(0).multi_index, std::vector<Index>({0, 0}));
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[0]), "alpha");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[1]), "one");
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[2]), "A");
 
-        EXPECT_EQ(table.GetRow(3).multi_index, std::vector<std::size_t>({1u, 1u}));
+        EXPECT_EQ(table.GetRow(3).multi_index, std::vector<Index>({1, 1}));
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[0]), "beta");
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[1]), "two");
         EXPECT_EQ(GridFieldToString(table.GetRow(3).fields[2]), "D");

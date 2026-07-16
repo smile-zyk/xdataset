@@ -95,8 +95,8 @@ public:
         return std::unique_ptr<CellStorage>(new ScalarStorage<T>(*this));
     }
 
-    T& value(std::size_t row) { return values_[row]; }
-    const T& value(std::size_t row) const { return values_[row]; }
+    T& value(Index row) { return values_[static_cast<std::size_t>(row)]; }
+    const T& value(Index row) const { return values_[static_cast<std::size_t>(row)]; }
 
     void append(const T& v) { values_.push_back(v); }
 
@@ -127,15 +127,15 @@ public:
         return std::unique_ptr<CellStorage>(new VectorStorageNumeric<T>(*this));
     }
 
-    MapType value(std::size_t row) {
+    MapType value(Index row) {
         return MapType(ptr_for_row(row), width_);
     }
 
-    ConstMapType value(std::size_t row) const {
+    ConstMapType value(Index row) const {
         return ConstMapType(ptr_for_row(row), width_);
     }
 
-    void set(std::size_t row, const OwnedType& v) {
+    void set(Index row, const OwnedType& v) {
         if (v.size() != width_) throw std::bad_cast();
         value(row) = v;
     }
@@ -151,12 +151,12 @@ public:
     const T* data() const { return values_.empty() ? nullptr : &values_[0]; }
 
 private:
-    T* ptr_for_row(std::size_t row) {
-        return data() + static_cast<std::size_t>(width_) * row;
+    T* ptr_for_row(Index row) {
+        return data() + static_cast<std::size_t>(width_) * static_cast<std::size_t>(row);
     }
 
-    const T* ptr_for_row(std::size_t row) const {
-        return data() + static_cast<std::size_t>(width_) * row;
+    const T* ptr_for_row(Index row) const {
+        return data() + static_cast<std::size_t>(width_) * static_cast<std::size_t>(row);
     }
 
     Index width_;
@@ -182,8 +182,8 @@ public:
         return std::unique_ptr<CellStorage>(new VectorStorageString(*this));
     }
 
-    Eigen::Tensor<std::string, 1>& value(std::size_t row) { return rows_[row]; }
-    const Eigen::Tensor<std::string, 1>& value(std::size_t row) const { return rows_[row]; }
+    Eigen::Tensor<std::string, 1>& value(Index row) { return rows_[static_cast<std::size_t>(row)]; }
+    const Eigen::Tensor<std::string, 1>& value(Index row) const { return rows_[static_cast<std::size_t>(row)]; }
 
     void append(const Eigen::Tensor<std::string, 1>& row) { rows_.push_back(row); }
 
@@ -218,15 +218,15 @@ public:
         return std::unique_ptr<CellStorage>(new MatrixStorageNumeric<T>(*this));
     }
 
-    MapType value(std::size_t row) {
+    MapType value(Index row) {
         return MapType(ptr_for_row(row), cell_rows_, cell_cols_);
     }
 
-    ConstMapType value(std::size_t row) const {
+    ConstMapType value(Index row) const {
         return ConstMapType(ptr_for_row(row), cell_rows_, cell_cols_);
     }
 
-    void set(std::size_t row, const OwnedType& m) {
+    void set(Index row, const OwnedType& m) {
         if (m.rows() != cell_rows_ || m.cols() != cell_cols_) throw std::bad_cast();
         value(row) = m;
     }
@@ -247,12 +247,12 @@ public:
     const T* data() const { return values_.empty() ? nullptr : &values_[0]; }
 
 private:
-    T* ptr_for_row(std::size_t row) {
-        return data() + static_cast<std::size_t>(cell_rows_ * cell_cols_) * row;
+    T* ptr_for_row(Index row) {
+        return data() + static_cast<std::size_t>(cell_rows_ * cell_cols_) * static_cast<std::size_t>(row);
     }
 
-    const T* ptr_for_row(std::size_t row) const {
-        return data() + static_cast<std::size_t>(cell_rows_ * cell_cols_) * row;
+    const T* ptr_for_row(Index row) const {
+        return data() + static_cast<std::size_t>(cell_rows_ * cell_cols_) * static_cast<std::size_t>(row);
     }
 
     Index cell_rows_;
@@ -279,8 +279,8 @@ public:
         return std::unique_ptr<CellStorage>(new MatrixStorageString(*this));
     }
 
-    Eigen::Tensor<std::string, 2>& value(std::size_t row) { return rows_[row]; }
-    const Eigen::Tensor<std::string, 2>& value(std::size_t row) const { return rows_[row]; }
+    Eigen::Tensor<std::string, 2>& value(Index row) { return rows_[static_cast<std::size_t>(row)]; }
+    const Eigen::Tensor<std::string, 2>& value(Index row) const { return rows_[static_cast<std::size_t>(row)]; }
 
     void append(const Eigen::Tensor<std::string, 2>& row) { rows_.push_back(row); }
 
@@ -639,7 +639,7 @@ public:
         typedef RowView reference;
 
         iterator() : owner_(nullptr), idx_(0) {}
-        iterator(CellSeries* owner, std::size_t idx) : owner_(owner), idx_(idx) {}
+        iterator(CellSeries* owner, Index idx) : owner_(owner), idx_(idx) {}
 
         reference operator*() const;
 
@@ -662,7 +662,7 @@ public:
 
     private:
         CellSeries* owner_;
-        std::size_t idx_;
+        Index idx_;
     };
 
     class const_iterator {
@@ -674,7 +674,7 @@ public:
         typedef ConstRowView reference;
 
         const_iterator() : owner_(nullptr), idx_(0) {}
-        const_iterator(const CellSeries* owner, std::size_t idx) : owner_(owner), idx_(idx) {}
+        const_iterator(const CellSeries* owner, Index idx) : owner_(owner), idx_(idx) {}
 
         reference operator*() const;
 
@@ -697,7 +697,7 @@ public:
 
     private:
         const CellSeries* owner_;
-        std::size_t idx_;
+        Index idx_;
     };
 
     CellSeries()
@@ -747,7 +747,7 @@ public:
         static_assert(IsSupported<T>::value, "unsupported type");
         CellSeries s(CellKind::kScalar, DTypeOf<T>::tag, std::vector<Index>());
         s.resize(values.size());
-        for (std::size_t i = 0; i < values.size(); ++i) s.scalar_at<T>(i) = values[i];
+        for (std::size_t i = 0; i < values.size(); ++i) s.scalar_at<T>(static_cast<Index>(i)) = values[i];
         return s;
     }
 
@@ -761,7 +761,7 @@ public:
         CellSeries s(CellKind::kScalar, DTypeOf<T>::tag, std::vector<Index>());
         s.resize(len);
         for (std::size_t i = 0; i < len; ++i) {
-            s.scalar_at<T>(i) = values[i];
+            s.scalar_at<T>(static_cast<Index>(i)) = values[i];
         }
         return s;
     }
@@ -825,7 +825,7 @@ public:
             if (rows[i].size() != width) {
                 throw std::invalid_argument("all vector rows must have the same width");
             }
-            out.vector_at<T>(i) = rows[i];
+            out.vector_at<T>(static_cast<Index>(i)) = rows[i];
         }
         return out;
     }
@@ -841,7 +841,7 @@ public:
             if (rows[i].dimension(0) != width) {
                 throw std::invalid_argument("all vector rows must have the same width");
             }
-            out.vector_at<std::string>(i) = rows[i];
+            out.vector_at<std::string>(static_cast<Index>(i)) = rows[i];
         }
         return out;
     }
@@ -917,7 +917,7 @@ public:
             if (rows[i].rows() != cell_rows || rows[i].cols() != cell_cols) {
                 throw std::invalid_argument("all matrix rows must have the same shape");
             }
-            out.matrix_at<T>(i) = rows[i];
+            out.matrix_at<T>(static_cast<Index>(i)) = rows[i];
         }
         return out;
     }
@@ -934,7 +934,7 @@ public:
             if (rows[i].dimension(0) != cell_rows || rows[i].dimension(1) != cell_cols) {
                 throw std::invalid_argument("all matrix rows must have the same shape");
             }
-            out.matrix_at<std::string>(i) = rows[i];
+            out.matrix_at<std::string>(static_cast<Index>(i)) = rows[i];
         }
         return out;
     }
@@ -984,139 +984,139 @@ public:
     CellSeries iloc(std::size_t start, std::size_t end) const {
         if (start > end || end > size()) throw std::out_of_range("iloc out of range");
         CellSeries out(kind_, dtype_, shape_);
-        for (std::size_t i = start; i < end; ++i) out.append_from(*this, i);
+        for (std::size_t i = start; i < end; ++i) out.append_from(*this, static_cast<Index>(i));
         return out;
     }
 
     iterator begin() { return iterator(this, 0); }
-    iterator end() { return iterator(this, size()); }
+    iterator end() { return iterator(this, static_cast<Index>(size())); }
     const_iterator begin() const { return const_iterator(this, 0); }
-    const_iterator end() const { return const_iterator(this, size()); }
+    const_iterator end() const { return const_iterator(this, static_cast<Index>(size())); }
     const_iterator cbegin() const { return const_iterator(this, 0); }
-    const_iterator cend() const { return const_iterator(this, size()); }
+    const_iterator cend() const { return const_iterator(this, static_cast<Index>(size())); }
 
-    RowView row(std::size_t i);
-    ConstRowView row(std::size_t i) const;
+    RowView row(Index i);
+    ConstRowView row(Index i) const;
 
     template <typename T>
-    T& scalar_at(std::size_t i) {
-        if (i >= size()) throw std::out_of_range("row index out of range");
+    T& scalar_at(Index i) {
+        if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("row index out of range");
         return scalar_storage<T>()->value(i);
     }
 
     template <typename T>
-    const T& scalar_at(std::size_t i) const {
-        if (i >= size()) throw std::out_of_range("row index out of range");
+    const T& scalar_at(Index i) const {
+        if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("row index out of range");
         return scalar_storage<T>()->value(i);
     }
 
     template <typename T>
     typename std::enable_if<!std::is_same<T, std::string>::value,
                             typename NumericVectorTypes<T>::MapType>::type
-    vector_at(std::size_t i) {
-        if (i >= size()) throw std::out_of_range("row index out of range");
+    vector_at(Index i) {
+        if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("row index out of range");
         return vector_storage_numeric<T>()->value(i);
     }
 
     template <typename T>
     typename std::enable_if<!std::is_same<T, std::string>::value,
                             typename NumericVectorTypes<T>::ConstMapType>::type
-    vector_at(std::size_t i) const {
-        if (i >= size()) throw std::out_of_range("row index out of range");
+    vector_at(Index i) const {
+        if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("row index out of range");
         return vector_storage_numeric<T>()->value(i);
     }
 
     template <typename T>
     typename std::enable_if<std::is_same<T, std::string>::value, Eigen::Tensor<std::string, 1>&>::type
-    vector_at(std::size_t i) {
-        if (i >= size()) throw std::out_of_range("row index out of range");
+    vector_at(Index i) {
+        if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("row index out of range");
         return vector_storage_string()->value(i);
     }
 
     template <typename T>
     typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 1>&>::type
-    vector_at(std::size_t i) const {
-        if (i >= size()) throw std::out_of_range("row index out of range");
+    vector_at(Index i) const {
+        if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("row index out of range");
         return vector_storage_string()->value(i);
     }
 
     template <typename T>
     typename std::enable_if<!std::is_same<T, std::string>::value,
                             typename NumericMatrixTypes<T>::MapType>::type
-    matrix_at(std::size_t i) {
-        if (i >= size()) throw std::out_of_range("row index out of range");
+    matrix_at(Index i) {
+        if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("row index out of range");
         return matrix_storage_numeric<T>()->value(i);
     }
 
     template <typename T>
     typename std::enable_if<!std::is_same<T, std::string>::value,
                             typename NumericMatrixTypes<T>::ConstMapType>::type
-    matrix_at(std::size_t i) const {
-        if (i >= size()) throw std::out_of_range("row index out of range");
+    matrix_at(Index i) const {
+        if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("row index out of range");
         return matrix_storage_numeric<T>()->value(i);
     }
 
     template <typename T>
     typename std::enable_if<std::is_same<T, std::string>::value, Eigen::Tensor<std::string, 2>&>::type
-    matrix_at(std::size_t i) {
-        if (i >= size()) throw std::out_of_range("row index out of range");
+    matrix_at(Index i) {
+        if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("row index out of range");
         return matrix_storage_string()->value(i);
     }
 
     template <typename T>
     typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 2>&>::type
-    matrix_at(std::size_t i) const {
-        if (i >= size()) throw std::out_of_range("row index out of range");
+    matrix_at(Index i) const {
+        if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("row index out of range");
         return matrix_storage_string()->value(i);
     }
 
     template <typename T>
-    T& vector_elem(std::size_t row, Index i) {
+    T& vector_elem(Index row, Index i) {
         typename NumericVectorTypes<T>::MapType v = vector_at<T>(row);
         if (i < 0 || i >= v.size()) throw std::out_of_range("vector index out of range");
         return v(i);
     }
 
     template <typename T>
-    const T vector_elem(std::size_t row, Index i) const {
+    const T vector_elem(Index row, Index i) const {
         typename NumericVectorTypes<T>::ConstMapType v = vector_at<T>(row);
         if (i < 0 || i >= v.size()) throw std::out_of_range("vector index out of range");
         return v(i);
     }
 
-    std::string& vector_elem_string(std::size_t row, Index i) {
+    std::string& vector_elem_string(Index row, Index i) {
         Eigen::Tensor<std::string, 1>& v = vector_at<std::string>(row);
         if (i < 0 || i >= v.dimension(0)) throw std::out_of_range("vector index out of range");
         return v(i);
     }
 
-    const std::string& vector_elem_string(std::size_t row, Index i) const {
+    const std::string& vector_elem_string(Index row, Index i) const {
         const Eigen::Tensor<std::string, 1>& v = vector_at<std::string>(row);
         if (i < 0 || i >= v.dimension(0)) throw std::out_of_range("vector index out of range");
         return v(i);
     }
 
     template <typename T>
-    T& matrix_elem(std::size_t row, Index r, Index c) {
+    T& matrix_elem(Index row, Index r, Index c) {
         typename NumericMatrixTypes<T>::MapType m = matrix_at<T>(row);
         if (r < 0 || c < 0 || r >= m.rows() || c >= m.cols()) throw std::out_of_range("matrix index out of range");
         return m(r, c);
     }
 
     template <typename T>
-    const T matrix_elem(std::size_t row, Index r, Index c) const {
+    const T matrix_elem(Index row, Index r, Index c) const {
         typename NumericMatrixTypes<T>::ConstMapType m = matrix_at<T>(row);
         if (r < 0 || c < 0 || r >= m.rows() || c >= m.cols()) throw std::out_of_range("matrix index out of range");
         return m(r, c);
     }
 
-    std::string& matrix_elem_string(std::size_t row, Index r, Index c) {
+    std::string& matrix_elem_string(Index row, Index r, Index c) {
         Eigen::Tensor<std::string, 2>& m = matrix_at<std::string>(row);
         if (r < 0 || c < 0 || r >= m.dimension(0) || c >= m.dimension(1)) throw std::out_of_range("matrix index out of range");
         return m(r, c);
     }
 
-    const std::string& matrix_elem_string(std::size_t row, Index r, Index c) const {
+    const std::string& matrix_elem_string(Index row, Index r, Index c) const {
         const Eigen::Tensor<std::string, 2>& m = matrix_at<std::string>(row);
         if (r < 0 || c < 0 || r >= m.dimension(0) || c >= m.dimension(1)) throw std::out_of_range("matrix index out of range");
         return m(r, c);
@@ -1151,9 +1151,9 @@ public:
         matrix_storage_string()->append(m);
     }
 
-    void append_from(const CellSeries& src, std::size_t row) {
+    void append_from(const CellSeries& src, Index row) {
         if (src.kind_ != kind_ || src.dtype_ != dtype_ || src.shape_ != shape_) throw std::bad_cast();
-        if (row >= src.size()) throw std::out_of_range("row index out of range");
+        if (row < 0 || static_cast<std::size_t>(row) >= src.size()) throw std::out_of_range("row index out of range");
 
         if (kind_ == CellKind::kScalar) {
             if (dtype_ == DTypeTag::kReal) append_scalar<double>(src.scalar_at<double>(row));
@@ -1177,9 +1177,10 @@ public:
         else append_matrix(src.matrix_at<std::string>(row));
     }
 
-    void assign_from(const CellSeries& src, std::size_t src_row, std::size_t dst_row) {
+    void assign_from(const CellSeries& src, Index src_row, Index dst_row) {
         if (src.kind_ != kind_ || src.dtype_ != dtype_ || src.shape_ != shape_) throw std::bad_cast();
-        if (src_row >= src.size() || dst_row >= size()) throw std::out_of_range("row index out of range");
+        if (src_row < 0 || static_cast<std::size_t>(src_row) >= src.size() ||
+            dst_row < 0 || static_cast<std::size_t>(dst_row) >= size()) throw std::out_of_range("row index out of range");
 
         if (kind_ == CellKind::kScalar) {
             if (dtype_ == DTypeTag::kReal) scalar_at<double>(dst_row) = src.scalar_at<double>(src_row);
@@ -1243,11 +1244,11 @@ public:
         if (dtype_ != DTypeOf<T>::tag) throw std::bad_cast();
         for (std::size_t i = 0; i < size(); ++i) {
             if (kind_ == CellKind::kScalar) {
-                scalar_at<T>(i) = val;
+                scalar_at<T>(static_cast<Index>(i)) = val;
             } else if (kind_ == CellKind::kVector) {
-                fill_vector_row(i, val, std::is_same<T, std::string>());
+                fill_vector_row(static_cast<Index>(i), val, std::is_same<T, std::string>());
             } else {
-                fill_matrix_row(i, val, std::is_same<T, std::string>());
+                fill_matrix_row(static_cast<Index>(i), val, std::is_same<T, std::string>());
             }
         }
     }
@@ -1307,8 +1308,8 @@ public:
         throw std::runtime_error("string storage is not trivially-copyable");
     }
 
-    Cell cell_at(std::size_t i) const {
-        if (i >= size()) throw std::out_of_range("cell index out of range");
+    Cell cell_at(Index i) const {
+        if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("cell index out of range");
 
         if (kind_ == CellKind::kScalar) {
             if (dtype_ == DTypeTag::kReal) return Cell::Scalar<double>(scalar_at<double>(i));
@@ -1362,29 +1363,29 @@ public:
                 if (dtype_ == DTypeTag::kReal) {
                     CellSeries out = CellSeries::Scalars<double>(size());
                     for (std::size_t row = 0; row < size(); ++row) {
-                        out.scalar_at<double>(row) = vector_elem<double>(row, selected[0]);
+                        out.scalar_at<double>(static_cast<Index>(row)) = vector_elem<double>(static_cast<Index>(row), selected[0]);
                     }
                     return out;
                 }
                 if (dtype_ == DTypeTag::kInteger) {
                     CellSeries out = CellSeries::Scalars<int>(size());
                     for (std::size_t row = 0; row < size(); ++row) {
-                        out.scalar_at<int>(row) = vector_elem<int>(row, selected[0]);
+                        out.scalar_at<int>(static_cast<Index>(row)) = vector_elem<int>(static_cast<Index>(row), selected[0]);
                     }
                     return out;
                 }
                 if (dtype_ == DTypeTag::kComplex) {
                     CellSeries out = CellSeries::Scalars<std::complex<double> >(size());
                     for (std::size_t row = 0; row < size(); ++row) {
-                        out.scalar_at<std::complex<double> >(row) =
-                            vector_elem<std::complex<double> >(row, selected[0]);
+                        out.scalar_at<std::complex<double> >(static_cast<Index>(row)) =
+                            vector_elem<std::complex<double> >(static_cast<Index>(row), selected[0]);
                     }
                     return out;
                 }
 
                 CellSeries out = CellSeries::Scalars<std::string>(size());
                 for (std::size_t row = 0; row < size(); ++row) {
-                    out.scalar_at<std::string>(row) = vector_elem_string(row, selected[0]);
+                    out.scalar_at<std::string>(static_cast<Index>(row)) = vector_elem_string(static_cast<Index>(row), selected[0]);
                 }
                 return out;
             }
@@ -1425,32 +1426,32 @@ public:
             if (dtype_ == DTypeTag::kReal) {
                 CellSeries out = CellSeries::Scalars<double>(size());
                 for (std::size_t row = 0; row < size(); ++row) {
-                    out.scalar_at<double>(row) =
-                        matrix_elem<double>(row, selected_rows[0], selected_cols[0]);
+                    out.scalar_at<double>(static_cast<Index>(row)) =
+                        matrix_elem<double>(static_cast<Index>(row), selected_rows[0], selected_cols[0]);
                 }
                 return out;
             }
             if (dtype_ == DTypeTag::kInteger) {
                 CellSeries out = CellSeries::Scalars<int>(size());
                 for (std::size_t row = 0; row < size(); ++row) {
-                    out.scalar_at<int>(row) =
-                        matrix_elem<int>(row, selected_rows[0], selected_cols[0]);
+                    out.scalar_at<int>(static_cast<Index>(row)) =
+                        matrix_elem<int>(static_cast<Index>(row), selected_rows[0], selected_cols[0]);
                 }
                 return out;
             }
             if (dtype_ == DTypeTag::kComplex) {
                 CellSeries out = CellSeries::Scalars<std::complex<double> >(size());
                 for (std::size_t row = 0; row < size(); ++row) {
-                    out.scalar_at<std::complex<double> >(row) =
-                        matrix_elem<std::complex<double> >(row, selected_rows[0], selected_cols[0]);
+                    out.scalar_at<std::complex<double> >(static_cast<Index>(row)) =
+                        matrix_elem<std::complex<double> >(static_cast<Index>(row), selected_rows[0], selected_cols[0]);
                 }
                 return out;
             }
 
             CellSeries out = CellSeries::Scalars<std::string>(size());
             for (std::size_t row = 0; row < size(); ++row) {
-                out.scalar_at<std::string>(row) =
-                    matrix_elem_string(row, selected_rows[0], selected_cols[0]);
+                out.scalar_at<std::string>(static_cast<Index>(row)) =
+                    matrix_elem_string(static_cast<Index>(row), selected_rows[0], selected_cols[0]);
             }
             return out;
         }
@@ -1462,11 +1463,11 @@ public:
             if (dtype_ == DTypeTag::kReal) {
                 CellSeries out = CellSeries::Vectors<double>(size(), static_cast<Index>(remaining.size()));
                 for (std::size_t row = 0; row < size(); ++row) {
-                    auto out_vec = out.vector_at<double>(row);
+                    auto out_vec = out.vector_at<double>(static_cast<Index>(row));
                     for (std::size_t i = 0; i < remaining.size(); ++i) {
                         const Index r = row_reduce ? selected_rows[0] : remaining[i];
                         const Index c = row_reduce ? remaining[i] : selected_cols[0];
-                        out_vec(static_cast<Index>(i)) = matrix_elem<double>(row, r, c);
+                        out_vec(static_cast<Index>(i)) = matrix_elem<double>(static_cast<Index>(row), r, c);
                     }
                 }
                 return out;
@@ -1474,11 +1475,11 @@ public:
             if (dtype_ == DTypeTag::kInteger) {
                 CellSeries out = CellSeries::Vectors<int>(size(), static_cast<Index>(remaining.size()));
                 for (std::size_t row = 0; row < size(); ++row) {
-                    auto out_vec = out.vector_at<int>(row);
+                    auto out_vec = out.vector_at<int>(static_cast<Index>(row));
                     for (std::size_t i = 0; i < remaining.size(); ++i) {
                         const Index r = row_reduce ? selected_rows[0] : remaining[i];
                         const Index c = row_reduce ? remaining[i] : selected_cols[0];
-                        out_vec(static_cast<Index>(i)) = matrix_elem<int>(row, r, c);
+                        out_vec(static_cast<Index>(i)) = matrix_elem<int>(static_cast<Index>(row), r, c);
                     }
                 }
                 return out;
@@ -1487,11 +1488,11 @@ public:
                 CellSeries out = CellSeries::Vectors<std::complex<double> >(
                     size(), static_cast<Index>(remaining.size()));
                 for (std::size_t row = 0; row < size(); ++row) {
-                    auto out_vec = out.vector_at<std::complex<double> >(row);
+                    auto out_vec = out.vector_at<std::complex<double> >(static_cast<Index>(row));
                     for (std::size_t i = 0; i < remaining.size(); ++i) {
                         const Index r = row_reduce ? selected_rows[0] : remaining[i];
                         const Index c = row_reduce ? remaining[i] : selected_cols[0];
-                        out_vec(static_cast<Index>(i)) = matrix_elem<std::complex<double> >(row, r, c);
+                        out_vec(static_cast<Index>(i)) = matrix_elem<std::complex<double> >(static_cast<Index>(row), r, c);
                     }
                 }
                 return out;
@@ -1499,11 +1500,11 @@ public:
 
             CellSeries out = CellSeries::Vectors<std::string>(size(), static_cast<Index>(remaining.size()));
             for (std::size_t row = 0; row < size(); ++row) {
-                auto& out_vec = out.vector_at<std::string>(row);
+                auto& out_vec = out.vector_at<std::string>(static_cast<Index>(row));
                 for (std::size_t i = 0; i < remaining.size(); ++i) {
                     const Index r = row_reduce ? selected_rows[0] : remaining[i];
                     const Index c = row_reduce ? remaining[i] : selected_cols[0];
-                    out_vec(static_cast<Index>(i)) = matrix_elem_string(row, r, c);
+                    out_vec(static_cast<Index>(i)) = matrix_elem_string(static_cast<Index>(row), r, c);
                 }
             }
             return out;
@@ -1526,9 +1527,9 @@ private:
     CellSeries at_vector_numeric_impl(const std::vector<Index>& selected) const {
         CellSeries out = CellSeries::Vectors<T>(size(), static_cast<Index>(selected.size()));
         for (std::size_t row = 0; row < size(); ++row) {
-            auto out_vec = out.vector_at<T>(row);
+            auto out_vec = out.vector_at<T>(static_cast<Index>(row));
             for (std::size_t i = 0; i < selected.size(); ++i) {
-                out_vec(static_cast<Index>(i)) = vector_elem<T>(row, selected[i]);
+                out_vec(static_cast<Index>(i)) = vector_elem<T>(static_cast<Index>(row), selected[i]);
             }
         }
         return out;
@@ -1537,9 +1538,9 @@ private:
     CellSeries at_vector_string_impl(const std::vector<Index>& selected) const {
         CellSeries out = CellSeries::Vectors<std::string>(size(), static_cast<Index>(selected.size()));
         for (std::size_t row = 0; row < size(); ++row) {
-            auto out_vec = out.vector_at<std::string>(row);
+            auto out_vec = out.vector_at<std::string>(static_cast<Index>(row));
             for (std::size_t i = 0; i < selected.size(); ++i) {
-                out_vec(static_cast<Index>(i)) = vector_elem_string(row, selected[i]);
+                out_vec(static_cast<Index>(i)) = vector_elem_string(static_cast<Index>(row), selected[i]);
             }
         }
         return out;
@@ -1556,11 +1557,11 @@ private:
             static_cast<Index>(selected_cols.size()));
 
         for (std::size_t row = 0; row < size(); ++row) {
-            auto out_mat = out.matrix_at<T>(row);
+            auto out_mat = out.matrix_at<T>(static_cast<Index>(row));
             for (std::size_t r = 0; r < selected_rows.size(); ++r) {
                 for (std::size_t c = 0; c < selected_cols.size(); ++c) {
                     out_mat(static_cast<Index>(r), static_cast<Index>(c)) =
-                        matrix_elem<T>(row, selected_rows[r], selected_cols[c]);
+                        matrix_elem<T>(static_cast<Index>(row), selected_rows[r], selected_cols[c]);
                 }
             }
         }
@@ -1577,11 +1578,11 @@ private:
             static_cast<Index>(selected_cols.size()));
 
         for (std::size_t row = 0; row < size(); ++row) {
-            auto& out_mat = out.matrix_at<std::string>(row);
+            auto& out_mat = out.matrix_at<std::string>(static_cast<Index>(row));
             for (std::size_t r = 0; r < selected_rows.size(); ++r) {
                 for (std::size_t c = 0; c < selected_cols.size(); ++c) {
                     out_mat(static_cast<Index>(r), static_cast<Index>(c)) =
-                        matrix_elem_string(row, selected_rows[r], selected_cols[c]);
+                        matrix_elem_string(static_cast<Index>(row), selected_rows[r], selected_cols[c]);
                 }
             }
         }
@@ -1685,21 +1686,21 @@ private:
     }
 
     template <typename T>
-    void fill_vector_row(std::size_t row, const T& val, std::false_type) {
+    void fill_vector_row(Index row, const T& val, std::false_type) {
         vector_at<T>(row).setConstant(val);
     }
 
-    void fill_vector_row(std::size_t row, const std::string& val, std::true_type) {
+    void fill_vector_row(Index row, const std::string& val, std::true_type) {
         Eigen::Tensor<std::string, 1>& t = vector_at<std::string>(row);
         for (Index i = 0; i < t.dimension(0); ++i) t(i) = val;
     }
 
     template <typename T>
-    void fill_matrix_row(std::size_t row, const T& val, std::false_type) {
+    void fill_matrix_row(Index row, const T& val, std::false_type) {
         matrix_at<T>(row).setConstant(val);
     }
 
-    void fill_matrix_row(std::size_t row, const std::string& val, std::true_type) {
+    void fill_matrix_row(Index row, const std::string& val, std::true_type) {
         Eigen::Tensor<std::string, 2>& t = matrix_at<std::string>(row);
         for (Index r = 0; r < t.dimension(0); ++r) {
             for (Index c = 0; c < t.dimension(1); ++c) {
@@ -1716,14 +1717,14 @@ private:
 
 class CellSeries::RowView {
 public:
-    RowView(CellSeries* owner, std::size_t idx) : owner_(owner), idx_(idx) {}
+    RowView(CellSeries* owner, Index idx) : owner_(owner), idx_(idx) {}
 
-    bool has_value() const { return owner_ != nullptr && idx_ < owner_->size(); }
+    bool has_value() const { return owner_ != nullptr && idx_ >= 0 && static_cast<std::size_t>(idx_) < owner_->size(); }
     CellKind kind() const { return checked_owner()->cell_kind(); }
     DTypeTag dtype() const { return checked_owner()->dtype(); }
     std::string dtype_name() const { return checked_owner()->dtype_name(); }
     std::vector<Index> cell_shape() const { return checked_owner()->cell_shape(); }
-    std::size_t index() const { return idx_; }
+    Index index() const { return idx_; }
 
     template <typename T>
     T& scalar() {
@@ -1791,24 +1792,24 @@ public:
 
 private:
     CellSeries* checked_owner() const {
-        if (!owner_ || idx_ >= owner_->size()) throw std::out_of_range("row view is invalid");
+        if (!owner_ || idx_ < 0 || static_cast<std::size_t>(idx_) >= owner_->size()) throw std::out_of_range("row view is invalid");
         return owner_;
     }
 
     CellSeries* owner_;
-    std::size_t idx_;
+    Index idx_;
 };
 
 class CellSeries::ConstRowView {
 public:
-    ConstRowView(const CellSeries* owner, std::size_t idx) : owner_(owner), idx_(idx) {}
+    ConstRowView(const CellSeries* owner, Index idx) : owner_(owner), idx_(idx) {}
 
-    bool has_value() const { return owner_ != nullptr && idx_ < owner_->size(); }
+    bool has_value() const { return owner_ != nullptr && idx_ >= 0 && static_cast<std::size_t>(idx_) < owner_->size(); }
     CellKind kind() const { return checked_owner()->cell_kind(); }
     DTypeTag dtype() const { return checked_owner()->dtype(); }
     std::string dtype_name() const { return checked_owner()->dtype_name(); }
     std::vector<Index> cell_shape() const { return checked_owner()->cell_shape(); }
-    std::size_t index() const { return idx_; }
+    Index index() const { return idx_; }
 
     template <typename T>
     const T& scalar() const {
@@ -1845,21 +1846,21 @@ public:
 
 private:
     const CellSeries* checked_owner() const {
-        if (!owner_ || idx_ >= owner_->size()) throw std::out_of_range("row view is invalid");
+        if (!owner_ || idx_ < 0 || static_cast<std::size_t>(idx_) >= owner_->size()) throw std::out_of_range("row view is invalid");
         return owner_;
     }
 
     const CellSeries* owner_;
-    std::size_t idx_;
+    Index idx_;
 };
 
-inline CellSeries::RowView CellSeries::row(std::size_t i) {
-    if (i >= size()) throw std::out_of_range("cell index out of range");
+inline CellSeries::RowView CellSeries::row(Index i) {
+    if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("cell index out of range");
     return RowView(this, i);
 }
 
-inline CellSeries::ConstRowView CellSeries::row(std::size_t i) const {
-    if (i >= size()) throw std::out_of_range("cell index out of range");
+inline CellSeries::ConstRowView CellSeries::row(Index i) const {
+    if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("cell index out of range");
     return ConstRowView(this, i);
 }
 

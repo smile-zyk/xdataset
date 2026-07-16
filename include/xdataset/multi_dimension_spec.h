@@ -2,6 +2,7 @@
 #define MULTI_DIMENSION_SPEC_H
 
 #include "dimension_spec.h"
+#include "xdataset_predefine.h"
 #include <functional>
 #include <vector>
 
@@ -12,9 +13,9 @@ namespace xdataset
     public:
         struct LeafRow
         {
-            std::vector<std::size_t> multi_index;
-            std::vector<std::size_t> dimension_row_indices;
-            std::size_t row_flat = 0;
+            std::vector<Index> multi_index;
+            std::vector<Index> dimension_row_indices;
+            Index row_flat = 0;
         };
 
         using LeafRowVisitor = std::function<void(const LeafRow& leaf_row)>;
@@ -37,15 +38,15 @@ namespace xdataset
         
         const std::vector<DimensionSpec>& dims() const;
 
-        const DimensionSpec& dim(std::size_t index) const;
+        const DimensionSpec& dim(Index index) const;
 
         void set_dimensions(const std::vector<DimensionSpec>& dims);
 
         // CSR-based index conversion: multi-index to flat index
-        std::size_t flat_index(const std::vector<std::size_t>& multi_index) const;
+        Index flat_index(const std::vector<Index>& multi_index) const;
         
         // CSR-based reverse: flat index to multi-index
-        std::vector<std::size_t> multi_index(std::size_t flat) const;
+        std::vector<Index> multi_index(Index flat) const;
 
         // Compute total cell count based on current dimensions
         std::size_t compute_cell_count() const;
@@ -54,7 +55,33 @@ namespace xdataset
         void for_each_leaf_row(const LeafRowVisitor& visitor) const;
 
         // Visit leaf rows whose flat index falls in [start_flat_row, end_flat_row).
-        void for_each_leaf_row(const LeafRowVisitor& visitor, std::size_t start_flat_row, std::size_t end_flat_row) const;
+        void for_each_leaf_row(const LeafRowVisitor& visitor, Index start_flat_row, Index end_flat_row) const;
+
+        // -----------------------------------------------------------------------
+        // Per-dimension-level group iteration
+        // -----------------------------------------------------------------------
+        //
+        // A DimGroup represents all leaf rows under a single multi-index prefix
+        // at a given dimension level.  Its [flat_start, flat_end) range can be
+        // passed directly to for_each_leaf_row(visitor, flat_start, flat_end).
+        //
+        // Example: spec = [Uniform(3), Uniform(4), Uniform(5)] (3x4x5 = 60 leaves)
+        //   for_each_group_at_dim(0, ...) ->  3 groups, each spanning 20 leaves
+        //   for_each_group_at_dim(1, ...) -> 12 groups, each spanning  5 leaves
+        //   for_each_group_at_dim(2, ...) -> 60 groups (same as for_each_leaf_row)
+
+        struct DimGroup
+        {
+            std::vector<Index> multi_index;  // prefix [0 .. dim_idx]
+            Index              flat_start;   // first leaf flat index
+            Index              flat_end;     // one-past-last leaf flat index (can pass to for_each_leaf_row)
+        };
+
+        using DimGroupVisitor = std::function<void(const DimGroup& group)>;
+
+        std::size_t group_count_at_dim(Index dim_idx) const;
+
+        void for_each_group_at_dim(Index dim_idx, const DimGroupVisitor& visitor) const;
 
     private:
         std::vector<DimensionSpec> dims_;

@@ -90,7 +90,7 @@ namespace xdataset
     // =========================================================================
     struct GridRow
     {
-        std::vector<std::size_t>  multi_index;
+        std::vector<Index>  multi_index;
         std::vector<GridField>    fields;
 
         std::string FormatMultiIndex() const;
@@ -111,15 +111,15 @@ namespace xdataset
         const std::vector<std::string>& headers()   const { return headers_;   }
         std::size_t                     row_count() const { return total_rows_; }
 
-        const GridRow& GetRow(std::size_t row) const;
+        const GridRow& GetRow(Index row) const;
 
         std::string ToCsv() const;
         void        WriteToCsv(const std::string& file_path) const;
 
     protected:
         using RowGenerator = std::function<std::vector<GridRow>(
-            std::size_t start_row,
-            std::size_t end_row)>;
+            Index start_row,
+            Index end_row)>;
 
         GridModel() = default;
 
@@ -129,7 +129,7 @@ namespace xdataset
                        std::size_t chunk_size = 256);
 
     private:
-        void EnsureChunkLoaded(std::size_t chunk_idx) const;
+        void EnsureChunkLoaded(Index chunk_idx) const;
 
         std::vector<std::string>   headers_;
         std::size_t                total_rows_  = 0;

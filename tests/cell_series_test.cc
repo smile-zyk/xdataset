@@ -20,7 +20,7 @@ using xdataset::Index;
 TEST(ScalarTest, CreateWithFillValue) {
     CellSeries s = CellSeries::Scalars<double>(3, 1.5);
     ASSERT_EQ(s.size(), 3u);
-    for (std::size_t i = 0; i < 3; ++i)
+    for (Index i = 0; i < 3; ++i)
         EXPECT_DOUBLE_EQ(s.scalar_at<double>(i), 1.5);
 }
 
@@ -57,7 +57,7 @@ TEST(ScalarTest, FillOverwritesAllRows) {
     CellSeries s = CellSeries::Scalars<double>(5);
     s.scalar_at<double>(2) = 99.0;
     s.fill<double>(3.14);
-    for (std::size_t i = 0; i < 5; ++i)
+    for (Index i = 0; i < 5; ++i)
         EXPECT_DOUBLE_EQ(s.scalar_at<double>(i), 3.14);
 }
 
@@ -264,7 +264,7 @@ TEST(VectorTest, ElementAccessor) {
 TEST(VectorTest, FillAllElements) {
     CellSeries vecs = CellSeries::Vectors<double>(2, 3);
     vecs.fill<double>(7.0);
-    for (std::size_t r = 0; r < 2; ++r)
+    for (Index r = 0; r < 2; ++r)
         for (Index c = 0; c < 3; ++c)
             EXPECT_DOUBLE_EQ(vecs.vector_at<double>(r)(c), 7.0);
 }
@@ -459,7 +459,7 @@ TEST(MatrixTest, ElementAccessor) {
 TEST(MatrixTest, FillAllElements) {
     CellSeries mats = CellSeries::Matrices<double>(2, 2, 2, 0.0);
     mats.fill<double>(5.0);
-    for (std::size_t r = 0; r < 2; ++r)
+    for (Index r = 0; r < 2; ++r)
         EXPECT_DOUBLE_EQ(mats.matrix_at<double>(r).sum(), 20.0);
 }
 

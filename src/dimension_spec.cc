@@ -5,24 +5,13 @@
 namespace xdataset
 {
     // Factory methods
-    DimensionSpec DimensionSpec::Uniform(Index size)
+    DimensionSpec DimensionSpec::Uniform(std::size_t size)
     {
-        if (size < 0)
-        {
-            throw std::invalid_argument("uniform dimension size must be non-negative");
-        }
         return DimensionSpec(UniformDim(size));
     }
 
     DimensionSpec DimensionSpec::Jagged(const std::vector<std::size_t>& sizes)
     {
-        for (std::size_t i = 0; i < sizes.size(); ++i)
-        {
-            if (sizes[i] < 0)
-            {
-                throw std::invalid_argument("jagged dimension size must be non-negative");
-            }
-        }
         return DimensionSpec(JaggedDim(sizes));
     }
 
@@ -60,7 +49,7 @@ namespace xdataset
     }
 
     // Convenient getters (with error checking)
-    Index DimensionSpec::uniform_size() const
+    std::size_t DimensionSpec::uniform_size() const
     {
         const UniformDim* u = as_uniform();
         if (!u)
@@ -103,36 +92,36 @@ namespace xdataset
         }
     }
 
-    std::size_t DimensionSpec::child_width(std::size_t parent_idx) const
+    std::size_t DimensionSpec::child_width(Index parent_idx) const
     {
         if (is_uniform())
         {
-            return static_cast<std::size_t>(as_uniform()->size);
+            return as_uniform()->size;
         }
         else
         {
             const JaggedDim* j = as_jagged();
-            if (parent_idx >= j->sizes.size())
+            if (parent_idx < 0 || static_cast<std::size_t>(parent_idx) >= j->sizes.size())
             {
                 throw std::out_of_range("parent_idx out of bounds");
             }
-            return static_cast<std::size_t>(j->sizes[parent_idx]);
+            return j->sizes[static_cast<std::size_t>(parent_idx)];
         }
     }
 
-    void DimensionSpec::child_range(std::size_t parent_idx, std::size_t& start, std::size_t& end) const
+    void DimensionSpec::child_range(Index parent_idx, Index& start, Index& end) const
     {
         const JaggedDim* jagged = as_jagged();
         if (!jagged)
         {
             throw std::logic_error("child_range() is only valid for jagged dimensions");
         }
-        if (parent_idx >= jagged->sizes.size())
+        if (parent_idx < 0 || static_cast<std::size_t>(parent_idx) >= jagged->sizes.size())
         {
             throw std::out_of_range("parent_idx out of bounds");
         }
-        start = jagged->prefix_sum[parent_idx];
-        end = jagged->prefix_sum[parent_idx + 1];
+        start = static_cast<Index>(jagged->prefix_sum[static_cast<std::size_t>(parent_idx)]);
+        end = static_cast<Index>(jagged->prefix_sum[static_cast<std::size_t>(parent_idx) + 1]);
     }
 
 } // namespace xdataset

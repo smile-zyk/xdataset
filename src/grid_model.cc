@@ -195,7 +195,7 @@ namespace xdataset
         throw std::logic_error("unsupported cell kind");
     }
 
-    static std::vector<GridField> CellAtToColumns(const CellSeries& series, std::size_t row)
+    static std::vector<GridField> CellAtToColumns(const CellSeries& series, Index row)
     {
         std::vector<GridField> cells;
 
@@ -291,7 +291,7 @@ namespace xdataset
         throw std::logic_error("unsupported cell kind");
     }
 
-    static std::string CellAtToString(const CellSeries& series, std::size_t row)
+    static std::string CellAtToString(const CellSeries& series, Index row)
     {
         const std::vector<GridField> cols = CellAtToColumns(series, row);
         if (cols.empty())
@@ -354,30 +354,31 @@ namespace xdataset
         loaded_chunks_.assign((total_rows_ + chunk_size_ - 1) / chunk_size_, false);
     }
 
-    const GridRow& GridModel::GetRow(std::size_t row) const
+    const GridRow& GridModel::GetRow(Index row) const
     {
-        EnsureChunkLoaded(row / chunk_size_);
-        return rows_[row];
+        EnsureChunkLoaded(row / static_cast<Index>(chunk_size_));
+        return rows_[static_cast<std::size_t>(row)];
     }
 
-    void GridModel::EnsureChunkLoaded(std::size_t chunk_idx) const
+    void GridModel::EnsureChunkLoaded(Index chunk_idx) const
     {
-        if (loaded_chunks_[chunk_idx])
+        const std::size_t ci = static_cast<std::size_t>(chunk_idx);
+        if (loaded_chunks_[ci])
         {
             return;
         }
 
-        const std::size_t start = chunk_idx * chunk_size_;
-        const std::size_t end   = (std::min)(start + chunk_size_, total_rows_);
+        const Index start = static_cast<Index>(ci * chunk_size_);
+        const Index end   = static_cast<Index>((std::min)((ci + 1) * chunk_size_, total_rows_));
 
         std::vector<GridRow> chunk_rows = generator_(start, end);
 
         for (std::size_t i = 0; i < chunk_rows.size(); ++i)
         {
-            rows_[start + i] = std::move(chunk_rows[i]);
+            rows_[static_cast<std::size_t>(start) + i] = std::move(chunk_rows[i]);
         }
 
-        loaded_chunks_[chunk_idx] = true;
+        loaded_chunks_[ci] = true;
     }
 
     // =========================================================================
@@ -399,7 +400,7 @@ namespace xdataset
         // Data rows (lazy — triggers chunk loads on demand)
         for (std::size_t i = 0; i < total_rows_; ++i)
         {
-            const GridRow& row = GetRow(i);
+            const GridRow& row = GetRow(static_cast<Index>(i));
             csv += EscapeCsvCell(row.FormatMultiIndex());
 
             for (const GridField& field : row.fields)
@@ -440,43 +441,38 @@ namespace xdataset
 
     BlockGridModel::BlockGridModel(const Block& block)
     {
-        // --- build headers and dimension spec ---
         std::vector<std::string> all_headers;
-
         std::vector<DimensionSpec> dims;
-        dims.reserve(block.independents().size());
+        std::vector<std::string> indep_names = block.independents();
+        dims.reserve(indep_names.size());
 
-        for (const std::string& indep_name : block.independents())
+        for (const std::string& indep_name : indep_names)
         {
-            const VariableDescriptor& desc = block.variable_descriptor(indep_name);
-            const std::vector<std::string> hdrs =
-                ExpandHeadersForSeries(indep_name, desc.data());
+            const IndependentVariableInfo& iv = block.independent_variable(indep_name);
+            const std::vector<std::string> hdrs = ExpandHeadersForSeries(indep_name, iv.data);
             all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
-
-            const MultiDimensionSpec& indep_dim = desc.multi_dimension_spec();
-            if (indep_dim.rank() != 1 || indep_dim.dims().size() != 1)
-                throw std::logic_error("independent VariableDescriptor must store exactly one dimension");
-            dims.push_back(indep_dim.dims()[0]);
+            dims.push_back(iv.dimension);
         }
-        for (const std::string& dep_name : block.dependents())
+
+        std::vector<std::string> dep_names = block.dependents();
+        for (const std::string& dep_name : dep_names)
         {
-            const VariableDescriptor& desc = block.variable_descriptor(dep_name);
-            const std::vector<std::string> hdrs =
-                ExpandHeadersForSeries(dep_name, desc.data());
+            const DependentVariableInfo& dv = block.dependent_variable(dep_name);
+            const std::vector<std::string> hdrs = ExpandHeadersForSeries(dep_name, dv.data);
             all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
         }
 
         const MultiDimensionSpec traversal_spec(dims);
         const std::size_t total_rows = dims.empty() ? 0 : traversal_spec.compute_cell_count();
-
         const std::size_t total_headers = all_headers.size();
-        const Block*      b             = &block;  // safe: Block owns this object
+        const Block*      b = &block;
 
         Configure(std::move(all_headers), total_rows,
-            [b, traversal_spec, total_headers](std::size_t start, std::size_t end) -> std::vector<GridRow>
+            [b, traversal_spec, total_headers, indep_names, dep_names](
+                Index start, Index end) -> std::vector<GridRow>
             {
                 std::vector<GridRow> result;
-                result.reserve(end - start);
+                result.reserve(static_cast<std::size_t>(end - start));
                 traversal_spec.for_each_leaf_row(
                     [&](const MultiDimensionSpec::LeafRow& leaf_row)
                     {
@@ -484,18 +480,17 @@ namespace xdataset
                         row.multi_index = leaf_row.multi_index;
                         row.fields.reserve(total_headers);
 
-                        const auto& indeps = b->independents();
                         const auto& dim_ri = leaf_row.dimension_row_indices;
-                        for (std::size_t d = 0; d < indeps.size(); ++d)
+                        for (std::size_t d = 0; d < indep_names.size(); ++d)
                         {
-                            const VariableDescriptor& id = b->variable_descriptor(indeps[d]);
-                            const std::vector<GridField> vals = CellAtToColumns(id.data(), dim_ri[d]);
+                            const IndependentVariableInfo& iv = b->independent_variable(indep_names[d]);
+                            const std::vector<GridField> vals = CellAtToColumns(iv.data, dim_ri[d]);
                             row.fields.insert(row.fields.end(), vals.begin(), vals.end());
                         }
-                        for (const std::string& dn : b->dependents())
+                        for (const std::string& dn : dep_names)
                         {
-                            const VariableDescriptor& dd = b->variable_descriptor(dn);
-                            const std::vector<GridField> vals = CellAtToColumns(dd.data(), leaf_row.row_flat);
+                            const DependentVariableInfo& dv = b->dependent_variable(dn);
+                            const std::vector<GridField> vals = CellAtToColumns(dv.data, leaf_row.row_flat);
                             row.fields.insert(row.fields.end(), vals.begin(), vals.end());
                         }
                         result.push_back(std::move(row));
@@ -514,7 +509,7 @@ namespace xdataset
         std::vector<std::pair<std::string, const CellSeries*>> indep_columns;
         std::vector<std::string> all_headers;
 
-        indep_columns.reserve(variable.indep_datas().size() + 1);
+        indep_columns.reserve(variable.indep_datas().size());
         for (const auto& item : variable.indep_datas())
         {
             indep_columns.push_back(std::make_pair(item.first, &item.second));
@@ -523,13 +518,6 @@ namespace xdataset
         }
 
         const CellSeries* dep_series = nullptr;
-        if (variable.kind() == VariableKind::kIndependent)
-        {
-            const std::string sn = variable.name().empty() ? "self" : variable.name();
-            indep_columns.push_back(std::make_pair(sn, &variable.data()));
-            const std::vector<std::string> hdrs = ExpandHeadersForSeries(sn, variable.data());
-            all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
-        }
         if (variable.kind() == VariableKind::kDependent)
         {
             dep_series = &variable.data();
@@ -545,13 +533,13 @@ namespace xdataset
 
         const std::size_t total_rows   = spec.compute_cell_count();
         const std::size_t total_headers = all_headers.size();
-        const Variable*   v            = &variable;  // safe: Variable owns this object
 
         Configure(std::move(all_headers), total_rows,
-            [v, spec, indep_columns, total_headers, dep_series](std::size_t start, std::size_t end) -> std::vector<GridRow>
+            [spec, indep_columns, total_headers, dep_series](
+                Index start, Index end) -> std::vector<GridRow>
             {
                 std::vector<GridRow> result;
-                result.reserve(end - start);
+                result.reserve(static_cast<std::size_t>(end - start));
                 spec.for_each_leaf_row(
                     [&](const MultiDimensionSpec::LeafRow& leaf_row)
                     {
@@ -563,14 +551,14 @@ namespace xdataset
                         for (std::size_t d = 0; d < indep_columns.size(); ++d)
                         {
                             const CellSeries* is = indep_columns[d].second;
-                            if (dim_ri[d] >= is->size())
+                            if (dim_ri[d] < 0 || static_cast<std::size_t>(dim_ri[d]) >= is->size())
                                 throw std::out_of_range("expanded independent row index out of bounds");
                             const std::vector<GridField> vals = CellAtToColumns(*is, dim_ri[d]);
                             row.fields.insert(row.fields.end(), vals.begin(), vals.end());
                         }
                         if (dep_series != nullptr)
                         {
-                            if (leaf_row.row_flat >= dep_series->size())
+                            if (leaf_row.row_flat < 0 || static_cast<std::size_t>(leaf_row.row_flat) >= dep_series->size())
                                 throw std::out_of_range("dependent data row index out of bounds");
                             const std::vector<GridField> vals = CellAtToColumns(*dep_series, leaf_row.row_flat);
                             row.fields.insert(row.fields.end(), vals.begin(), vals.end());

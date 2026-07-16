@@ -1,4 +1,4 @@
-﻿#include "block.h"
+#include "block.h"
 
 #include <iostream>
 #include <memory>
@@ -25,7 +25,7 @@ namespace
         CellSeries s = CellSeries::Vectors<double>(rows, width);
         for (std::size_t i = 0; i < rows; ++i)
             for (Index j = 0; j < width; ++j)
-                s.vector_at<double>(i)(j) = static_cast<double>(i * width + j + 1);
+                s.vector_at<double>(static_cast<Index>(i))(j) = static_cast<double>(static_cast<Index>(i) * width + j + 1);
         return s;
     }
 
@@ -35,7 +35,7 @@ namespace
         for (std::size_t i = 0; i < rows; ++i)
             for (Index ri = 0; ri < r; ++ri)
                 for (Index ci = 0; ci < c; ++ci)
-                    s.matrix_at<double>(i)(ri, ci) = static_cast<double>(i * r * c + ri * c + ci + 1);
+                    s.matrix_at<double>(static_cast<Index>(i))(ri, ci) = static_cast<double>(static_cast<Index>(i) * r * c + ri * c + ci + 1);
         return s;
     }
 
@@ -43,7 +43,7 @@ namespace
     {
         CellSeries s = CellSeries::Scalars<std::string>(vals.size());
         for (std::size_t i = 0; i < vals.size(); ++i)
-            s.scalar_at<std::string>(i) = vals[i];
+            s.scalar_at<std::string>(static_cast<Index>(i)) = vals[i];
         return s;
     }
 
@@ -85,7 +85,7 @@ int main()
             // print first & last row
             print_row(t.GetRow(0), "first: ");
             print_row(t.GetRow(5), "last:  ");
-            t.WriteToCsv("demo_simple.csv");
+            t.WriteToCsv("output/demo_simple.csv");
             std::cout << "-> written to demo_simple.csv" << std::endl;
         }
 
@@ -106,7 +106,7 @@ int main()
             print_row(t.GetRow(1));
             print_row(t.GetRow(2));
             print_row(t.GetRow(3));
-            t.WriteToCsv("demo_strings.csv");
+            t.WriteToCsv("output/demo_strings.csv");
             std::cout << "-> written to demo_strings.csv" << std::endl;
         }
 
@@ -126,8 +126,8 @@ int main()
             for (const auto& h : t.headers()) std::cout << "  " << h;
             std::cout << std::endl;
             for (std::size_t i = 0; i < t.row_count(); ++i)
-                print_row(t.GetRow(i));
-            t.WriteToCsv("demo_vectors.csv");
+                print_row(t.GetRow(static_cast<Index>(i)));
+            t.WriteToCsv("output/demo_vectors.csv");
             std::cout << "-> written to demo_vectors.csv" << std::endl;
         }
 
@@ -144,8 +144,8 @@ int main()
             for (const auto& h : t.headers()) std::cout << "  " << h;
             std::cout << std::endl;
             for (std::size_t i = 0; i < t.row_count(); ++i)
-                print_row(t.GetRow(i));
-            t.WriteToCsv("demo_matrices.csv");
+                print_row(t.GetRow(static_cast<Index>(i)));
+            t.WriteToCsv("output/demo_matrices.csv");
             std::cout << "-> written to demo_matrices.csv" << std::endl;
         }
 
@@ -167,7 +167,7 @@ int main()
             std::cout << "total rows: " << t.row_count() << ", columns: " << t.headers().size() << std::endl;
             print_row(t.GetRow(0),  "first:  ");
             print_row(t.GetRow(23), "last:   ");
-            t.WriteToCsv("demo_3d.csv");
+            t.WriteToCsv("output/demo_3d.csv");
             std::cout << "-> written to demo_3d.csv" << std::endl;
         }
 
@@ -189,8 +189,8 @@ int main()
             for (const auto& h : t.headers()) std::cout << "  " << h;
             std::cout << std::endl;
             for (std::size_t i = 0; i < t.row_count(); ++i)
-                print_row(t.GetRow(i));
-            t.WriteToCsv("demo_jagged.csv");
+                print_row(t.GetRow(static_cast<Index>(i)));
+            t.WriteToCsv("output/demo_jagged.csv");
             std::cout << "-> written to demo_jagged.csv" << std::endl;
         }
 
@@ -273,7 +273,7 @@ int main()
                       << sel->data().size() << " rows" << std::endl;
             const GridModel& st = sel->grid_model();
             for (std::size_t i = 0; i < st.row_count(); ++i)
-                print_row(st.GetRow(i));
+                print_row(st.GetRow(static_cast<Index>(i)));
         }
 
         // =====================================================================

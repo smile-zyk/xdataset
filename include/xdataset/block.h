@@ -9,29 +9,29 @@
 #include "cell_series.h"
 #include "dimension_spec.h"
 #include "grid_model.h"
+#include "multi_dimension_spec.h"
 #include "variable.h"
-#include "variable_descriptor.h"
 
 namespace xdataset
 {
-    struct IndependentVariableCreateInfo
+    struct IndependentVariableInfo
     {
-        std::string name;
-        CellSeries data;
+        std::string   name;
+        CellSeries    data;
         DimensionSpec dimension;
     };
 
-    struct DependentVariableCreateInfo
+    struct DependentVariableInfo
     {
         std::string name;
-        CellSeries data;
+        CellSeries  data;
     };
 
     struct BlockCreateInfo
     {
-        std::string name;
-        std::vector<IndependentVariableCreateInfo> independent_variables;
-        std::vector<DependentVariableCreateInfo> dependent_variables;
+        std::string                                name;
+        std::vector<IndependentVariableInfo> independent_variables;
+        std::vector<DependentVariableInfo>   dependent_variables;
     };
 
     class Block
@@ -41,25 +41,28 @@ namespace xdataset
         explicit Block(BlockCreateInfo&& info);
 
         const std::string& name() const;
-        
-        const std::vector<std::string>& dependents() const;
-        
-        const std::vector<std::string>& independents() const;
-        
-        const VariableDescriptor& variable_descriptor(const std::string& name) const;
+
+        std::vector<std::string> dependents() const;
+
+        std::vector<std::string> independents() const;
+
+        const IndependentVariableInfo& independent_variable(const std::string& name) const;
+
+        const DependentVariableInfo& dependent_variable(const std::string& name) const;
 
         std::shared_ptr<Variable> GetOrCreateVariable(const std::string& variable_name);
         const GridModel& grid_model() const;
 
     private:
-        std::shared_ptr<Variable> CreateVariable(const VariableDescriptor& descriptor);
+        std::shared_ptr<Variable> CreateVariable(const IndependentVariableInfo& info) const;
 
-        std::string name_;
-        std::vector<std::string> dependents_;
-        std::vector<std::string> independents_;
-        tsl::ordered_map<std::string, VariableDescriptor> variable_descriptor_map_;
+        void ensure_unique_name(const std::string& name) const;
+
+        std::string                                           name_;
+        tsl::ordered_map<std::string, IndependentVariableInfo> independent_variable_map_;
+        tsl::ordered_map<std::string, DependentVariableInfo>   dependent_variable_map_;
         tsl::ordered_map<std::string, std::shared_ptr<Variable>> variable_cache_;
-        mutable std::unique_ptr<GridModel> grid_model_cache_;
+        mutable std::unique_ptr<GridModel>                    grid_model_cache_;
     };
 }
 

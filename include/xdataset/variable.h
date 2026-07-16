@@ -10,10 +10,15 @@
 #include "grid_model.h"
 #include "multi_dimension_spec.h"
 #include "multi_index_selector.h"
-#include "variable_descriptor.h"
 
 namespace xdataset
 {
+    enum class VariableKind
+    {
+        kDependent,
+        kIndependent
+    };
+
     struct VariableCreateInfo
     {
         std::string name;
@@ -49,6 +54,8 @@ namespace xdataset
             return name_;
         }
 
+        void set_name(const std::string& name);
+
         const GridModel& grid_model() const;
 
         const tsl::ordered_map<std::string, CellSeries>& indep_datas() const
@@ -66,8 +73,8 @@ namespace xdataset
 
         // ── Static factory methods for direct Variable creation ────────────────
         //  All created variables use uniform dimensions.  For jagged or other
-        //  complex setups, use Block with IndependentVariableCreateInfo /
-        //  DependentVariableCreateInfo instead.
+        //  complex setups, use Block with IndependentVariableInfo /
+        //  DependentVariableInfo instead.
 
         // Standalone independent variable (no prior independents).
         static std::shared_ptr<Variable> CreateIndependent(

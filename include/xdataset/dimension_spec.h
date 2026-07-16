@@ -42,7 +42,7 @@ namespace xdataset
     class DimensionSpec
     {
     public:
-        static DimensionSpec Uniform(Index size);
+        static DimensionSpec Uniform(std::size_t size);
         static DimensionSpec Jagged(const std::vector<std::size_t>& sizes);
 
         // Type checking
@@ -54,7 +54,7 @@ namespace xdataset
         const JaggedDim* as_jagged() const;
 
         // Convenient getters (throws if wrong type)
-        Index uniform_size() const;
+        std::size_t uniform_size() const;
         const std::vector<std::size_t>& jagged_sizes() const;
         const std::vector<std::size_t>& prefix_sum() const;
         
@@ -62,10 +62,10 @@ namespace xdataset
         std::size_t element_count() const;
         
         // Width of child elements for a specific parent (uniform: uniform_size, jagged: jagged_sizes[parent_idx])
-        std::size_t child_width(std::size_t parent_idx) const;
+        std::size_t child_width(Index parent_idx) const;
         
         // Get child range [start, end) for parent at parent_idx (jagged only)
-        void child_range(std::size_t parent_idx, std::size_t& start, std::size_t& end) const;
+        void child_range(Index parent_idx, Index& start, Index& end) const;
 
     private:
         explicit DimensionSpec(const UniformDim& uniform);
