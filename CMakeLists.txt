@@ -20,7 +20,6 @@ add_executable(xdataset_test
 	tests/block_test.cc
 	tests/variable_test.cc
 	tests/grid_model_test.cc
-	src/cell_series.cc
 	src/dimension_spec.cc
 	src/multi_dimension_spec.cc
 	src/multi_index_selector.cc
@@ -31,7 +30,6 @@ add_executable(xdataset_test
 
 add_executable(xdataset_playground
 	apps/xdataset_playground/main.cc
-	src/cell_series.cc
 	src/dimension_spec.cc
 	src/multi_dimension_spec.cc
 	src/multi_index_selector.cc

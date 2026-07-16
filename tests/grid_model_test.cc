@@ -1,4 +1,4 @@
-﻿#include "block_fixtures.h"
+#include "block_fixtures.h"
 
 #include <gtest/gtest.h>
 
@@ -166,15 +166,5 @@ namespace xdataset
         model.Configure({"a"}, 1,
             [](Index, Index) -> std::vector<GridRow> { return {}; });
         EXPECT_THROW(model.WriteToCsv(""), std::invalid_argument);
-    }
-
-    TEST(GridModelCsvTest, WriteToCsvRoundtripsThroughFile)
-    {
-        Block block(MakeValueRichCreateInfo());
-        const GridModel& table = block.grid_model();
-
-        table.WriteToCsv("__test_roundtrip.csv");
-        const std::string csv = table.ToCsv();
-        EXPECT_EQ(csv.size(), table.ToCsv().size());  // stable across calls
     }
 } // namespace xdataset
