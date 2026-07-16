@@ -1,4 +1,4 @@
-#include "multi_dimension_spec.h"
+﻿#include "multi_dimension_spec.h"
 #include <stdexcept>
 #include <algorithm>
 #include <functional>
@@ -15,31 +15,31 @@ namespace xdataset
     {
         for (const auto& d : dims)
         {
-            add_dimension(d);   // validates jagged parent count
+            add_dimension(d);   // validates ragged parent count
         }
     }
 
-    MultiDimensionSpec& MultiDimensionSpec::add_uniform(std::size_t size)
+    MultiDimensionSpec& MultiDimensionSpec::add_regular(std::size_t size)
     {
-        dims_.push_back(DimensionSpec::Uniform(size));
+        dims_.push_back(DimensionSpec::Regular(size));
         return *this;
     }
 
-    MultiDimensionSpec& MultiDimensionSpec::add_jagged(const std::vector<std::size_t>& sizes)
+    MultiDimensionSpec& MultiDimensionSpec::add_ragged(const std::vector<std::size_t>& sizes)
     {
-        return add_dimension(DimensionSpec::Jagged(sizes));
+        return add_dimension(DimensionSpec::Ragged(sizes));
     }
 
     MultiDimensionSpec& MultiDimensionSpec::add_dimension(const DimensionSpec& dim)
     {
-        if (dim.is_jagged() && !dims_.empty())   // skip first dim — may be stored in isolation
+        if (dim.is_ragged() && !dims_.empty())   // skip first dim — may be stored in isolation
         {
-            const std::vector<std::size_t>& sizes = dim.as_jagged()->sizes;
+            const std::vector<std::size_t>& sizes = dim.as_ragged()->sizes;
             const std::size_t expected = compute_cell_count();
             if (sizes.size() != expected)
             {
                 throw std::invalid_argument(
-                    "jagged sizes count (" + std::to_string(sizes.size()) +
+                    "ragged sizes count (" + std::to_string(sizes.size()) +
                     ") must match the total cell count of previous dimensions (" +
                     std::to_string(expected) + ")");
             }
@@ -110,14 +110,14 @@ namespace xdataset
         Index flat = 0;
         for (std::size_t d = 0; d < dims_.size(); ++d)
         {
-            if (dims_[d].is_uniform())
+            if (dims_[d].is_regular())
             {
                 // For uniform dimension: flat = flat * size_d + index_d (row-major order)
-                flat = flat * static_cast<Index>(dims_[d].as_uniform()->size) + multi_index[d];
+                flat = flat * static_cast<Index>(dims_[d].as_regular()->size) + multi_index[d];
             }
             else
             {
-                // For jagged dimension: flat is the parent row index, child is multi_index[d]
+                // For Ragged dimension: flat is the parent row index, child is multi_index[d]
                 const std::vector<std::size_t>& prefix = dims_[d].prefix_sum();
                 flat = static_cast<Index>(prefix[static_cast<std::size_t>(flat)]) + multi_index[d];
             }
@@ -141,15 +141,15 @@ namespace xdataset
         Index residual = flat;
         for (std::size_t d = dims_.size(); d-- > 0;)
         {
-            if (dims_[d].is_uniform())
+            if (dims_[d].is_regular())
             {
-                const Index size = static_cast<Index>(dims_[d].as_uniform()->size);
+                const Index size = static_cast<Index>(dims_[d].as_regular()->size);
                 result[d] = residual % size;
                 residual = residual / size;
             }
             else
             {
-                // For jagged: binary search in prefix sum to find the parent row,
+                // For Ragged: binary search in prefix sum to find the parent row,
                 // then compute the child index within that parent.
                 const std::vector<std::size_t>& prefix = dims_[d].prefix_sum();
                 auto it = std::upper_bound(prefix.begin(), prefix.end(), static_cast<std::size_t>(residual));
@@ -166,13 +166,13 @@ namespace xdataset
         std::size_t count = 1;
         for (std::size_t i = 0; i < dims_.size(); ++i)
         {
-            if (dims_[i].is_uniform())
+            if (dims_[i].is_regular())
             {
-                count *= dims_[i].as_uniform()->size;
+                count *= dims_[i].as_regular()->size;
             }
             else
             {
-                // For jagged, directly set to total (no multiply, jagged defines the structure)
+                // For Ragged, directly set to total (no multiply, Ragged defines the structure)
                 count = dims_[i].prefix_sum().back();
             }
         }
@@ -222,10 +222,10 @@ namespace xdataset
             Index parent_flat = 0;
             for (std::size_t d = 0; d < rank; ++d)
             {
-                if (dims_[d].is_uniform())
+                if (dims_[d].is_regular())
                 {
                     leaf_row.dimension_row_indices[d] = leaf_row.multi_index[d];
-                    parent_flat = parent_flat * static_cast<Index>(dims_[d].uniform_size())
+                    parent_flat = parent_flat * static_cast<Index>(dims_[d].regular_size())
                         + leaf_row.multi_index[d];
                 }
                 else
@@ -252,9 +252,9 @@ namespace xdataset
         std::size_t count = 1;
         for (std::size_t i = 0; i <= static_cast<std::size_t>(dim_idx); ++i)
         {
-            if (dims_[i].is_uniform())
+            if (dims_[i].is_regular())
             {
-                count *= dims_[i].as_uniform()->size;
+                count *= dims_[i].as_regular()->size;
             }
             else
             {
@@ -283,9 +283,9 @@ namespace xdataset
             [&](std::size_t d, Index parent_flat)
         {
             std::size_t child_count = 0;
-            if (dims_[d].is_uniform())
+            if (dims_[d].is_regular())
             {
-                child_count = dims_[d].uniform_size();
+                child_count = dims_[d].regular_size();
             }
             else
             {
@@ -297,9 +297,9 @@ namespace xdataset
                 full_mi[d] = idx;
 
                 Index current_flat = 0;
-                if (dims_[d].is_uniform())
+                if (dims_[d].is_regular())
                 {
-                    const Index size = static_cast<Index>(dims_[d].uniform_size());
+                    const Index size = static_cast<Index>(dims_[d].regular_size());
                     current_flat = parent_flat * size + idx;
                 }
                 else

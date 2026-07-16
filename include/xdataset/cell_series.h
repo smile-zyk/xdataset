@@ -1,4 +1,4 @@
-#ifndef XDATASET_TENSOR_SERIES_H_
+﻿#ifndef XDATASET_TENSOR_SERIES_H_
 #define XDATASET_TENSOR_SERIES_H_
 
 #include <Eigen/Dense>

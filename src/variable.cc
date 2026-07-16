@@ -1,4 +1,4 @@
-#include "variable.h"
+﻿#include "variable.h"
 #include "cell_series.h"
 #include "dimension_spec.h"
 #include "multi_dimension_spec.h"
@@ -69,6 +69,33 @@ namespace xdataset
             grid_model_cache_.reset(new VariableGridModel(*this));
         }
         return *grid_model_cache_;
+    }
+
+    const CellSeries& Variable::indep_data(Index index) const
+    {
+        if (index <= 0)
+            throw std::invalid_argument("indep_data index must be 1-based and greater than 0");
+
+        const std::size_t count = indep_datas_.size();
+        if (static_cast<std::size_t>(index) > count)
+            throw std::out_of_range("indep_data index out of range");
+
+        // index=1 → last column, index=count → first column
+        const std::size_t target = count - static_cast<std::size_t>(index);
+        auto it = indep_datas_.begin();
+        std::advance(it, static_cast<std::ptrdiff_t>(target));
+        return it->second;
+    }
+
+    const CellSeries& Variable::indep_data(const std::string& name) const
+    {
+        if (name.empty())
+            throw std::invalid_argument("indep_data name must not be empty");
+
+        auto it = indep_datas_.find(name);
+        if (it == indep_datas_.end())
+            throw std::invalid_argument("indep_data name not found: " + name);
+        return it->second;
     }
 
     std::shared_ptr<Variable> Variable::indep(Index index) const
@@ -244,7 +271,7 @@ namespace xdataset
 
         struct SelectionDimensionInformation
         {
-            bool is_jagged = false;
+            bool is_ragged = false;
             std::vector<Index> source_rows;
             std::vector<std::size_t> child_counts;
         };
@@ -265,9 +292,9 @@ namespace xdataset
 
             const DimensionSpec& dim = multi_dimension_spec_.dim(dim_idx);
             std::size_t width = 0;
-            if (dim.is_uniform())
+            if (dim.is_regular())
             {
-                width = dim.uniform_size();
+                width = dim.regular_size();
             }
             else
             {
@@ -278,9 +305,9 @@ namespace xdataset
                 actual_selectors[static_cast<std::size_t>(dim_idx)].resolve(static_cast<Index>(width));
 
             selection_info[dim_idx].child_counts.push_back(selected_children.size());
-            selection_info[dim_idx].is_jagged = !dim.is_uniform();
+            selection_info[dim_idx].is_ragged = !dim.is_regular();
 
-            if (selection_info[dim_idx].is_jagged)
+            if (selection_info[dim_idx].is_ragged)
             {
                 for (Index child : selected_children)
                 {
@@ -302,9 +329,9 @@ namespace xdataset
             for (Index child : selected_children)
             {
                 Index current_flat = 0;
-                if (dim.is_uniform())
+                if (dim.is_regular())
                 {
-                    const Index size = static_cast<Index>(dim.uniform_size());
+                    const Index size = static_cast<Index>(dim.regular_size());
                     current_flat = parent_flat * size + child;
                 }
                 else
@@ -333,24 +360,24 @@ namespace xdataset
             const std::vector<std::size_t>& counts = selection_info[static_cast<Index>(i)].child_counts;
             if (counts.empty())
             {
-                selected_multi_dim.add_uniform(0);
+                selected_multi_dim.add_regular(0);
                 continue;
             }
 
-            if (selection_info[static_cast<Index>(i)].is_jagged)
+            if (selection_info[static_cast<Index>(i)].is_ragged)
             {
                 if (counts.size() == 1)
                 {
-                    selected_multi_dim.add_uniform(counts.front());
+                    selected_multi_dim.add_regular(counts.front());
                 }
                 else
                 {
-                    selected_multi_dim.add_jagged(counts);
+                    selected_multi_dim.add_ragged(counts);
                 }
             }
             else
             {
-                selected_multi_dim.add_uniform(counts.front());
+                selected_multi_dim.add_regular(counts.front());
             }
         }
 
@@ -401,7 +428,7 @@ namespace xdataset
         vinfo.name = name;
         vinfo.indep_datas[vinfo.name] = data;    // raw copy
         vinfo.data = std::move(data);            // expanded = self for single-dim
-        vinfo.multi_dimension_spec = MultiDimensionSpec({DimensionSpec::Uniform(size)});
+        vinfo.multi_dimension_spec = MultiDimensionSpec({DimensionSpec::Regular(size)});
         vinfo.kind = VariableKind::kIndependent;
         return std::make_shared<Variable>(std::move(vinfo));
     }
@@ -443,7 +470,7 @@ namespace xdataset
                     "CreateDependent: independent variable '" + var->name() +
                     "' has no dimensions");
             }
-            spec.add_dimension(dims.back());   // validates parent count for jagged
+            spec.add_dimension(dims.back());   // validates parent count for ragged
         }
 
         VariableCreateInfo vinfo;

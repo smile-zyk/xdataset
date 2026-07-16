@@ -1,4 +1,4 @@
-#include "variable_descriptor.h"
+﻿#include "variable_descriptor.h"
 
 #include <stdexcept>
 

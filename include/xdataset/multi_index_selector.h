@@ -1,4 +1,4 @@
-#ifndef MULTI_INDEX_SELECTOR_H_
+﻿#ifndef MULTI_INDEX_SELECTOR_H_
 #define MULTI_INDEX_SELECTOR_H_
 
 #include "xdataset_predefine.h"

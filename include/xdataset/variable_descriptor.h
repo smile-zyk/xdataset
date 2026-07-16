@@ -1,4 +1,4 @@
-#ifndef VARIABLE_DESCRIPTOR_H
+﻿#ifndef VARIABLE_DESCRIPTOR_H
 #define VARIABLE_DESCRIPTOR_H
 
 #include "cell_series.h"

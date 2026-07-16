@@ -1,4 +1,4 @@
-#ifndef DIMENSION_SPEC_H
+﻿#ifndef DIMENSION_SPEC_H
 #define DIMENSION_SPEC_H
 
 #include "xdataset_predefine.h"
@@ -8,21 +8,21 @@
 
 namespace xdataset
 {
-    struct UniformDim
+    struct RegularDim
     {
         std::size_t size;
         
-        UniformDim() : size(0) {}
-        explicit UniformDim(std::size_t s) : size(s) {}
+        RegularDim() : size(0) {}
+        explicit RegularDim(std::size_t s) : size(s) {}
     };
 
-    struct JaggedDim
+    struct RaggedDim
     {
         std::vector<std::size_t> sizes;
         std::vector<std::size_t> prefix_sum;
         
-        JaggedDim() {}
-        explicit JaggedDim(const std::vector<std::size_t>& s) : sizes(s)
+        RaggedDim() {}
+        explicit RaggedDim(const std::vector<std::size_t>& s) : sizes(s)
         {
             compute_prefix_sum();
         }
@@ -42,36 +42,36 @@ namespace xdataset
     class DimensionSpec
     {
     public:
-        static DimensionSpec Uniform(std::size_t size);
-        static DimensionSpec Jagged(const std::vector<std::size_t>& sizes);
+        static DimensionSpec Regular(std::size_t size);
+        static DimensionSpec Ragged(const std::vector<std::size_t>& sizes);
 
         // Type checking
-        bool is_uniform() const;
-        bool is_jagged() const;
+        bool is_regular() const;
+        bool is_ragged() const;
 
         // Safe access: returns pointer if type matches, nullptr otherwise
-        const UniformDim* as_uniform() const;
-        const JaggedDim* as_jagged() const;
+        const RegularDim* as_regular() const;
+        const RaggedDim* as_ragged() const;
 
         // Convenient getters (throws if wrong type)
-        std::size_t uniform_size() const;
-        const std::vector<std::size_t>& jagged_sizes() const;
+        std::size_t regular_size() const;
+        const std::vector<std::size_t>& ragged_sizes() const;
         const std::vector<std::size_t>& prefix_sum() const;
         
-        // Number of elements at this level (uniform: size, jagged: sizes.size())
+        // Number of elements at this level (regular: size, ragged: sizes.size())
         std::size_t element_count() const;
         
-        // Width of child elements for a specific parent (uniform: uniform_size, jagged: jagged_sizes[parent_idx])
+        // Width of child elements for a specific parent (regular: regular_size, ragged: ragged_sizes[parent_idx])
         std::size_t child_width(Index parent_idx) const;
         
-        // Get child range [start, end) for parent at parent_idx (jagged only)
+        // Get child range [start, end) for parent at parent_idx (ragged only)
         void child_range(Index parent_idx, Index& start, Index& end) const;
 
     private:
-        explicit DimensionSpec(const UniformDim& uniform);
-        explicit DimensionSpec(const JaggedDim& jagged);
+        explicit DimensionSpec(const RegularDim& regular);
+        explicit DimensionSpec(const RaggedDim& ragged);
 
-        boost::variant<UniformDim, JaggedDim> spec_;
+        boost::variant<RegularDim, RaggedDim> spec_;
     };
 } // namespace xdataset
 

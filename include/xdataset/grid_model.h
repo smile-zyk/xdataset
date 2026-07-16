@@ -1,4 +1,4 @@
-#ifndef GRID_MODEL_H
+﻿#ifndef GRID_MODEL_H
 #define GRID_MODEL_H
 
 #include <boost/variant.hpp>

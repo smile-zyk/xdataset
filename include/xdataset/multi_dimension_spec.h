@@ -1,4 +1,4 @@
-#ifndef MULTI_DIMENSION_SPEC_H
+﻿#ifndef MULTI_DIMENSION_SPEC_H
 #define MULTI_DIMENSION_SPEC_H
 
 #include "dimension_spec.h"
@@ -24,9 +24,9 @@ namespace xdataset
         
         explicit MultiDimensionSpec(const std::vector<DimensionSpec>& dims);
 
-        MultiDimensionSpec& add_uniform(std::size_t size);
+        MultiDimensionSpec& add_regular(std::size_t size);
         
-        MultiDimensionSpec& add_jagged(const std::vector<std::size_t>& sizes);
+        MultiDimensionSpec& add_ragged(const std::vector<std::size_t>& sizes);
         
         MultiDimensionSpec& add_dimension(const DimensionSpec& dim);
 
@@ -65,7 +65,7 @@ namespace xdataset
         // at a given dimension level.  Its [flat_start, flat_end) range can be
         // passed directly to for_each_leaf_row(visitor, flat_start, flat_end).
         //
-        // Example: spec = [Uniform(3), Uniform(4), Uniform(5)] (3x4x5 = 60 leaves)
+        // Example: spec = [Regular(3), Regular(4), Regular(5)] (3x4x5 = 60 leaves)
         //   for_each_group_at_dim(0, ...) ->  3 groups, each spanning 20 leaves
         //   for_each_group_at_dim(1, ...) -> 12 groups, each spanning  5 leaves
         //   for_each_group_at_dim(2, ...) -> 60 groups (same as for_each_leaf_row)

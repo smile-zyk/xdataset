@@ -1,4 +1,4 @@
-#include "block_fixtures.h"
+﻿#include "block_fixtures.h"
 
 #include <gtest/gtest.h>
 
@@ -11,8 +11,8 @@ namespace xdataset
         BlockCreateInfo info;
         info.name = "demo";
 
-        IndependentVariableInfo x{"x", MakeScalarSeries(2), DimensionSpec::Uniform(2)};
-        IndependentVariableInfo y{"y", MakeScalarSeries(3), DimensionSpec::Uniform(3)};
+        IndependentVariableInfo x{"x", MakeScalarSeries(2), DimensionSpec::Regular(2)};
+        IndependentVariableInfo y{"y", MakeScalarSeries(3), DimensionSpec::Regular(3)};
         DependentVariableInfo z{"z", MakeScalarSeries(6)};
 
         info.independent_variables.push_back(x);
@@ -31,8 +31,8 @@ namespace xdataset
 
         const IndependentVariableInfo& x_info = block.independent_variable("x");
         EXPECT_EQ(x_info.name, "x");
-        EXPECT_TRUE(x_info.dimension.is_uniform());
-        EXPECT_EQ(x_info.dimension.uniform_size(), 2u);
+        EXPECT_TRUE(x_info.dimension.is_regular());
+        EXPECT_EQ(x_info.dimension.regular_size(), 2u);
 
         // z is dependent — independent_variable("z") should throw
         EXPECT_THROW({ block.independent_variable("z"); }, std::invalid_argument);
@@ -54,7 +54,7 @@ namespace xdataset
         BlockCreateInfo info;
         info.name = "demo";
 
-        IndependentVariableInfo x{"same", MakeScalarSeries(2), DimensionSpec::Uniform(2)};
+        IndependentVariableInfo x{"same", MakeScalarSeries(2), DimensionSpec::Regular(2)};
         DependentVariableInfo z{"same", MakeScalarSeries(2)};
 
         info.independent_variables.push_back(x);
@@ -68,7 +68,7 @@ namespace xdataset
         BlockCreateInfo info;
         info.name = "demo";
 
-        IndependentVariableInfo x{"", MakeScalarSeries(2), DimensionSpec::Uniform(2)};
+        IndependentVariableInfo x{"", MakeScalarSeries(2), DimensionSpec::Regular(2)};
 
         info.independent_variables.push_back(x);
 
@@ -80,8 +80,8 @@ namespace xdataset
         BlockCreateInfo info;
         info.name = "demo";
 
-        IndependentVariableInfo x{"x", MakeScalarSeries(2), DimensionSpec::Uniform(2)};
-        IndependentVariableInfo y{"y", MakeScalarSeries(3), DimensionSpec::Uniform(3)};
+        IndependentVariableInfo x{"x", MakeScalarSeries(2), DimensionSpec::Regular(2)};
+        IndependentVariableInfo y{"y", MakeScalarSeries(3), DimensionSpec::Regular(3)};
         DependentVariableInfo z{"z", MakeScalarSeries(5)};
 
         info.independent_variables.push_back(x);
@@ -96,7 +96,7 @@ namespace xdataset
         BlockCreateInfo info;
         info.name = "demo";
 
-        IndependentVariableInfo x{"x", MakeScalarSeries(3), DimensionSpec::Uniform(2)};
+        IndependentVariableInfo x{"x", MakeScalarSeries(3), DimensionSpec::Regular(2)};
 
         info.independent_variables.push_back(x);
 
@@ -124,7 +124,7 @@ namespace xdataset
         EXPECT_EQ(x_data->kind(), VariableKind::kIndependent);
         ASSERT_EQ(x_data->multi_dimension_spec().rank(), 1u);
         ASSERT_EQ(x_data->multi_dimension_spec().dims().size(), 1u);
-        EXPECT_EQ(x_data->multi_dimension_spec().dims()[0].uniform_size(), 2);
+        EXPECT_EQ(x_data->multi_dimension_spec().dims()[0].regular_size(), 2);
         EXPECT_EQ(x_data->data().size(), 2u);
 
         const std::shared_ptr<Variable> y_data = block.GetOrCreateVariable("y");
@@ -132,8 +132,8 @@ namespace xdataset
         EXPECT_EQ(y_data->kind(), VariableKind::kIndependent);
         ASSERT_EQ(y_data->multi_dimension_spec().rank(), 2u);
         ASSERT_EQ(y_data->multi_dimension_spec().dims().size(), 2u);
-        EXPECT_EQ(y_data->multi_dimension_spec().dims()[0].uniform_size(), 2);
-        EXPECT_EQ(y_data->multi_dimension_spec().dims()[1].uniform_size(), 3);
+        EXPECT_EQ(y_data->multi_dimension_spec().dims()[0].regular_size(), 2);
+        EXPECT_EQ(y_data->multi_dimension_spec().dims()[1].regular_size(), 3);
         EXPECT_EQ(y_data->data().size(), 6u);   // expanded: 2*3
     }
 
@@ -147,14 +147,14 @@ namespace xdataset
         EXPECT_EQ(z_data->kind(), VariableKind::kDependent);
         ASSERT_EQ(z_data->multi_dimension_spec().rank(), 2u);
         ASSERT_EQ(z_data->multi_dimension_spec().dims().size(), 2u);
-        EXPECT_EQ(z_data->multi_dimension_spec().dims()[0].uniform_size(), 2);
-        EXPECT_EQ(z_data->multi_dimension_spec().dims()[1].uniform_size(), 3);
+        EXPECT_EQ(z_data->multi_dimension_spec().dims()[0].regular_size(), 2);
+        EXPECT_EQ(z_data->multi_dimension_spec().dims()[1].regular_size(), 3);
         EXPECT_EQ(z_data->data().size(), 6u);
     }
 
     TEST(BlockVariableCacheTest, BuildsJaggedVariableWithPrefixDims)
     {
-        Block block(MakeJaggedCreateInfo());
+        Block block(MakeRaggedCreateInfo());
 
         const std::shared_ptr<Variable> y_data = block.GetOrCreateVariable("y");
         ASSERT_NE(y_data, nullptr);
@@ -162,12 +162,12 @@ namespace xdataset
         EXPECT_EQ(y_data->kind(), VariableKind::kIndependent);
         ASSERT_EQ(y_data->multi_dimension_spec().rank(), 2u);
         ASSERT_EQ(y_data->multi_dimension_spec().dims().size(), 2u);
-        EXPECT_TRUE(y_data->multi_dimension_spec().dims()[0].is_uniform());
-        EXPECT_TRUE(y_data->multi_dimension_spec().dims()[1].is_jagged());
-        EXPECT_EQ(y_data->multi_dimension_spec().dims()[0].uniform_size(), 2);
-        ASSERT_EQ(y_data->multi_dimension_spec().dims()[1].jagged_sizes().size(), 2u);
-        EXPECT_EQ(y_data->multi_dimension_spec().dims()[1].jagged_sizes()[0], 1);
-        EXPECT_EQ(y_data->multi_dimension_spec().dims()[1].jagged_sizes()[1], 2);
+        EXPECT_TRUE(y_data->multi_dimension_spec().dims()[0].is_regular());
+        EXPECT_TRUE(y_data->multi_dimension_spec().dims()[1].is_ragged());
+        EXPECT_EQ(y_data->multi_dimension_spec().dims()[0].regular_size(), 2);
+        ASSERT_EQ(y_data->multi_dimension_spec().dims()[1].ragged_sizes().size(), 2u);
+        EXPECT_EQ(y_data->multi_dimension_spec().dims()[1].ragged_sizes()[0], 1);
+        EXPECT_EQ(y_data->multi_dimension_spec().dims()[1].ragged_sizes()[1], 2);
         EXPECT_EQ(y_data->data().size(), 3u);
     }
 
@@ -181,15 +181,15 @@ namespace xdataset
         EXPECT_EQ(z_data->kind(), VariableKind::kIndependent);
         ASSERT_EQ(z_data->multi_dimension_spec().rank(), 3u);
         ASSERT_EQ(z_data->multi_dimension_spec().dims().size(), 3u);
-        EXPECT_TRUE(z_data->multi_dimension_spec().dims()[0].is_uniform());
-        EXPECT_TRUE(z_data->multi_dimension_spec().dims()[1].is_jagged());
-        EXPECT_TRUE(z_data->multi_dimension_spec().dims()[2].is_uniform());
-        EXPECT_EQ(z_data->multi_dimension_spec().dims()[0].uniform_size(), 2);
-        ASSERT_EQ(z_data->multi_dimension_spec().dims()[1].jagged_sizes().size(), 2u);
-        EXPECT_EQ(z_data->multi_dimension_spec().dims()[1].jagged_sizes()[0], 1);
-        EXPECT_EQ(z_data->multi_dimension_spec().dims()[1].jagged_sizes()[1], 2);
-        EXPECT_EQ(z_data->multi_dimension_spec().dims()[2].uniform_size(), 2);
-        EXPECT_EQ(z_data->data().size(), 6u);   // expanded: 2*3 [jagged 1+2=3 rows * 2]
+        EXPECT_TRUE(z_data->multi_dimension_spec().dims()[0].is_regular());
+        EXPECT_TRUE(z_data->multi_dimension_spec().dims()[1].is_ragged());
+        EXPECT_TRUE(z_data->multi_dimension_spec().dims()[2].is_regular());
+        EXPECT_EQ(z_data->multi_dimension_spec().dims()[0].regular_size(), 2);
+        ASSERT_EQ(z_data->multi_dimension_spec().dims()[1].ragged_sizes().size(), 2u);
+        EXPECT_EQ(z_data->multi_dimension_spec().dims()[1].ragged_sizes()[0], 1);
+        EXPECT_EQ(z_data->multi_dimension_spec().dims()[1].ragged_sizes()[1], 2);
+        EXPECT_EQ(z_data->multi_dimension_spec().dims()[2].regular_size(), 2);
+        EXPECT_EQ(z_data->data().size(), 6u);   // expanded: 2*3 [Ragged 1+2=3 rows * 2]
     }
 
     TEST(BlockGridModelTest, AggregatesAllVariablesIntoOneTable)
@@ -221,7 +221,7 @@ namespace xdataset
 
     TEST(BlockGridModelTest, AggregatesJaggedVariablesIntoOneTable)
     {
-        Block block(MakeJaggedCreateInfo());
+        Block block(MakeRaggedCreateInfo());
         const GridModel& table = block.grid_model();
 
         ASSERT_EQ(table.headers().size(), 3u);

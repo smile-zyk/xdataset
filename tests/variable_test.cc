@@ -1,4 +1,4 @@
-#include "block_fixtures.h"
+ï»¿#include "block_fixtures.h"
 
 #include <gtest/gtest.h>
 #include <complex>
@@ -57,9 +57,9 @@ namespace xdataset
         EXPECT_NE(csv.find("\"[1,2]\",20,3,105"), std::string::npos);
     }
 
-    TEST(VariableGridModelTest, JaggedIndependentTableExpandsPrefixDimensions)
+    TEST(VariableGridModelTest, RaggedIndependentTableExpandsPrefixDimensions)
     {
-        Block block(MakeJaggedCreateInfo());
+        Block block(MakeRaggedCreateInfo());
         std::shared_ptr<Variable> y_data = block.GetOrCreateVariable("y");
         ASSERT_NE(y_data, nullptr);
 
@@ -86,9 +86,9 @@ namespace xdataset
         EXPECT_NE(csv.find("\"[1,1]\",20,3"), std::string::npos);
     }
 
-    TEST(VariableGridModelTest, JaggedDependentTableContainsDataColumnAndCsv)
+    TEST(VariableGridModelTest, RaggedDependentTableContainsDataColumnAndCsv)
     {
-        Block block(MakeJaggedCreateInfo());
+        Block block(MakeRaggedCreateInfo());
         std::shared_ptr<Variable> z_data = block.GetOrCreateVariable("z");
         ASSERT_NE(z_data, nullptr);
 
@@ -120,7 +120,7 @@ namespace xdataset
         EXPECT_NE(csv.find("\"[1,1]\",20,3,102"), std::string::npos);
     }
 
-    TEST(VariableGridModelTest, InterleavedJaggedIndependentTableExpandsPrefixDimensions)
+    TEST(VariableGridModelTest, InterleavedRaggedIndependentTableExpandsPrefixDimensions)
     {
         Block block(MakeInterleavedCreateInfo());
         std::shared_ptr<Variable> z_data = block.GetOrCreateVariable("z");
@@ -169,7 +169,7 @@ namespace xdataset
         EXPECT_NE(csv.find("\"[1,1,1]\",20,3,200"), std::string::npos);
     }
 
-    TEST(VariableGridModelTest, InterleavedJaggedDependentTableContainsDataColumnAndCsv)
+    TEST(VariableGridModelTest, InterleavedRaggedDependentTableContainsDataColumnAndCsv)
     {
         Block block(MakeInterleavedCreateInfo());
         std::shared_ptr<Variable> w_data = block.GetOrCreateVariable("w");
@@ -250,7 +250,7 @@ namespace xdataset
         EXPECT_EQ(by_name->multi_dimension_spec().rank(), indep1->multi_dimension_spec().rank());
     }
 
-    // IndependentIndepOneReturnsIndexSeries â€?indep(1) on an Independent returns
+    // IndependentIndepOneReturnsIndexSeries ï¿½?indep(1) on an Independent returns
     // a dimension-level index series (multi_index.back()).  For z (3rd indep, 3 dims
     // U2 x J{1,2} x U2, 6 rows), the index cycles 0,1,0,1,0,1.
     TEST(VariableIndepTest, IndependentIndepOneReturnsIndexSeries)
@@ -298,8 +298,8 @@ namespace xdataset
         EXPECT_EQ(selected->kind(), VariableKind::kDependent);
         EXPECT_EQ(selected->multi_dimension_spec().rank(), 2u);
 
-        EXPECT_EQ(selected->multi_dimension_spec().dims()[0].as_uniform()->size, 2u);
-        EXPECT_EQ(selected->multi_dimension_spec().dims()[1].as_uniform()->size, 2u);
+        EXPECT_EQ(selected->multi_dimension_spec().dims()[0].as_regular()->size, 2u);
+        EXPECT_EQ(selected->multi_dimension_spec().dims()[1].as_regular()->size, 2u);
 
         const GridModel& table = selected->grid_model();
         ASSERT_EQ(table.headers().size(), 3u);
@@ -353,7 +353,7 @@ namespace xdataset
             IndependentVariableInfo{
                 "x",
                 MakeScalarSeriesFrom({10.0, 20.0, 30.0, 40.0}),
-                DimensionSpec::Uniform(4)});
+                DimensionSpec::Regular(4)});
         info.dependent_variables.push_back(
             DependentVariableInfo{
                 "z",
@@ -370,7 +370,7 @@ namespace xdataset
         ASSERT_NE(selected, nullptr);
         EXPECT_EQ(selected->kind(), VariableKind::kDependent);
         EXPECT_EQ(selected->multi_dimension_spec().rank(), 1u);
-        EXPECT_EQ(selected->multi_dimension_spec().dims()[0].as_uniform()->size, 2u);
+        EXPECT_EQ(selected->multi_dimension_spec().dims()[0].as_regular()->size, 2u);
 
         const GridModel& table = selected->grid_model();
         ASSERT_EQ(table.headers().size(), 2u);
@@ -390,7 +390,7 @@ namespace xdataset
         std::shared_ptr<Variable> w_data = block.GetOrCreateVariable("w");
         ASSERT_NE(w_data, nullptr);
 
-        // Collapse z (Uniform(2)) with Equal(0); retain x (Uniform(2)) and y (Jagged({1,2})).
+        // Collapse z (Regular(2)) with Equal(0); retain x (Regular(2)) and y (Ragged({1,2})).
         std::vector<MultiIndexSelector> selectors;
         selectors.push_back(MultiIndexSelector::Any());
         selectors.push_back(MultiIndexSelector::Any());
@@ -401,14 +401,14 @@ namespace xdataset
         EXPECT_EQ(selected->kind(), VariableKind::kDependent);
         EXPECT_EQ(selected->multi_dimension_spec().rank(), 2u);
 
-        EXPECT_NE(selected->multi_dimension_spec().dims()[0].as_uniform(), nullptr);
-        EXPECT_EQ(selected->multi_dimension_spec().dims()[0].as_uniform()->size, 2u);
+        EXPECT_NE(selected->multi_dimension_spec().dims()[0].as_regular(), nullptr);
+        EXPECT_EQ(selected->multi_dimension_spec().dims()[0].as_regular()->size, 2u);
 
-        EXPECT_NE(selected->multi_dimension_spec().dims()[1].as_jagged(), nullptr);
-        const auto* jagged = selected->multi_dimension_spec().dims()[1].as_jagged();
-        ASSERT_EQ(jagged->sizes.size(), 2u);
-        EXPECT_EQ(jagged->sizes[0], 1);
-        EXPECT_EQ(jagged->sizes[1], 2);
+        EXPECT_NE(selected->multi_dimension_spec().dims()[1].as_ragged(), nullptr);
+        const auto* ragged = selected->multi_dimension_spec().dims()[1].as_ragged();
+        ASSERT_EQ(ragged->sizes.size(), 2u);
+        EXPECT_EQ(ragged->sizes[0], 1);
+        EXPECT_EQ(ragged->sizes[1], 2);
 
         const GridModel& table = selected->grid_model();
         ASSERT_EQ(table.headers().size(), 3u);
@@ -432,7 +432,7 @@ namespace xdataset
     {
         // For ragged independent variables, equal selection must still be in range.
 
-        Block block(MakeJaggedCreateInfo());
+        Block block(MakeRaggedCreateInfo());
         std::shared_ptr<Variable> y_data = block.GetOrCreateVariable("y");
         ASSERT_NE(y_data, nullptr);
 
@@ -467,7 +467,7 @@ namespace xdataset
         info.data.vector_at<double>(1) << 4.0, 5.0, 6.0;
         info.indep_datas["x"] = CellSeries::ScalarsFrom<double>({10.0, 20.0});
         info.multi_dimension_spec = MultiDimensionSpec(
-            std::vector<DimensionSpec>{DimensionSpec::Uniform(2)});
+            std::vector<DimensionSpec>{DimensionSpec::Regular(2)});
 
         Variable v(info);
         std::shared_ptr<Variable> selected =
@@ -500,7 +500,7 @@ namespace xdataset
                                       10, 11, 12;
         info.indep_datas["x"] = CellSeries::ScalarsFrom<double>({10.0, 20.0});
         info.multi_dimension_spec = MultiDimensionSpec(
-            std::vector<DimensionSpec>{DimensionSpec::Uniform(2)});
+            std::vector<DimensionSpec>{DimensionSpec::Regular(2)});
 
         Variable m(info);
         std::shared_ptr<Variable> selected = m.at(
@@ -526,7 +526,7 @@ namespace xdataset
         info.data = CellSeries::ScalarsFrom<double>({1.0, 2.0});
         info.indep_datas["x"] = CellSeries::ScalarsFrom<double>({10.0, 20.0});
         info.multi_dimension_spec = MultiDimensionSpec(
-            std::vector<DimensionSpec>{DimensionSpec::Uniform(2)});
+            std::vector<DimensionSpec>{DimensionSpec::Regular(2)});
 
         Variable s(info);
         EXPECT_THROW(
@@ -608,9 +608,9 @@ namespace xdataset
         EXPECT_EQ(GridFieldToString(table.GetRow(0).fields[5]), "4");
     }
 
-    TEST(VariableGridModelTest, JaggedVectorDependentColumnsExpand)
+    TEST(VariableGridModelTest, RaggedVectorDependentColumnsExpand)
     {
-        Block block(MakeJaggedVectorCreateInfo());
+        Block block(MakeRaggedVectorCreateInfo());
         std::shared_ptr<Variable> v_var = block.GetOrCreateVariable("v");
         const GridModel& table = v_var->grid_model();
 

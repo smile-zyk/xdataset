@@ -1,4 +1,4 @@
-#include "multi_dimension_spec.h"
+﻿#include "multi_dimension_spec.h"
 
 #include <gtest/gtest.h>
 
@@ -9,21 +9,21 @@ namespace xdataset
         MultiDimensionSpec spec;
         EXPECT_TRUE(spec.empty());
 
-        spec.add_uniform(2).add_uniform(3);
+        spec.add_regular(2).add_regular(3);
 
         EXPECT_FALSE(spec.empty());
         EXPECT_EQ(spec.rank(), 2u);
         EXPECT_EQ(spec.ndim(), 2u);
         ASSERT_EQ(spec.dims().size(), 2u);
-        EXPECT_TRUE(spec.dims()[0].is_uniform());
-        EXPECT_TRUE(spec.dims()[1].is_uniform());
+        EXPECT_TRUE(spec.dims()[0].is_regular());
+        EXPECT_TRUE(spec.dims()[1].is_regular());
         EXPECT_EQ(spec.compute_cell_count(), 6u);
     }
 
     TEST(MultiDimensionSpecTest, ForEachLeafRowReportsDimensionRowIndices)
     {
         MultiDimensionSpec spec;
-        spec.add_uniform(2).add_jagged({2, 1});
+        spec.add_regular(2).add_ragged({2, 1});
 
         std::vector<std::vector<Index>> multi_indices;
         std::vector<std::vector<Index>> dimension_row_indices;
@@ -54,10 +54,10 @@ namespace xdataset
         EXPECT_EQ(row_flats[2], 2);
     }
 
-    TEST(MultiDimensionSpecTest, ForEachLeafRowHandlesInterleavedUniformAndJaggedDimensions)
+    TEST(MultiDimensionSpecTest, ForEachLeafRowHandlesInterleavedUniformAndRaggedDimensions)
     {
         MultiDimensionSpec spec;
-        spec.add_uniform(2).add_jagged({2, 1}).add_uniform(2);
+        spec.add_regular(2).add_ragged({2, 1}).add_regular(2);
 
         std::vector<std::vector<Index>> multi_indices;
         std::vector<std::vector<Index>> dimension_row_indices;
@@ -107,7 +107,7 @@ namespace xdataset
     TEST(MultiDimensionSpecTest, GroupCountAtDim)
     {
         MultiDimensionSpec spec;
-        spec.add_uniform(3).add_uniform(4).add_uniform(5);
+        spec.add_regular(3).add_regular(4).add_regular(5);
         EXPECT_EQ(spec.rank(), 3u);
         EXPECT_EQ(spec.compute_cell_count(), 60u);
 
@@ -118,9 +118,9 @@ namespace xdataset
 
     TEST(MultiDimensionSpecTest, ForEachGroupAtDimUniform3x4x5)
     {
-        // 3x4x5 uniform grid: 60 leaves
+        // 3x4x5 regular grid: 60 leaves
         MultiDimensionSpec spec;
-        spec.add_uniform(3).add_uniform(4).add_uniform(5);
+        spec.add_regular(3).add_regular(4).add_regular(5);
 
         // Dim 0: 3 groups, each spanning 20 leaves
         {
@@ -184,10 +184,10 @@ namespace xdataset
 
     TEST(MultiDimensionSpecTest, ForEachGroupAtDimCanDriveForEachLeafRowRange)
     {
-        // 3x4 uniform grid: 12 leaves.  Access dim-1 groups to iterate leaves in
+        // 3x4 regular grid: 12 leaves.  Access dim-1 groups to iterate leaves in
         // per-group batches of 4.
         MultiDimensionSpec spec;
-        spec.add_uniform(3).add_uniform(4);
+        spec.add_regular(3).add_regular(4);
 
         std::vector<std::vector<Index>> all_multi_indices;
         spec.for_each_group_at_dim(0, [&](const MultiDimensionSpec::DimGroup& g) {
@@ -206,10 +206,10 @@ namespace xdataset
         EXPECT_EQ(all_multi_indices[11], std::vector<Index>({2, 3}));
     }
 
-    TEST(MultiDimensionSpecTest, ForEachGroupAtDimJaggedInterleaved)
+    TEST(MultiDimensionSpecTest, ForEachGroupAtDimRaggedInterleaved)
     {
         MultiDimensionSpec spec;
-        spec.add_uniform(2).add_jagged({1, 2}).add_uniform(2);
+        spec.add_regular(2).add_ragged({1, 2}).add_regular(2);
 
         // Dim 0: 2 groups
         {
@@ -220,10 +220,10 @@ namespace xdataset
             ASSERT_EQ(groups.size(), 2u);
             EXPECT_EQ(groups[0].multi_index, std::vector<Index>({0}));
             EXPECT_EQ(groups[0].flat_start, 0);
-            EXPECT_EQ(groups[0].flat_end, 2);    // jagged node 0 has 1*2=2 leaves
+            EXPECT_EQ(groups[0].flat_end, 2);    // ragged node 0 has 1*2=2 leaves
             EXPECT_EQ(groups[1].multi_index, std::vector<Index>({1}));
             EXPECT_EQ(groups[1].flat_start, 2);
-            EXPECT_EQ(groups[1].flat_end, 6);    // jagged node 1 has 2*2=4 leaves
+            EXPECT_EQ(groups[1].flat_end, 6);    // ragged node 1 has 2*2=4 leaves
         }
 
         // Dim 1: 1+2=3 groups

@@ -1,4 +1,4 @@
-#include "cell_series.h"
+﻿#include "cell_series.h"
 
 #include <gtest/gtest.h>
 

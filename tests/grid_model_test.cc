@@ -1,4 +1,4 @@
-#include "block_fixtures.h"
+﻿#include "block_fixtures.h"
 
 #include <gtest/gtest.h>
 
@@ -151,7 +151,7 @@ namespace xdataset
 
     TEST(GridModelCsvTest, ToCsvFromVariable)
     {
-        Block block(MakeJaggedCreateInfo());
+        Block block(MakeRaggedCreateInfo());
         std::shared_ptr<Variable> y = block.GetOrCreateVariable("y");
         const GridModel& table = y->grid_model();
 

@@ -1,4 +1,4 @@
-#include "block.h"
+﻿#include "block.h"
 
 #include <stdexcept>
 
@@ -25,12 +25,12 @@ namespace xdataset
 
             independent_variable_map_.emplace(iv.name, iv);
 
-            // Add in order — add_dimension validates jagged against prior dims.
+            // Add in order — add_dimension validates ragged against prior dims.
             dependent_multi_dim.add_dimension(iv.dimension);
 
             // Validate: independent data size must match dimension element count.
-            const std::size_t dim_elems = iv.dimension.is_uniform()
-                ? iv.dimension.uniform_size()
+            const std::size_t dim_elems = iv.dimension.is_regular()
+                ? iv.dimension.regular_size()
                 : iv.dimension.prefix_sum().back();
             if (iv.data.size() != static_cast<Index>(dim_elems))
                 throw std::invalid_argument(

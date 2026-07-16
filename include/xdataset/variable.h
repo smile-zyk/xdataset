@@ -1,4 +1,4 @@
-#ifndef VARIABLE_H
+﻿#ifndef VARIABLE_H
 #define VARIABLE_H
 
 #include <memory>
@@ -63,6 +63,10 @@ namespace xdataset
             return indep_datas_;
         }
 
+        const CellSeries& indep_data(Index index) const;
+
+        const CellSeries& indep_data(const std::string& name) const;
+
         std::shared_ptr<Variable> indep(Index index = 1) const;
 
         std::shared_ptr<Variable> indep(const std::string& name) const;
@@ -70,11 +74,6 @@ namespace xdataset
         std::shared_ptr<Variable> at(const std::vector<MultiIndexSelector>& selectors) const;
 
         std::shared_ptr<Variable> select(const std::vector<MultiIndexSelector>& selectors) const;
-
-        // ── Static factory methods for direct Variable creation ────────────────
-        //  All created variables use uniform dimensions.  For jagged or other
-        //  complex setups, use Block with IndependentVariableInfo /
-        //  DependentVariableInfo instead.
 
         // Standalone independent variable (no prior independents).
         static std::shared_ptr<Variable> CreateIndependent(

@@ -1,4 +1,4 @@
-#include "block.h"
+﻿#include "block.h"
 
 #include <iostream>
 #include <memory>
@@ -67,14 +67,14 @@ int main()
     try
     {
         // =====================================================================
-        // 1. Simple uniform block (2 x 3)
+        // 1. Simple regular block (2 x 3)
         // =====================================================================
-        section("1. Simple 2x3 uniform block");
+        section("1. Simple 2x3 regular block");
         {
             BlockCreateInfo info;
             info.name = "simple";
-            info.independent_variables.push_back({"a", doubles({1.0, 2.0}), DimensionSpec::Uniform(2)});
-            info.independent_variables.push_back({"b", doubles({10.0, 20.0, 30.0}), DimensionSpec::Uniform(3)});
+            info.independent_variables.push_back({"a", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
+            info.independent_variables.push_back({"b", doubles({10.0, 20.0, 30.0}), DimensionSpec::Regular(3)});
             info.dependent_variables.push_back({"c", doubles({100.0, 101.0, 102.0, 103.0, 104.0, 105.0})});
             Block block(info);
 
@@ -96,8 +96,8 @@ int main()
         {
             BlockCreateInfo info;
             info.name = "strings";
-            info.independent_variables.push_back({"city", strings({"Paris", "London"}), DimensionSpec::Uniform(2)});
-            info.independent_variables.push_back({"unit", strings({"kg", "L"}), DimensionSpec::Uniform(2)});
+            info.independent_variables.push_back({"city", strings({"Paris", "London"}), DimensionSpec::Regular(2)});
+            info.independent_variables.push_back({"unit", strings({"kg", "L"}), DimensionSpec::Regular(2)});
             info.dependent_variables.push_back({"val", strings({"A", "B", "C", "D"})});
             Block block(info);
 
@@ -117,8 +117,8 @@ int main()
         {
             BlockCreateInfo info;
             info.name = "vectors";
-            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Uniform(2)});
-            info.independent_variables.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Uniform(2)});
+            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
+            info.independent_variables.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
             info.dependent_variables.push_back({"vec", vectors(4, 3)});
             Block block(info);
 
@@ -135,8 +135,8 @@ int main()
         {
             BlockCreateInfo info;
             info.name = "matrices";
-            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Uniform(2)});
-            info.independent_variables.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Uniform(2)});
+            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
+            info.independent_variables.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
             info.dependent_variables.push_back({"mat", matrices(4, 2, 2)});
             Block block(info);
 
@@ -156,9 +156,9 @@ int main()
         {
             BlockCreateInfo info;
             info.name = "3d";
-            info.independent_variables.push_back({"a", doubles({1.0, 2.0}), DimensionSpec::Uniform(2)});
-            info.independent_variables.push_back({"b", doubles({10.0, 20.0, 30.0}), DimensionSpec::Uniform(3)});
-            info.independent_variables.push_back({"c", doubles({100.0, 200.0, 300.0, 400.0}), DimensionSpec::Uniform(4)});
+            info.independent_variables.push_back({"a", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
+            info.independent_variables.push_back({"b", doubles({10.0, 20.0, 30.0}), DimensionSpec::Regular(3)});
+            info.independent_variables.push_back({"c", doubles({100.0, 200.0, 300.0, 400.0}), DimensionSpec::Regular(4)});
             info.dependent_variables.push_back({"p", doubles(std::vector<double>(24, 0.0))});
             info.dependent_variables.push_back({"q", doubles(std::vector<double>(24, 0.0))});
             Block block(info);
@@ -172,15 +172,15 @@ int main()
         }
 
         // =====================================================================
-        // 6. Jagged + interleaved (original demo)
+        // 6. Ragged + interleaved (original demo)
         // =====================================================================
-        section("6. Jagged-interleaved block (x x y(jagged) x z)");
+        section("6. Ragged-interleaved block (x x y(Ragged) x z)");
         {
             BlockCreateInfo info;
             info.name = "interleaved";
-            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Uniform(2)});
-            info.independent_variables.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Jagged({1, 2})});
-            info.independent_variables.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Uniform(2)});
+            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
+            info.independent_variables.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Ragged({1, 2})});
+            info.independent_variables.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Regular(2)});
             info.dependent_variables.push_back({"w", doubles({1000.0, 1001.0, 1002.0, 1003.0, 1004.0, 1005.0})});
             info.dependent_variables.push_back({"v", vectors(6, 2)});
             Block block(info);
@@ -201,8 +201,8 @@ int main()
         {
             BlockCreateInfo info;
             info.name = "lazy";
-            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Uniform(2)});
-            info.independent_variables.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Uniform(3)});
+            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
+            info.independent_variables.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Regular(3)});
             info.dependent_variables.push_back({"z", doubles({100.0, 101.0, 102.0, 103.0, 104.0, 105.0})});
             Block block(info);
 
@@ -221,9 +221,9 @@ int main()
         {
             BlockCreateInfo info;
             info.name = "indep";
-            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Uniform(2)});
-            info.independent_variables.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Jagged({1, 2})});
-            info.independent_variables.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Uniform(2)});
+            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
+            info.independent_variables.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Ragged({1, 2})});
+            info.independent_variables.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Regular(2)});
             info.dependent_variables.push_back({"w", doubles({1000.0, 1001.0, 1002.0, 1003.0, 1004.0, 1005.0})});
             Block block(info);
 
@@ -256,9 +256,9 @@ int main()
         {
             BlockCreateInfo info;
             info.name = "select";
-            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Uniform(2)});
-            info.independent_variables.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Jagged({1, 2})});
-            info.independent_variables.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Uniform(2)});
+            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
+            info.independent_variables.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Ragged({1, 2})});
+            info.independent_variables.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Regular(2)});
             info.dependent_variables.push_back({"w", doubles({1000.0, 1001.0, 1002.0, 1003.0, 1004.0, 1005.0})});
             Block block(info);
 
