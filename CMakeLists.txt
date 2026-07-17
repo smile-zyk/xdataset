@@ -10,6 +10,7 @@ find_package(Eigen3 3.3 CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 find_package(Boost 1.72 CONFIG REQUIRED)
 find_package(tsl-ordered-map CONFIG REQUIRED)
+find_package(llnl-units CONFIG REQUIRED)
 include(GoogleTest)
 
 enable_testing()
@@ -20,12 +21,14 @@ add_executable(xdataset_test
 	tests/block_test.cc
 	tests/variable_test.cc
 	tests/grid_model_test.cc
+	tests/units_util_test.cc
 	src/dimension_spec.cc
 	src/multi_dimension_spec.cc
 	src/multi_index_selector.cc
 	src/variable.cc
 	src/block.cc
 	src/grid_model.cc
+	src/units_util.cc
 )
 
 add_executable(xdataset_playground
@@ -36,12 +39,13 @@ add_executable(xdataset_playground
 	src/variable.cc
 	src/block.cc
 	src/grid_model.cc
+	src/units_util.cc
 )
 
 target_include_directories(xdataset_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(xdataset_playground PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(xdataset_test PRIVATE Eigen3::Eigen GTest::gtest_main Boost::headers tsl::ordered_map)
-target_link_libraries(xdataset_playground PRIVATE Eigen3::Eigen Boost::headers tsl::ordered_map)
+target_link_libraries(xdataset_test PRIVATE Eigen3::Eigen GTest::gtest_main Boost::headers tsl::ordered_map llnl-units::units)
+target_link_libraries(xdataset_playground PRIVATE Eigen3::Eigen Boost::headers tsl::ordered_map llnl-units::units)
 
 gtest_discover_tests(xdataset_test)

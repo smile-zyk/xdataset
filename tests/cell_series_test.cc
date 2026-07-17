@@ -834,3 +834,177 @@ TEST(ContiguousTest, MatrixMemcpyAndRowMajorLayout) {
     for (int i = 0; i < 8; ++i)
         EXPECT_DOUBLE_EQ(flat[i], static_cast<double>(i + 1));
 }
+
+// ---------------------------------------------------------------------------
+// Unit — Cell
+// ---------------------------------------------------------------------------
+
+TEST(CellUnitTest, DefaultCellIsDimensionless)
+{
+    Cell c;
+    EXPECT_TRUE(xdataset::same_dimension(c.unit(), xdataset::Unit()));
+}
+
+TEST(CellUnitTest, CopyPropagatesUnit)
+{
+    Cell c = Cell::Scalar<double>(3.14);
+    c.set_unit(xdataset::parse_unit("m"));
+    Cell c2(c);
+    EXPECT_TRUE(xdataset::same_dimension(c2.unit(), c.unit()));
+}
+
+TEST(CellUnitTest, MovePropagatesUnit)
+{
+    Cell c = Cell::Scalar<double>(2.72);
+    c.set_unit(xdataset::parse_unit("Hz"));
+    Cell c2(std::move(c));
+    EXPECT_TRUE(xdataset::same_dimension(c2.unit(), xdataset::parse_unit("Hz")));
+}
+
+TEST(CellUnitTest, AssignPropagatesUnit)
+{
+    Cell c1 = Cell::Scalar<double>(1.0);
+    c1.set_unit(xdataset::parse_unit("m"));
+    Cell c2;
+    c2 = c1;
+    EXPECT_TRUE(xdataset::same_dimension(c2.unit(), xdataset::parse_unit("m")));
+}
+
+// ---------------------------------------------------------------------------
+// Unit — CellSeries set_unit / canonicalize / canonicalized
+// ---------------------------------------------------------------------------
+
+TEST(CellSeriesUnitTest, DefaultSeriesIsDimensionless)
+{
+    CellSeries s = CellSeries::Scalars<double>(3, 1.0);
+    EXPECT_TRUE(xdataset::same_dimension(s.unit(), xdataset::Unit()));
+}
+
+TEST(CellSeriesUnitTest, SetUnitByUnitObject)
+{
+    CellSeries s = CellSeries::ScalarsFrom(std::vector<double>{1.0, 2.0, 3.0});
+    s.set_unit(xdataset::parse_unit("m"));
+    EXPECT_TRUE(xdataset::same_dimension(s.unit(), xdataset::parse_unit("m")));
+    // values unchanged (set_unit only tags)
+    EXPECT_DOUBLE_EQ(s.scalar_at<double>(0), 1.0);
+    EXPECT_DOUBLE_EQ(s.scalar_at<double>(2), 3.0);
+}
+
+TEST(CellSeriesUnitTest, SetUnitByString)
+{
+    CellSeries s = CellSeries::Scalars<double>(2, 7.0);
+    s.set_unit("Hz");
+    EXPECT_TRUE(xdataset::same_dimension(s.unit(), xdataset::parse_unit("Hz")));
+}
+
+TEST(CellSeriesUnitTest, CanonicalizeConvertsValues)
+{
+    CellSeries s = CellSeries::ScalarsFrom(std::vector<double>{1.0, 5.0});
+    s.set_unit("km");
+    s.canonicalize();
+    // 1 km → 1000 m,  5 km → 5000 m
+    EXPECT_DOUBLE_EQ(s.scalar_at<double>(0), 1000.0);
+    EXPECT_DOUBLE_EQ(s.scalar_at<double>(1), 5000.0);
+    EXPECT_DOUBLE_EQ(s.unit().multiplier(), 1.0);
+    EXPECT_TRUE(xdataset::same_dimension(s.unit(), xdataset::parse_unit("m")));
+}
+
+TEST(CellSeriesUnitTest, CanonicalizeFastPathCoherentSI)
+{
+    CellSeries s = CellSeries::ScalarsFrom(std::vector<double>{9.0, 10.0});
+    s.set_unit("Hz");  // multiplier == 1, non-affine
+    s.canonicalize();
+    // values unchanged
+    EXPECT_DOUBLE_EQ(s.scalar_at<double>(0), 9.0);
+    EXPECT_DOUBLE_EQ(s.scalar_at<double>(1), 10.0);
+    EXPECT_DOUBLE_EQ(s.unit().multiplier(), 1.0);
+}
+
+TEST(CellSeriesUnitTest, CanonicalizeAffineDegC)
+{
+    CellSeries s = CellSeries::ScalarsFrom(std::vector<double>{0.0, 100.0});
+    s.set_unit("degC");
+    s.canonicalize();
+    // 0 °C → 273.15 K,  100 °C → 373.15 K
+    EXPECT_NEAR(s.scalar_at<double>(0), 273.15, 1e-10);
+    EXPECT_NEAR(s.scalar_at<double>(1), 373.15, 1e-10);
+    EXPECT_FALSE(xdataset::is_affine(s.unit()));
+}
+
+TEST(CellSeriesUnitTest, CanonicalizedDoesNotModifyOriginal)
+{
+    CellSeries orig = CellSeries::ScalarsFrom(std::vector<double>{2.0, 4.0});
+    orig.set_unit("mm");
+
+    CellSeries copy = orig.canonicalized();
+    // copy: 2 mm → 0.002 m, 4 mm → 0.004 m
+    EXPECT_NEAR(copy.scalar_at<double>(0), 0.002, 1e-12);
+    EXPECT_TRUE(xdataset::same_dimension(copy.unit(), xdataset::parse_unit("m")));
+
+    // orig unchanged
+    EXPECT_DOUBLE_EQ(orig.scalar_at<double>(0), 2.0);
+    EXPECT_TRUE(xdataset::same_dimension(orig.unit(), xdataset::parse_unit("mm")));
+}
+
+// ---------------------------------------------------------------------------
+// Unit — CellSeries propagation through copy / iloc / cell_at
+// ---------------------------------------------------------------------------
+
+TEST(CellSeriesUnitTest, CopyPropagatesUnit)
+{
+    CellSeries s = CellSeries::Scalars<double>(2, 0.0);
+    s.set_unit("Pa");
+    CellSeries s2(s);
+    EXPECT_TRUE(xdataset::same_dimension(s2.unit(), xdataset::parse_unit("Pa")));
+}
+
+TEST(CellSeriesUnitTest, MovePropagatesUnit)
+{
+    CellSeries s = CellSeries::Scalars<double>(2, 0.0);
+    s.set_unit("N");
+    CellSeries s2(std::move(s));
+    EXPECT_TRUE(xdataset::same_dimension(s2.unit(), xdataset::parse_unit("N")));
+}
+
+TEST(CellSeriesUnitTest, AssignPropagatesUnit)
+{
+    CellSeries s1 = CellSeries::Scalars<double>(2, 0.0);
+    s1.set_unit("J");
+    CellSeries s2;
+    s2 = s1;
+    EXPECT_TRUE(xdataset::same_dimension(s2.unit(), xdataset::parse_unit("J")));
+}
+
+TEST(CellSeriesUnitTest, IlocPropagatesUnit)
+{
+    CellSeries s = CellSeries::ScalarsFrom(std::vector<double>{10.0, 20.0, 30.0});
+    s.set_unit("m");
+    CellSeries sub = s.iloc(0, 2);
+    EXPECT_TRUE(xdataset::same_dimension(sub.unit(), xdataset::parse_unit("m")));
+    EXPECT_EQ(sub.size(), 2u);
+}
+
+TEST(CellSeriesUnitTest, HeadPropagatesUnit)
+{
+    CellSeries s = CellSeries::ScalarsFrom(std::vector<double>{1.0, 2.0, 3.0});
+    s.set_unit("s");
+    CellSeries h = s.head(2);
+    EXPECT_TRUE(xdataset::same_dimension(h.unit(), xdataset::parse_unit("s")));
+}
+
+TEST(CellSeriesUnitTest, TailPropagatesUnit)
+{
+    CellSeries s = CellSeries::ScalarsFrom(std::vector<double>{1.0, 2.0, 3.0});
+    s.set_unit("K");
+    CellSeries t = s.tail(2);
+    EXPECT_TRUE(xdataset::same_dimension(t.unit(), xdataset::parse_unit("K")));
+}
+
+TEST(CellSeriesUnitTest, CellAtCarriesUnit)
+{
+    CellSeries s = CellSeries::ScalarsFrom(std::vector<double>{42.0});
+    s.set_unit("W");
+    Cell c = s.cell_at(0);
+    EXPECT_TRUE(xdataset::same_dimension(c.unit(), xdataset::parse_unit("W")));
+    EXPECT_DOUBLE_EQ(c.scalar<double>(), 42.0);
+}

@@ -13,6 +13,8 @@
 #include <type_traits>
 #include <vector>
 
+#include "units_util.h"
+
 namespace xdataset {
 
 using Index = Eigen::Index;
@@ -301,7 +303,8 @@ public:
         : kind_(CellKind::kScalar),
           dtype_(DTypeTag::kReal),
           shape_(),
-          storage_(new ScalarStorage<double>()) {
+          storage_(new ScalarStorage<double>()),
+          unit_() {
         scalar_storage<double>()->resize(1);
     }
 
@@ -309,7 +312,8 @@ public:
         : kind_(other.kind_),
           dtype_(other.dtype_),
           shape_(other.shape_),
-          storage_(other.storage_ ? other.storage_->clone() : std::unique_ptr<CellStorage>()) {}
+          storage_(other.storage_ ? other.storage_->clone() : std::unique_ptr<CellStorage>()),
+          unit_(other.unit_) {}
 
     Cell& operator=(const Cell& other) {
         if (this != &other) {
@@ -317,6 +321,7 @@ public:
             dtype_ = other.dtype_;
             shape_ = other.shape_;
             storage_ = other.storage_ ? other.storage_->clone() : std::unique_ptr<CellStorage>();
+            unit_ = other.unit_;
         }
         return *this;
     }
@@ -325,13 +330,15 @@ public:
         : kind_(other.kind_),
           dtype_(other.dtype_),
           shape_(std::move(other.shape_)),
-          storage_(std::move(other.storage_)) {}
+          storage_(std::move(other.storage_)),
+          unit_(std::move(other.unit_)) {}
 
     Cell& operator=(Cell&& other) noexcept {
         kind_ = other.kind_;
         dtype_ = other.dtype_;
         shape_ = std::move(other.shape_);
         storage_ = std::move(other.storage_);
+        unit_ = std::move(other.unit_);
         return *this;
     }
 
@@ -444,6 +451,8 @@ public:
     CellKind kind() const { return kind_; }
     DTypeTag dtype() const { return dtype_; }
     std::vector<Index> cell_shape() const { return shape_; }
+    const Unit& unit() const { return unit_; }
+    void set_unit(const Unit& u) { unit_ = u; }
 
     std::string dtype_name() const {
         switch (dtype_) {
@@ -611,6 +620,7 @@ private:
     DTypeTag dtype_;
     std::vector<Index> shape_;
     std::unique_ptr<CellStorage> storage_;
+    Unit unit_;
 };
 
 class CellSeries {
@@ -704,13 +714,15 @@ public:
         : kind_(CellKind::kScalar),
           dtype_(DTypeTag::kReal),
           shape_(),
-          storage_(make_storage(CellKind::kScalar, DTypeTag::kReal, std::vector<Index>())) {}
+          storage_(make_storage(CellKind::kScalar, DTypeTag::kReal, std::vector<Index>())),
+          unit_() {}
 
     CellSeries(CellKind kind, DTypeTag dtype, const std::vector<Index>& shape)
-        : kind_(kind), dtype_(dtype), shape_(shape), storage_(make_storage(kind, dtype, shape)) {}
+        : kind_(kind), dtype_(dtype), shape_(shape), storage_(make_storage(kind, dtype, shape)), unit_() {}
 
     CellSeries(const CellSeries& other)
-        : kind_(other.kind_), dtype_(other.dtype_), shape_(other.shape_), storage_(other.storage_->clone()) {}
+        : kind_(other.kind_), dtype_(other.dtype_), shape_(other.shape_),
+          storage_(other.storage_->clone()), unit_(other.unit_) {}
 
     CellSeries& operator=(const CellSeries& other) {
         if (this != &other) {
@@ -718,18 +730,23 @@ public:
             dtype_ = other.dtype_;
             shape_ = other.shape_;
             storage_ = other.storage_->clone();
+            unit_ = other.unit_;
         }
         return *this;
     }
 
     CellSeries(CellSeries&& other) noexcept
-        : kind_(other.kind_), dtype_(other.dtype_), shape_(std::move(other.shape_)), storage_(std::move(other.storage_)) {}
+        : kind_(other.kind_), dtype_(other.dtype_),
+          shape_(std::move(other.shape_)),
+          storage_(std::move(other.storage_)),
+          unit_(std::move(other.unit_)) {}
 
     CellSeries& operator=(CellSeries&& other) noexcept {
         kind_ = other.kind_;
         dtype_ = other.dtype_;
         shape_ = std::move(other.shape_);
         storage_ = std::move(other.storage_);
+        unit_ = std::move(other.unit_);
         return *this;
     }
 
@@ -951,6 +968,61 @@ public:
     CellKind cell_kind() const { return kind_; }
     DTypeTag dtype() const { return dtype_; }
     std::vector<Index> cell_shape() const { return shape_; }
+    const Unit& unit() const { return unit_; }
+
+    //---- unit assignment & canonicalisation ----------------------------
+
+    // Assign a unit to this series.  No value conversion is performed —
+    // the existing numbers are simply tagged with the given unit.
+    void set_unit(const Unit& u) { unit_ = u; }
+
+    void set_unit(const std::string& s) {
+        unit_ = parse_unit(s);
+    }
+
+    // Convert values in-place to canonical SI (multiplier absorbed,
+    // unit = base_units).  Affine units (degC/degF) are handled via
+    // units::convert.  Fast path when multiplier == 1 and non-affine.
+    void canonicalize() {
+        const double mult = multiplier_of(unit_);
+        const Unit target = xdataset::canonicalize(unit_);
+        const bool affine = is_affine(unit_);
+
+        if (!affine && mult == 1.0) {
+            unit_ = target;
+            return;
+        }
+
+        for (std::size_t i = 0; i < size(); ++i) {
+            Index idx = static_cast<Index>(i);
+            if (kind_ == CellKind::kScalar) {
+                double& v = scalar_at<double>(idx);
+                v = affine ? units::convert(v, unit_, target) : v * mult;
+            } else if (kind_ == CellKind::kVector) {
+                typename NumericVectorTypes<double>::MapType v = vector_at<double>(idx);
+                for (Index j = 0; j < v.size(); ++j) {
+                    v(j) = affine ? units::convert(v(j), unit_, target) : v(j) * mult;
+                }
+            } else {
+                typename NumericMatrixTypes<double>::MapType m = matrix_at<double>(idx);
+                for (Index r = 0; r < m.rows(); ++r) {
+                    for (Index c = 0; c < m.cols(); ++c) {
+                        m(r, c) = affine ? units::convert(m(r, c), unit_, target) : m(r, c) * mult;
+                    }
+                }
+            }
+        }
+        unit_ = target;
+    }
+
+    // Return a canonicalised copy without modifying *this.
+    CellSeries canonicalized() const {
+        CellSeries result(*this);
+        result.canonicalize();
+        return result;
+    }
+
+    //---------------------------------------------------------------------
 
     Index values_per_row() const {
         if (kind_ == CellKind::kScalar) return 1;
@@ -985,6 +1057,7 @@ public:
         if (start > end || end > size()) throw std::out_of_range("iloc out of range");
         CellSeries out(kind_, dtype_, shape_);
         for (std::size_t i = start; i < end; ++i) out.append_from(*this, static_cast<Index>(i));
+        out.unit_ = unit_;
         return out;
     }
 
@@ -1311,42 +1384,43 @@ public:
     Cell cell_at(Index i) const {
         if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("cell index out of range");
 
-        if (kind_ == CellKind::kScalar) {
-            if (dtype_ == DTypeTag::kReal) return Cell::Scalar<double>(scalar_at<double>(i));
-            if (dtype_ == DTypeTag::kInteger) return Cell::Scalar<int>(scalar_at<int>(i));
-            if (dtype_ == DTypeTag::kComplex) return Cell::Scalar<std::complex<double> >(scalar_at<std::complex<double> >(i));
-            return Cell::Scalar<std::string>(scalar_at<std::string>(i));
-        }
+        Cell result;
 
-        if (kind_ == CellKind::kVector) {
+        if (kind_ == CellKind::kScalar) {
+            if (dtype_ == DTypeTag::kReal) result = Cell::Scalar<double>(scalar_at<double>(i));
+            else if (dtype_ == DTypeTag::kInteger) result = Cell::Scalar<int>(scalar_at<int>(i));
+            else if (dtype_ == DTypeTag::kComplex) result = Cell::Scalar<std::complex<double> >(scalar_at<std::complex<double> >(i));
+            else result = Cell::Scalar<std::string>(scalar_at<std::string>(i));
+        } else if (kind_ == CellKind::kVector) {
             if (dtype_ == DTypeTag::kReal) {
                 typename NumericVectorTypes<double>::OwnedType v = vector_at<double>(i);
-                return Cell::Vector<double>(v);
-            }
-            if (dtype_ == DTypeTag::kInteger) {
+                result = Cell::Vector<double>(v);
+            } else if (dtype_ == DTypeTag::kInteger) {
                 typename NumericVectorTypes<int>::OwnedType v = vector_at<int>(i);
-                return Cell::Vector<int>(v);
-            }
-            if (dtype_ == DTypeTag::kComplex) {
+                result = Cell::Vector<int>(v);
+            } else if (dtype_ == DTypeTag::kComplex) {
                 typename NumericVectorTypes<std::complex<double> >::OwnedType v = vector_at<std::complex<double> >(i);
-                return Cell::Vector<std::complex<double> >(v);
+                result = Cell::Vector<std::complex<double> >(v);
+            } else {
+                result = Cell::Vector(vector_at<std::string>(i));
             }
-            return Cell::Vector(vector_at<std::string>(i));
+        } else {
+            if (dtype_ == DTypeTag::kReal) {
+                typename NumericMatrixTypes<double>::OwnedType m = matrix_at<double>(i);
+                result = Cell::Matrix<double>(m);
+            } else if (dtype_ == DTypeTag::kInteger) {
+                typename NumericMatrixTypes<int>::OwnedType m = matrix_at<int>(i);
+                result = Cell::Matrix<int>(m);
+            } else if (dtype_ == DTypeTag::kComplex) {
+                typename NumericMatrixTypes<std::complex<double> >::OwnedType m = matrix_at<std::complex<double> >(i);
+                result = Cell::Matrix<std::complex<double> >(m);
+            } else {
+                result = Cell::Matrix(matrix_at<std::string>(i));
+            }
         }
 
-        if (dtype_ == DTypeTag::kReal) {
-            typename NumericMatrixTypes<double>::OwnedType m = matrix_at<double>(i);
-            return Cell::Matrix<double>(m);
-        }
-        if (dtype_ == DTypeTag::kInteger) {
-            typename NumericMatrixTypes<int>::OwnedType m = matrix_at<int>(i);
-            return Cell::Matrix<int>(m);
-        }
-        if (dtype_ == DTypeTag::kComplex) {
-            typename NumericMatrixTypes<std::complex<double> >::OwnedType m = matrix_at<std::complex<double> >(i);
-            return Cell::Matrix<std::complex<double> >(m);
-        }
-        return Cell::Matrix(matrix_at<std::string>(i));
+        result.set_unit(unit_);
+        return result;
     }
 
     CellSeries at(const std::vector<Index>& selected, bool reduce_to_scalar = false) const {
@@ -1532,6 +1606,7 @@ private:
                 out_vec(static_cast<Index>(i)) = vector_elem<T>(static_cast<Index>(row), selected[i]);
             }
         }
+        out.unit_ = unit_;
         return out;
     }
 
@@ -1543,6 +1618,7 @@ private:
                 out_vec(static_cast<Index>(i)) = vector_elem_string(static_cast<Index>(row), selected[i]);
             }
         }
+        out.unit_ = unit_;
         return out;
     }
 
@@ -1565,6 +1641,7 @@ private:
                 }
             }
         }
+        out.unit_ = unit_;
         return out;
     }
 
@@ -1586,6 +1663,7 @@ private:
                 }
             }
         }
+        out.unit_ = unit_;
         return out;
     }
 
@@ -1713,6 +1791,7 @@ private:
     DTypeTag dtype_;
     std::vector<Index> shape_;
     std::unique_ptr<CellStorage> storage_;
+    Unit unit_;
 };
 
 class CellSeries::RowView {
