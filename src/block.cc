@@ -1,4 +1,4 @@
-﻿#include "block.h"
+#include "block.h"
 
 #include <stdexcept>
 
@@ -7,11 +7,11 @@ namespace xdataset
     void Block::ensure_unique_name(const std::string& name) const
     {
         if (name.empty())
-            throw std::invalid_argument("variable name must not be empty");
-        if (independent_variable_map_.find(name) != independent_variable_map_.end())
-            throw std::invalid_argument("duplicate variable name in block: " + name);
-        if (dependent_variable_map_.find(name) != dependent_variable_map_.end())
-            throw std::invalid_argument("duplicate variable name in block: " + name);
+            throw std::invalid_argument("DataArray name must not be empty");
+        if (independent_spec_map_.find(name) != independent_spec_map_.end())
+            throw std::invalid_argument("duplicate DataArray name in block: " + name);
+        if (dependent_spec_map_.find(name) != dependent_spec_map_.end())
+            throw std::invalid_argument("duplicate DataArray name in block: " + name);
     }
 
     Block::Block(const BlockCreateInfo& info)
@@ -19,13 +19,13 @@ namespace xdataset
     {
         MultiDimensionSpec dependent_multi_dim;   // builds up from all independents in order
 
-        for (const auto& iv : info.independent_variables)
+        for (const auto& iv : info.independent_specs)
         {
             ensure_unique_name(iv.name);
 
-            independent_variable_map_.emplace(iv.name, iv);
+            independent_spec_map_.emplace(iv.name, iv);
 
-            // Add in order — add_dimension validates ragged against prior dims.
+            // Add in order �� add_dimension validates ragged against prior dims.
             dependent_multi_dim.add_dimension(iv.dimension);
 
             // Validate: independent data size must match dimension element count.
@@ -34,15 +34,15 @@ namespace xdataset
                 : iv.dimension.prefix_sum().back();
             if (iv.data.size() != static_cast<Index>(dim_elems))
                 throw std::invalid_argument(
-                    "independent variable '" + iv.name + "': data size " +
+                    "independent DataArray '" + iv.name + "': data size " +
                     std::to_string(iv.data.size()) + " does not match dimension element count " +
                     std::to_string(dim_elems));
         }
 
-        if (!info.dependent_variables.empty() && independent_variable_map_.empty())
-            throw std::invalid_argument("dependent variables require at least one independent variable");
+        if (!info.dependent_specs.empty() && independent_spec_map_.empty())
+            throw std::invalid_argument("dependent variables require at least one independent DataArray");
 
-        for (const auto& dv : info.dependent_variables)
+        for (const auto& dv : info.dependent_specs)
         {
             ensure_unique_name(dv.name);
 
@@ -50,11 +50,11 @@ namespace xdataset
             const std::size_t expected = dependent_multi_dim.compute_cell_count();
             if (dv.data.size() != static_cast<Index>(expected))
                 throw std::invalid_argument(
-                    "dependent variable '" + dv.name + "': data size " +
+                    "dependent DataArray '" + dv.name + "': data size " +
                     std::to_string(dv.data.size()) + " does not match derived cell count " +
                     std::to_string(expected));
 
-            dependent_variable_map_.emplace(dv.name, dv);
+            dependent_spec_map_.emplace(dv.name, dv);
         }
     }
 
@@ -72,8 +72,8 @@ namespace xdataset
     std::vector<std::string> Block::dependents() const
     {
         std::vector<std::string> names;
-        names.reserve(dependent_variable_map_.size());
-        for (const auto& kv : dependent_variable_map_)
+        names.reserve(dependent_spec_map_.size());
+        for (const auto& kv : dependent_spec_map_)
             names.push_back(kv.first);
         return names;
     }
@@ -81,41 +81,41 @@ namespace xdataset
     std::vector<std::string> Block::independents() const
     {
         std::vector<std::string> names;
-        names.reserve(independent_variable_map_.size());
-        for (const auto& kv : independent_variable_map_)
+        names.reserve(independent_spec_map_.size());
+        for (const auto& kv : independent_spec_map_)
             names.push_back(kv.first);
         return names;
     }
 
-    const IndependentVariableInfo& Block::independent_variable(const std::string& name) const
+    const IndependentSpec& Block::independent_spec(const std::string& name) const
     {
-        auto it = independent_variable_map_.find(name);
-        if (it == independent_variable_map_.end())
-            throw std::invalid_argument("independent variable not found: " + name);
+        auto it = independent_spec_map_.find(name);
+        if (it == independent_spec_map_.end())
+            throw std::invalid_argument("independent DataArray not found: " + name);
         return it->second;
     }
 
-    const DependentVariableInfo& Block::dependent_variable(const std::string& name) const
+    const DependentSpec& Block::dependent_spec(const std::string& name) const
     {
-        auto it = dependent_variable_map_.find(name);
-        if (it == dependent_variable_map_.end())
-            throw std::invalid_argument("dependent variable not found: " + name);
+        auto it = dependent_spec_map_.find(name);
+        if (it == dependent_spec_map_.end())
+            throw std::invalid_argument("dependent DataArray not found: " + name);
         return it->second;
     }
 
-    std::shared_ptr<Variable> Block::CreateVariable(const IndependentVariableInfo& info) const
+    std::shared_ptr<DataArray> Block::CreateDataArray(const IndependentSpec& info) const
     {
-        VariableCreateInfo vinfo;
+        DataArrayCreateInfo vinfo;
         vinfo.name = info.name;
-        vinfo.kind = VariableKind::kIndependent;
+        vinfo.kind = DataArrayKind::kIndependent;
 
         MultiDimensionSpec composed_multi_dim;
-        std::vector<const CellSeries*> prior_indeps;
+        std::vector<const DataSeries*> prior_indeps;
         bool found = false;
 
-        for (const auto& kv : independent_variable_map_)
+        for (const auto& kv : independent_spec_map_)
         {
-            const IndependentVariableInfo& iv = kv.second;
+            const IndependentSpec& iv = kv.second;
             composed_multi_dim.add_dimension(iv.dimension);
 
             if (kv.first == info.name)
@@ -127,10 +127,10 @@ namespace xdataset
         }
 
         if (!found)
-            throw std::invalid_argument("independent variable not found in block ordering: " + info.name);
+            throw std::invalid_argument("independent DataArray not found in block ordering: " + info.name);
 
         // Expand own data to the full cartesian product.
-        CellSeries expanded = CellSeries(info.data.cell_kind(), info.data.dtype(), info.data.cell_shape());
+        DataSeries expanded = DataSeries(info.data.data_kind(), info.data.dtype(), info.data.data_shape());
         composed_multi_dim.for_each_leaf_row(
             [&](const MultiDimensionSpec::LeafRow& lr)
             {
@@ -141,7 +141,7 @@ namespace xdataset
         // Prior independents stay raw.
         for (std::size_t p = 0; p < prior_indeps.size(); ++p)
         {
-            auto it = independent_variable_map_.begin();
+            auto it = independent_spec_map_.begin();
             std::advance(it, static_cast<std::ptrdiff_t>(p));
             vinfo.indep_datas.emplace(it->first, *prior_indeps[p]);
         }
@@ -149,36 +149,36 @@ namespace xdataset
         // Self: raw.
         vinfo.indep_datas.emplace(info.name, info.data);
         vinfo.multi_dimension_spec = composed_multi_dim;
-        return std::make_shared<Variable>(std::move(vinfo));
+        return std::make_shared<DataArray>(std::move(vinfo));
     }
 
-    std::shared_ptr<Variable> Block::GetOrCreateVariable(const std::string& variable_name)
+    std::shared_ptr<DataArray> Block::GetOrCreateDataArray(const std::string& name)
     {
-        auto cached_it = variable_cache_.find(variable_name);
-        if (cached_it != variable_cache_.end())
+        auto cached_it = data_array_cache_.find(name);
+        if (cached_it != data_array_cache_.end())
             return cached_it->second;
 
         // Try independent first.
-        auto it = independent_variable_map_.find(variable_name);
-        if (it != independent_variable_map_.end())
+        auto it = independent_spec_map_.find(name);
+        if (it != independent_spec_map_.end())
         {
-            auto var = CreateVariable(it->second);
+            auto var = CreateDataArray(it->second);
             if (var)
-                variable_cache_[variable_name] = var;
+                data_array_cache_[name] = var;
             return var;
         }
 
         // Dependent.
-        auto dit = dependent_variable_map_.find(variable_name);
-        if (dit != dependent_variable_map_.end())
+        auto dit = dependent_spec_map_.find(name);
+        if (dit != dependent_spec_map_.end())
         {
-            VariableCreateInfo vinfo;
+            DataArrayCreateInfo vinfo;
             vinfo.name = dit->second.name;
             vinfo.data = dit->second.data;
-            vinfo.kind = VariableKind::kDependent;
+            vinfo.kind = DataArrayKind::kDependent;
 
             MultiDimensionSpec multi_dim;
-            for (const auto& kv : independent_variable_map_)
+            for (const auto& kv : independent_spec_map_)
             {
                 const DimensionSpec& dim = kv.second.dimension;
                 multi_dim.add_dimension(dim);
@@ -186,18 +186,18 @@ namespace xdataset
             }
             vinfo.multi_dimension_spec = multi_dim;
 
-            auto var = std::make_shared<Variable>(std::move(vinfo));
-            variable_cache_[variable_name] = var;
+            auto var = std::make_shared<DataArray>(std::move(vinfo));
+            data_array_cache_[name] = var;
             return var;
         }
 
-        throw std::invalid_argument("variable not found: " + variable_name);
+        throw std::invalid_argument("DataArray not found: " + name);
     }
 
-    const GridModel& Block::grid_model() const
+    const DataFrame& Block::GetOrCreateDataFrame() const
     {
-        if (!grid_model_cache_)
-            grid_model_cache_.reset(new BlockGridModel(*this));
-        return *grid_model_cache_;
+        if (!data_frame_cache_)
+            data_frame_cache_.reset(new BlockDataFrame(*this));
+        return *data_frame_cache_;
     }
 } // namespace xdataset

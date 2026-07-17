@@ -1,5 +1,5 @@
-﻿#include "variable.h"
-#include "cell_series.h"
+#include "data_array.h"
+#include "data_series.h"
 #include "dimension_spec.h"
 #include "multi_dimension_spec.h"
 
@@ -12,7 +12,7 @@
 namespace xdataset
 {
 
-    Variable::Variable(const VariableCreateInfo& info)
+    DataArray::DataArray(const DataArrayCreateInfo& info)
         : name_(info.name),
           data_(info.data),
           indep_datas_(info.indep_datas),
@@ -25,13 +25,13 @@ namespace xdataset
             if (data_.size() != static_cast<Index>(expected))
             {
                 throw std::invalid_argument(
-                    "Variable '" + name_ + "': data size " + std::to_string(data_.size()) +
+                    "DataArray '" + name_ + "': data size " + std::to_string(data_.size()) +
                     " does not match multi_dimension_spec cell count " + std::to_string(expected));
             }
         }
     }
 
-    Variable::Variable(VariableCreateInfo&& info)
+    DataArray::DataArray(DataArrayCreateInfo&& info)
         : name_(std::move(info.name)),
           data_(std::move(info.data)),
           indep_datas_(std::move(info.indep_datas)),
@@ -44,34 +44,34 @@ namespace xdataset
             if (data_.size() != static_cast<Index>(expected))
             {
                 throw std::invalid_argument(
-                    "Variable '" + name_ + "': data size " + std::to_string(data_.size()) +
+                    "DataArray '" + name_ + "': data size " + std::to_string(data_.size()) +
                     " does not match multi_dimension_spec cell count " + std::to_string(expected));
             }
         }
     }
 
-    void Variable::set_name(const std::string& name)
+    void DataArray::set_name(const std::string& name)
     {
-        if (kind_ == VariableKind::kIndependent && !indep_datas_.empty() && name != name_)
+        if (kind_ == DataArrayKind::kIndependent && !indep_datas_.empty() && name != name_)
         {
             auto last = --indep_datas_.end();
-            CellSeries col = std::move(last->second);
+            DataSeries col = std::move(last->second);
             indep_datas_.erase(last);
             indep_datas_.emplace(name, std::move(col));
         }
         name_ = name;
     }
 
-    const GridModel& Variable::grid_model() const
+    const DataFrame& DataArray::GetOrCreateDataFrame() const
     {
-        if (!grid_model_cache_)
+        if (!data_frame_cache_)
         {
-            grid_model_cache_.reset(new VariableGridModel(*this));
+            data_frame_cache_.reset(new DataArrayDataFrame(*this));
         }
-        return *grid_model_cache_;
+        return *data_frame_cache_;
     }
 
-    const CellSeries& Variable::indep_data(Index index) const
+    const DataSeries& DataArray::indep_data(Index index) const
     {
         if (index <= 0)
             throw std::invalid_argument("indep_data index must be 1-based and greater than 0");
@@ -80,14 +80,14 @@ namespace xdataset
         if (static_cast<std::size_t>(index) > count)
             throw std::out_of_range("indep_data index out of range");
 
-        // index=1 → last column, index=count → first column
+        // index=1 �� last column, index=count �� first column
         const std::size_t target = count - static_cast<std::size_t>(index);
         auto it = indep_datas_.begin();
         std::advance(it, static_cast<std::ptrdiff_t>(target));
         return it->second;
     }
 
-    const CellSeries& Variable::indep_data(const std::string& name) const
+    const DataSeries& DataArray::indep_data(const std::string& name) const
     {
         if (name.empty())
             throw std::invalid_argument("indep_data name must not be empty");
@@ -98,7 +98,7 @@ namespace xdataset
         return it->second;
     }
 
-    std::shared_ptr<Variable> Variable::indep(Index index) const
+    std::shared_ptr<DataArray> DataArray::indep(Index index) const
     {
         if (index <= 0)
             throw std::invalid_argument("indep index must be 1-based and greater than 0");
@@ -107,14 +107,14 @@ namespace xdataset
         if (static_cast<std::size_t>(index) > count)
             throw std::out_of_range("indep index out of range");
 
-        // index=1 → last column, index=count → first column
+        // index=1 �� last column, index=count �� first column
         const std::size_t target = count - static_cast<std::size_t>(index);
-        const bool        is_self = (kind_ == VariableKind::kIndependent) && (target == count - 1);
+        const bool        is_self = (kind_ == DataArrayKind::kIndependent) && (target == count - 1);
 
         // Build prefix dimensions first (needed for compute_cell_count).
         std::vector<DimensionSpec> prefix_dims;
-        VariableCreateInfo         info;
-        info.kind = VariableKind::kIndependent;
+        DataArrayCreateInfo         info;
+        info.kind = DataArrayKind::kIndependent;
 
         std::size_t pos = 0;
         auto it = indep_datas_.begin();
@@ -141,7 +141,7 @@ namespace xdataset
         if (is_self)
         {
             // Self: index = multi_index.back() for each leaf row.
-            CellSeries idx = CellSeries::Scalars<int>(total_rows, 0);
+            DataSeries idx = DataSeries::CreateScalar<int>(total_rows, 0);
             result_spec.for_each_leaf_row(
                 [&](const MultiDimensionSpec::LeafRow& lr)
                 {
@@ -153,8 +153,8 @@ namespace xdataset
         else
         {
             // Expand raw data to the full cartesian product of result_spec.
-            const CellSeries& raw = it->second;
-            CellSeries expanded = CellSeries(raw.cell_kind(), raw.dtype(), raw.cell_shape());
+            const DataSeries& raw = it->second;
+            DataSeries expanded = DataSeries(raw.data_kind(), raw.dtype(), raw.data_shape());
             result_spec.for_each_leaf_row(
                 [&](const MultiDimensionSpec::LeafRow& lr)
                 {
@@ -165,17 +165,17 @@ namespace xdataset
         info.indep_datas[info.name] = info.data;
 
         info.multi_dimension_spec = result_spec;
-        return std::make_shared<Variable>(std::move(info));
+        return std::make_shared<DataArray>(std::move(info));
     }
 
-    std::shared_ptr<Variable> Variable::indep(const std::string& name) const
+    std::shared_ptr<DataArray> DataArray::indep(const std::string& name) const
     {
         if (name.empty())
         {
             throw std::invalid_argument("indep name must not be empty");
         }
 
-        if (kind_ == VariableKind::kIndependent && name == name_)
+        if (kind_ == DataArrayKind::kIndependent && name == name_)
         {
             return indep(1);
         }
@@ -195,30 +195,30 @@ namespace xdataset
         throw std::invalid_argument("indep name not found: " + name);
     }
 
-    std::shared_ptr<Variable> Variable::at(const std::vector<MultiIndexSelector>& selectors) const
+    std::shared_ptr<DataArray> DataArray::at(const std::vector<MultiIndexSelector>& selectors) const
     {
-        if (data().cell_kind() == CellKind::kScalar)
+        if (data().data_kind() == DataKind::kScalar)
         {
             throw std::logic_error("at is invalid for scalar data");
         }
 
-        VariableCreateInfo info;
+        DataArrayCreateInfo info;
         info.name = name_;
         info.kind = kind_;
         info.indep_datas = indep_datas_;
         info.multi_dimension_spec = multi_dimension_spec_;
 
-        if (data().cell_kind() == CellKind::kVector)
+        if (data().data_kind() == DataKind::kVector)
         {
             if (selectors.size() != 1)
             {
                 throw std::invalid_argument("vector at requires exactly one selector");
             }
 
-            const std::vector<Index> selected = selectors[0].resolve(data().cell_shape()[0]);
+            const std::vector<Index> selected = selectors[0].resolve(data().data_shape()[0]);
             info.data = data().at(selected, selectors[0].is_equal());
 
-            return std::make_shared<Variable>(std::move(info));
+            return std::make_shared<DataArray>(std::move(info));
         }
 
         if (selectors.size() != 2)
@@ -226,18 +226,18 @@ namespace xdataset
             throw std::invalid_argument("matrix at requires exactly two selectors");
         }
 
-        const std::vector<Index> selected_rows = selectors[0].resolve(data().cell_shape()[0]);
-        const std::vector<Index> selected_cols = selectors[1].resolve(data().cell_shape()[1]);
+        const std::vector<Index> selected_rows = selectors[0].resolve(data().data_shape()[0]);
+        const std::vector<Index> selected_cols = selectors[1].resolve(data().data_shape()[1]);
         info.data = data().at(
             selected_rows,
             selected_cols,
             selectors[0].is_equal(),
             selectors[1].is_equal());
 
-        return std::make_shared<Variable>(std::move(info));
+        return std::make_shared<DataArray>(std::move(info));
     }
 
-    std::shared_ptr<Variable> Variable::select(
+    std::shared_ptr<DataArray> DataArray::select(
         const std::vector<MultiIndexSelector>& selectors) const
     {
         const std::size_t rank = multi_dimension_spec_.rank();
@@ -248,7 +248,7 @@ namespace xdataset
 
         if (selectors.size() > rank)
         {
-            throw std::invalid_argument("selector count exceeds variable rank");
+            throw std::invalid_argument("selector count exceeds DataArray rank");
         }
 
         // `selectors` may be shorter than rank: normalize it by prepending Any and
@@ -279,7 +279,7 @@ namespace xdataset
         // key is source dimension index, value is SelectionDimensionInformation
         std::map<Index, SelectionDimensionInformation> selection_info;
 
-        // for dependent variable, record source data selected row
+        // for dependent DataArray, record source data selected row
         std::vector<Index> selected_row_indices;
 
         std::function<void(Index, Index)> walk = [&](Index dim_idx, Index parent_flat)
@@ -381,11 +381,11 @@ namespace xdataset
             }
         }
 
-        VariableCreateInfo info;
+        DataArrayCreateInfo info;
         info.name = name_;
         info.kind = kind_;
         info.multi_dimension_spec = selected_multi_dim;
-        CellSeries selected_data = CellSeries(data().cell_kind(), data().dtype(), data().cell_shape());
+        DataSeries selected_data = DataSeries(data().data_kind(), data().dtype(), data().data_shape());
         for (const Index& source_row : selected_row_indices)
         {
             selected_data.append_from(data(), source_row);
@@ -402,41 +402,41 @@ namespace xdataset
             const auto& source_rows = selection_info[static_cast<Index>(source_dim_idx)].source_rows;
 
             const std::string& indep_name = std::next(indep_datas_.begin(), source_dim_idx)->first;
-            const CellSeries& indep_series = indep_datas_.at(indep_name);
+            const DataSeries& indep_series = indep_datas_.at(indep_name);
             for (Index source_row : source_rows)
             {
                 info.indep_datas[indep_name].append_from(indep_series, source_row);
             }
         }
 
-        if (kind_ == VariableKind::kIndependent)
+        if (kind_ == DataArrayKind::kIndependent)
         {
             info.indep_datas[info.name] = info.data;
         }
 
-        return std::make_shared<Variable>(std::move(info));
+        return std::make_shared<DataArray>(std::move(info));
     }
 
-    // ── Static factory methods ─────────────────────────────────────────────────
+    // ���� Static factory methods ��������������������������������������������������������������������������������������������������
 
-    std::shared_ptr<Variable> Variable::CreateIndependent(
+    std::shared_ptr<DataArray> DataArray::CreateIndependent(
         std::string name,
-        CellSeries data)
+        DataSeries data)
     {
         const std::size_t size = data.size();
-        VariableCreateInfo vinfo;
+        DataArrayCreateInfo vinfo;
         vinfo.name = name;
         vinfo.indep_datas[vinfo.name] = data;    // raw copy
         vinfo.data = std::move(data);            // expanded = self for single-dim
         vinfo.multi_dimension_spec = MultiDimensionSpec({DimensionSpec::Regular(size)});
-        vinfo.kind = VariableKind::kIndependent;
-        return std::make_shared<Variable>(std::move(vinfo));
+        vinfo.kind = DataArrayKind::kIndependent;
+        return std::make_shared<DataArray>(std::move(vinfo));
     }
 
-    std::shared_ptr<Variable> Variable::CreateDependent(
+    std::shared_ptr<DataArray> DataArray::CreateDependent(
         std::string name,
-        CellSeries data,
-        const std::vector<std::shared_ptr<Variable>>& indep_variables)
+        DataSeries data,
+        const std::vector<std::shared_ptr<DataArray>>& indep_variables)
     {
         if (indep_variables.empty())
         {
@@ -444,7 +444,7 @@ namespace xdataset
                 "CreateDependent: indep_variables must not be empty");
         }
 
-        tsl::ordered_map<std::string, CellSeries> indep_datas;
+        tsl::ordered_map<std::string, DataSeries> indep_datas;
         MultiDimensionSpec spec;
 
         for (const auto& var : indep_variables)
@@ -454,11 +454,11 @@ namespace xdataset
                 throw std::invalid_argument(
                     "CreateDependent: null indep_variable in list");
             }
-            if (var->kind() != VariableKind::kIndependent)
+            if (var->kind() != DataArrayKind::kIndependent)
             {
                 throw std::invalid_argument(
-                    "CreateDependent: variable '" + var->name() +
-                    "' is not an independent variable");
+                    "CreateDependent: DataArray '" + var->name() +
+                    "' is not an independent DataArray");
             }
 
             indep_datas[var->name()] = var->data();
@@ -467,18 +467,18 @@ namespace xdataset
             if (dims.empty())
             {
                 throw std::logic_error(
-                    "CreateDependent: independent variable '" + var->name() +
+                    "CreateDependent: independent DataArray '" + var->name() +
                     "' has no dimensions");
             }
             spec.add_dimension(dims.back());   // validates parent count for ragged
         }
 
-        VariableCreateInfo vinfo;
+        DataArrayCreateInfo vinfo;
         vinfo.name = std::move(name);
         vinfo.data = std::move(data);
         vinfo.indep_datas = std::move(indep_datas);
         vinfo.multi_dimension_spec = std::move(spec);
-        vinfo.kind = VariableKind::kDependent;
-        return std::make_shared<Variable>(std::move(vinfo));
+        vinfo.kind = DataArrayKind::kDependent;
+        return std::make_shared<DataArray>(std::move(vinfo));
     }
 } // namespace xdataset

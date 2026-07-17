@@ -1,4 +1,4 @@
-﻿#include "block.h"
+#include "block.h"
 
 #include <iostream>
 #include <memory>
@@ -15,23 +15,25 @@ using namespace xdataset;
 
 namespace
 {
-    CellSeries doubles(const std::vector<double>& values)
+    DataSeries doubles(const std::vector<double>& values)
     {
-        return CellSeries::ScalarsFrom<double>(values);
+        return DataSeries::CreateScalarFromVector<double>(values);
     }
 
-    CellSeries vectors(std::size_t rows, Index width)
+    DataSeries vectors(std::size_t rows, Index width)
     {
-        CellSeries s = CellSeries::Vectors<double>(rows, width);
+        DataSeries s(DataKind::kVector, DTypeTag::kReal, {width});
+        s.resize(rows);
         for (std::size_t i = 0; i < rows; ++i)
             for (Index j = 0; j < width; ++j)
                 s.vector_at<double>(static_cast<Index>(i))(j) = static_cast<double>(static_cast<Index>(i) * width + j + 1);
         return s;
     }
 
-    CellSeries matrices(std::size_t rows, Index r, Index c)
+    DataSeries matrices(std::size_t rows, Index r, Index c)
     {
-        CellSeries s = CellSeries::Matrices<double>(rows, r, c);
+        DataSeries s(DataKind::kMatrix, DTypeTag::kReal, {r, c});
+        s.resize(rows);
         for (std::size_t i = 0; i < rows; ++i)
             for (Index ri = 0; ri < r; ++ri)
                 for (Index ci = 0; ci < c; ++ci)
@@ -39,19 +41,19 @@ namespace
         return s;
     }
 
-    CellSeries strings(const std::vector<std::string>& vals)
+    DataSeries strings(const std::vector<std::string>& vals)
     {
-        CellSeries s = CellSeries::Scalars<std::string>(vals.size());
+        DataSeries s = DataSeries::CreateScalar<std::string>(vals.size());
         for (std::size_t i = 0; i < vals.size(); ++i)
             s.scalar_at<std::string>(static_cast<Index>(i)) = vals[i];
         return s;
     }
 
-    void print_row(const GridRow& r, const std::string& label = "")
+    void print_row(const DataFrameRow& r, const std::string& label = "")
     {
         std::cout << "  " << label << r.FormatMultiIndex() << " |";
         for (const auto& f : r.fields)
-            std::cout << " " << GridFieldToString(f);
+            std::cout << " " << f.to_string();
         std::cout << std::endl;
     }
 
@@ -73,12 +75,12 @@ int main()
         {
             BlockCreateInfo info;
             info.name = "simple";
-            info.independent_variables.push_back({"a", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
-            info.independent_variables.push_back({"b", doubles({10.0, 20.0, 30.0}), DimensionSpec::Regular(3)});
-            info.dependent_variables.push_back({"c", doubles({100.0, 101.0, 102.0, 103.0, 104.0, 105.0})});
+            info.independent_specs.push_back({"a", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
+            info.independent_specs.push_back({"b", doubles({10.0, 20.0, 30.0}), DimensionSpec::Regular(3)});
+            info.dependent_specs.push_back({"c", doubles({100.0, 101.0, 102.0, 103.0, 104.0, 105.0})});
             Block block(info);
 
-            const GridModel& t = block.grid_model();
+            const DataFrame& t = block.GetOrCreateDataFrame();
             std::cout << "headers: ";
             for (const auto& h : t.headers()) std::cout << h << " ";
             std::cout << "\nrows: " << t.row_count() << std::endl;
@@ -96,12 +98,12 @@ int main()
         {
             BlockCreateInfo info;
             info.name = "strings";
-            info.independent_variables.push_back({"city", strings({"Paris", "London"}), DimensionSpec::Regular(2)});
-            info.independent_variables.push_back({"unit", strings({"kg", "L"}), DimensionSpec::Regular(2)});
-            info.dependent_variables.push_back({"val", strings({"A", "B", "C", "D"})});
+            info.independent_specs.push_back({"city", strings({"Paris", "London"}), DimensionSpec::Regular(2)});
+            info.independent_specs.push_back({"unit", strings({"kg", "L"}), DimensionSpec::Regular(2)});
+            info.dependent_specs.push_back({"val", strings({"A", "B", "C", "D"})});
             Block block(info);
 
-            const GridModel& t = block.grid_model();
+            const DataFrame& t = block.GetOrCreateDataFrame();
             print_row(t.GetRow(0));
             print_row(t.GetRow(1));
             print_row(t.GetRow(2));
@@ -117,12 +119,12 @@ int main()
         {
             BlockCreateInfo info;
             info.name = "vectors";
-            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
-            info.independent_variables.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
-            info.dependent_variables.push_back({"vec", vectors(4, 3)});
+            info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
+            info.independent_specs.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
+            info.dependent_specs.push_back({"vec", vectors(4, 3)});
             Block block(info);
 
-            const GridModel& t = block.grid_model();
+            const DataFrame& t = block.GetOrCreateDataFrame();
             for (const auto& h : t.headers()) std::cout << "  " << h;
             std::cout << std::endl;
             for (std::size_t i = 0; i < t.row_count(); ++i)
@@ -135,12 +137,12 @@ int main()
         {
             BlockCreateInfo info;
             info.name = "matrices";
-            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
-            info.independent_variables.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
-            info.dependent_variables.push_back({"mat", matrices(4, 2, 2)});
+            info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
+            info.independent_specs.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
+            info.dependent_specs.push_back({"mat", matrices(4, 2, 2)});
             Block block(info);
 
-            const GridModel& t = block.grid_model();
+            const DataFrame& t = block.GetOrCreateDataFrame();
             for (const auto& h : t.headers()) std::cout << "  " << h;
             std::cout << std::endl;
             for (std::size_t i = 0; i < t.row_count(); ++i)
@@ -156,14 +158,14 @@ int main()
         {
             BlockCreateInfo info;
             info.name = "3d";
-            info.independent_variables.push_back({"a", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
-            info.independent_variables.push_back({"b", doubles({10.0, 20.0, 30.0}), DimensionSpec::Regular(3)});
-            info.independent_variables.push_back({"c", doubles({100.0, 200.0, 300.0, 400.0}), DimensionSpec::Regular(4)});
-            info.dependent_variables.push_back({"p", doubles(std::vector<double>(24, 0.0))});
-            info.dependent_variables.push_back({"q", doubles(std::vector<double>(24, 0.0))});
+            info.independent_specs.push_back({"a", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
+            info.independent_specs.push_back({"b", doubles({10.0, 20.0, 30.0}), DimensionSpec::Regular(3)});
+            info.independent_specs.push_back({"c", doubles({100.0, 200.0, 300.0, 400.0}), DimensionSpec::Regular(4)});
+            info.dependent_specs.push_back({"p", doubles(std::vector<double>(24, 0.0))});
+            info.dependent_specs.push_back({"q", doubles(std::vector<double>(24, 0.0))});
             Block block(info);
 
-            const GridModel& t = block.grid_model();
+            const DataFrame& t = block.GetOrCreateDataFrame();
             std::cout << "total rows: " << t.row_count() << ", columns: " << t.headers().size() << std::endl;
             print_row(t.GetRow(0),  "first:  ");
             print_row(t.GetRow(23), "last:   ");
@@ -178,14 +180,14 @@ int main()
         {
             BlockCreateInfo info;
             info.name = "interleaved";
-            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
-            info.independent_variables.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Ragged({1, 2})});
-            info.independent_variables.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Regular(2)});
-            info.dependent_variables.push_back({"w", doubles({1000.0, 1001.0, 1002.0, 1003.0, 1004.0, 1005.0})});
-            info.dependent_variables.push_back({"v", vectors(6, 2)});
+            info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
+            info.independent_specs.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Ragged({1, 2})});
+            info.independent_specs.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Regular(2)});
+            info.dependent_specs.push_back({"w", doubles({1000.0, 1001.0, 1002.0, 1003.0, 1004.0, 1005.0})});
+            info.dependent_specs.push_back({"v", vectors(6, 2)});
             Block block(info);
 
-            const GridModel& t = block.grid_model();
+            const DataFrame& t = block.GetOrCreateDataFrame();
             for (const auto& h : t.headers()) std::cout << "  " << h;
             std::cout << std::endl;
             for (std::size_t i = 0; i < t.row_count(); ++i)
@@ -201,12 +203,12 @@ int main()
         {
             BlockCreateInfo info;
             info.name = "lazy";
-            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
-            info.independent_variables.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Regular(3)});
-            info.dependent_variables.push_back({"z", doubles({100.0, 101.0, 102.0, 103.0, 104.0, 105.0})});
+            info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
+            info.independent_specs.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Regular(3)});
+            info.dependent_specs.push_back({"z", doubles({100.0, 101.0, 102.0, 103.0, 104.0, 105.0})});
             Block block(info);
 
-            const GridModel& t = block.grid_model();
+            const DataFrame& t = block.GetOrCreateDataFrame();
             std::cout << "total row_count(): " << t.row_count() << " (but only 2 are loaded below)" << std::endl;
             print_row(t.GetRow(0));
             print_row(t.GetRow(1));
@@ -215,20 +217,20 @@ int main()
         }
 
         // =====================================================================
-        // 8. Variable.indep() chain
+        // 8. DataArray.indep() chain
         // =====================================================================
-        section("8. Variable.indep() chain");
+        section("8. DataArray.indep() chain");
         {
             BlockCreateInfo info;
             info.name = "indep";
-            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
-            info.independent_variables.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Ragged({1, 2})});
-            info.independent_variables.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Regular(2)});
-            info.dependent_variables.push_back({"w", doubles({1000.0, 1001.0, 1002.0, 1003.0, 1004.0, 1005.0})});
+            info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
+            info.independent_specs.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Ragged({1, 2})});
+            info.independent_specs.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Regular(2)});
+            info.dependent_specs.push_back({"w", doubles({1000.0, 1001.0, 1002.0, 1003.0, 1004.0, 1005.0})});
             Block block(info);
 
-            auto w = block.GetOrCreateVariable("w");           // dependent
-            std::cout << "w.kind() = " << (w->kind() == VariableKind::kDependent ? "dependent" : "independent") << std::endl;
+            auto w = block.GetOrCreateDataArray("w");           // dependent
+            std::cout << "w.kind() = " << (w->kind() == DataArrayKind::kDependent ? "dependent" : "independent") << std::endl;
 
             auto z_var = w->indep(1);                         // dependent w -> indep(1) = z
             std::cout << "w.indep(1).name() = " << z_var->name() << ", rank = " << z_var->multi_dimension_spec().rank() << std::endl;
@@ -241,7 +243,7 @@ int main()
 
             // grid model from indep(1)
             std::cout << "\nGrid from w.indep(1):" << std::endl;
-            const GridModel& zt = z_var->grid_model();
+            const DataFrame& zt = z_var->GetOrCreateDataFrame();
             std::cout << "  headers: ";
             for (const auto& h : zt.headers()) std::cout << h << " ";
             std::cout << "\n  rows: " << zt.row_count() << std::endl;
@@ -250,19 +252,19 @@ int main()
         }
 
         // =====================================================================
-        // 9. Variable.select() demo
+        // 9. DataArray.select() demo
         // =====================================================================
-        section("9. Variable.select()");
+        section("9. DataArray.select()");
         {
             BlockCreateInfo info;
             info.name = "select";
-            info.independent_variables.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
-            info.independent_variables.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Ragged({1, 2})});
-            info.independent_variables.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Regular(2)});
-            info.dependent_variables.push_back({"w", doubles({1000.0, 1001.0, 1002.0, 1003.0, 1004.0, 1005.0})});
+            info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
+            info.independent_specs.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Ragged({1, 2})});
+            info.independent_specs.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Regular(2)});
+            info.dependent_specs.push_back({"w", doubles({1000.0, 1001.0, 1002.0, 1003.0, 1004.0, 1005.0})});
             Block block(info);
 
-            auto w = block.GetOrCreateVariable("w");
+            auto w = block.GetOrCreateDataArray("w");
 
             // select where x=1, y=any, z=any -> collapses first dim
             auto sel = w->select({MultiIndexSelector::Equal(1),
@@ -271,36 +273,35 @@ int main()
             std::cout << "w.select(Equal(1), Any, Any) -> rank "
                       << sel->multi_dimension_spec().rank() << ", "
                       << sel->data().size() << " rows" << std::endl;
-            const GridModel& st = sel->grid_model();
+            const DataFrame& st = sel->GetOrCreateDataFrame();
             for (std::size_t i = 0; i < st.row_count(); ++i)
                 print_row(st.GetRow(static_cast<Index>(i)));
         }
 
         // =====================================================================
-        // 10. GridField type inspection
+        // 10. Measurement type inspection
         // =====================================================================
-        section("10. GridField type inspection");
+        section("10. Measurement type inspection");
         {
-            GridField d(3.14);
-            GridField i(42);
-            GridField c(std::complex<double>(1.0, -2.0));
-            GridField s(std::string("hello"));
+            Measurement d(3.14);
+            Measurement i(42);
+            Measurement c(std::complex<double>(1.0, -2.0));
+            Measurement s(std::string("hello"));
 
-            std::cout << "GridField(3.14):        "
-                      << "TypeOf=" << static_cast<int>(GridFieldGetVisitor::TypeOf(d))
-                      << "  ToString=\"" << GridFieldToString(d) << "\"" << std::endl;
-            std::cout << "GridField(42):          "
-                      << "IsInt? " << (GridFieldGetVisitor::IsInt(i) ? "yes" : "no")
-                      << "  ToString=\"" << GridFieldToString(i) << "\"" << std::endl;
-            std::cout << "GridField(1-2i):        "
-                      << "IsComplex? " << (GridFieldGetVisitor::IsComplex(c) ? "yes" : "no")
-                      << "  ToString=\"" << GridFieldToString(c) << "\"" << std::endl;
-            std::cout << "GridField(\"hello\"):   "
-                      << "IsString? " << (GridFieldGetVisitor::IsString(s) ? "yes" : "no")
-                      << "  ToString=\"" << GridFieldToString(s) << "\"" << std::endl;
+            std::cout << "Measurement(3.14):        "
+                      << "dtype=" << d.dtype_name()
+                      << "  ToString=\"" << d.to_string() << "\"" << std::endl;
+            std::cout << "Measurement(42):          "
+                      << "dtype=" << i.dtype_name()
+                      << "  ToString=\"" << i.to_string() << "\"" << std::endl;
+            std::cout << "Measurement(1-2i):        "
+                      << "dtype=" << c.dtype_name()
+                      << "  ToString=\"" << c.to_string() << "\"" << std::endl;
+            std::cout << "Measurement(\"hello\"):   "
+                      << "dtype=" << s.dtype_name()
+                      << "  ToString=\"" << s.to_string() << "\"" << std::endl;
 
-            auto& v = GridFieldGetVisitor::Apply(d);
-            std::cout << "GridFieldGetVisitor::Apply(3.14).as_double() = " << v.as_double() << std::endl;
+            std::cout << "Measurement(3.14).as_scalar<double>() = " << d.as_scalar<double>() << std::endl;
         }
 
         std::cout << "\nDone." << std::endl;

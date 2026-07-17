@@ -16,18 +16,19 @@ include(GoogleTest)
 enable_testing()
 
 add_executable(xdataset_test
-	tests/cell_series_test.cc
+	tests/data_series_test.cc
 	tests/multi_dimension_test.cc
 	tests/block_test.cc
-	tests/variable_test.cc
-	tests/grid_model_test.cc
+	tests/data_array_test.cc
+	tests/data_frame_test.cc
 	tests/units_util_test.cc
 	src/dimension_spec.cc
 	src/multi_dimension_spec.cc
 	src/multi_index_selector.cc
-	src/variable.cc
+	src/data_array.cc
 	src/block.cc
-	src/grid_model.cc
+	src/data_frame.cc
+	src/measurement.cc
 	src/units_util.cc
 )
 
@@ -36,9 +37,10 @@ add_executable(xdataset_playground
 	src/dimension_spec.cc
 	src/multi_dimension_spec.cc
 	src/multi_index_selector.cc
-	src/variable.cc
+	src/data_array.cc
 	src/block.cc
-	src/grid_model.cc
+	src/data_frame.cc
+	src/measurement.cc
 	src/units_util.cc
 )
 
