@@ -228,7 +228,7 @@ namespace xdataset
 
     std::string Measurement::to_string() const
     {
-        MeasurementFormatter fmt;
+        MeasurementFormatter fmt(unit_);
         return boost::apply_visitor(fmt, storage_);
     }
 
@@ -268,6 +268,13 @@ namespace xdataset
     // MeasurementFormatter
     // =========================================================================
 
+    std::string MeasurementFormatter::with_unit(const std::string& s) const
+    {
+        if (is_dimensionless(unit_))
+            return s;
+        return s + " " + unit_string(unit_);
+    }
+
     std::string MeasurementFormatter::format_complex(const std::complex<double>& v)
     {
         std::ostringstream oss;
@@ -286,24 +293,24 @@ namespace xdataset
     {
         std::ostringstream oss;
         oss << v;
-        return oss.str();
+        return with_unit(oss.str());
     }
 
     std::string MeasurementFormatter::operator()(int v) const
     {
         std::ostringstream oss;
         oss << v;
-        return oss.str();
+        return with_unit(oss.str());
     }
 
     std::string MeasurementFormatter::operator()(const std::complex<double>& v) const
     {
-        return format_complex(v);
+        return with_unit(format_complex(v));
     }
 
     std::string MeasurementFormatter::operator()(const std::string& v) const
     {
-        return format_scalar_string(v);
+        return with_unit(format_scalar_string(v));
     }
 
     // ── vector ─────────────────────────────────────────────────────────────
@@ -318,7 +325,7 @@ namespace xdataset
             oss << v(i);
         }
         oss << "]";
-        return oss.str();
+        return with_unit(oss.str());
     }
 
     std::string MeasurementFormatter::operator()(const Eigen::VectorXi& v) const
@@ -331,7 +338,7 @@ namespace xdataset
             oss << v(i);
         }
         oss << "]";
-        return oss.str();
+        return with_unit(oss.str());
     }
 
     std::string MeasurementFormatter::operator()(const Eigen::VectorXcd& v) const
@@ -344,7 +351,7 @@ namespace xdataset
             oss << format_complex(v(i));
         }
         oss << "]";
-        return oss.str();
+        return with_unit(oss.str());
     }
 
     std::string MeasurementFormatter::operator()(const Eigen::Tensor<std::string, 1>& v) const
@@ -357,7 +364,7 @@ namespace xdataset
             oss << format_scalar_string(v(i));
         }
         oss << "]";
-        return oss.str();
+        return with_unit(oss.str());
     }
 
     // ── matrix ─────────────────────────────────────────────────────────────
@@ -378,7 +385,7 @@ namespace xdataset
             oss << "]";
         }
         oss << "]";
-        return oss.str();
+        return with_unit(oss.str());
     }
 
     std::string MeasurementFormatter::operator()(const Eigen::MatrixXi& v) const
@@ -397,7 +404,7 @@ namespace xdataset
             oss << "]";
         }
         oss << "]";
-        return oss.str();
+        return with_unit(oss.str());
     }
 
     std::string MeasurementFormatter::operator()(const Eigen::MatrixXcd& v) const
@@ -416,7 +423,7 @@ namespace xdataset
             oss << "]";
         }
         oss << "]";
-        return oss.str();
+        return with_unit(oss.str());
     }
 
     std::string MeasurementFormatter::operator()(const Eigen::Tensor<std::string, 2>& v) const
@@ -435,7 +442,7 @@ namespace xdataset
             oss << "]";
         }
         oss << "]";
-        return oss.str();
+        return with_unit(oss.str());
     }
 
 } // namespace xdataset

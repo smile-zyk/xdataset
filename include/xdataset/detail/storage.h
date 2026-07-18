@@ -76,16 +76,16 @@ struct NumericMatrixTypes {
 //  Cell storage hierarchy (internal, not exposed to end users)
 // ---------------------------------------------------------------------------
 
-class CellStorage {
+class SeriesStorage {
 public:
-    virtual ~CellStorage() {}
+    virtual ~SeriesStorage() {}
     virtual std::size_t size() const = 0;
     virtual void resize(std::size_t rows) = 0;
-    virtual std::unique_ptr<CellStorage> clone() const = 0;
+    virtual std::unique_ptr<SeriesStorage> clone() const = 0;
 };
 
 template <typename T>
-class ScalarStorage : public CellStorage {
+class ScalarSeriesStorage : public SeriesStorage {
 public:
     std::size_t size() const override { return values_.size(); }
 
@@ -93,8 +93,8 @@ public:
         values_.resize(rows, T());
     }
 
-    std::unique_ptr<CellStorage> clone() const override {
-        return std::unique_ptr<CellStorage>(new ScalarStorage<T>(*this));
+    std::unique_ptr<SeriesStorage> clone() const override {
+        return std::unique_ptr<SeriesStorage>(new ScalarSeriesStorage<T>(*this));
     }
 
     T& value(Index row) { return values_[static_cast<std::size_t>(row)]; }
@@ -110,13 +110,13 @@ private:
 };
 
 template <typename T>
-class VectorStorageNumeric : public CellStorage {
+class VectorNumericSeriesStorage : public SeriesStorage {
 public:
     typedef typename NumericVectorTypes<T>::OwnedType OwnedType;
     typedef typename NumericVectorTypes<T>::MapType MapType;
     typedef typename NumericVectorTypes<T>::ConstMapType ConstMapType;
 
-    explicit VectorStorageNumeric(Index width) : width_(width), rows_(0) {}
+    explicit VectorNumericSeriesStorage(Index width) : width_(width), rows_(0) {}
 
     std::size_t size() const override { return rows_; }
 
@@ -125,8 +125,8 @@ public:
         values_.resize(static_cast<std::size_t>(width_) * rows_, T());
     }
 
-    std::unique_ptr<CellStorage> clone() const override {
-        return std::unique_ptr<CellStorage>(new VectorStorageNumeric<T>(*this));
+    std::unique_ptr<SeriesStorage> clone() const override {
+        return std::unique_ptr<SeriesStorage>(new VectorNumericSeriesStorage<T>(*this));
     }
 
     MapType value(Index row) {
@@ -166,9 +166,9 @@ private:
     std::vector<T> values_;
 };
 
-class VectorStorageString : public CellStorage {
+class VectorStringSeriesStorage : public SeriesStorage {
 public:
-    explicit VectorStorageString(Index width) : width_(width) {}
+    explicit VectorStringSeriesStorage(Index width) : width_(width) {}
 
     std::size_t size() const override { return rows_.size(); }
 
@@ -180,8 +180,8 @@ public:
         rows_.resize(rows, default_row());
     }
 
-    std::unique_ptr<CellStorage> clone() const override {
-        return std::unique_ptr<CellStorage>(new VectorStorageString(*this));
+    std::unique_ptr<SeriesStorage> clone() const override {
+        return std::unique_ptr<SeriesStorage>(new VectorStringSeriesStorage(*this));
     }
 
     Eigen::Tensor<std::string, 1>& value(Index row) { return rows_[static_cast<std::size_t>(row)]; }
@@ -200,13 +200,13 @@ private:
 };
 
 template <typename T>
-class MatrixStorageNumeric : public CellStorage {
+class MatrixNumericSeriesStorage : public SeriesStorage {
 public:
     typedef typename NumericMatrixTypes<T>::OwnedType OwnedType;
     typedef typename NumericMatrixTypes<T>::MapType MapType;
     typedef typename NumericMatrixTypes<T>::ConstMapType ConstMapType;
 
-    MatrixStorageNumeric(Index rows, Index cols)
+    MatrixNumericSeriesStorage(Index rows, Index cols)
         : cell_rows_(rows), cell_cols_(cols), row_count_(0) {}
 
     std::size_t size() const override { return row_count_; }
@@ -216,8 +216,8 @@ public:
         values_.resize(static_cast<std::size_t>(cell_rows_ * cell_cols_) * row_count_, T());
     }
 
-    std::unique_ptr<CellStorage> clone() const override {
-        return std::unique_ptr<CellStorage>(new MatrixStorageNumeric<T>(*this));
+    std::unique_ptr<SeriesStorage> clone() const override {
+        return std::unique_ptr<SeriesStorage>(new MatrixNumericSeriesStorage<T>(*this));
     }
 
     MapType value(Index row) {
@@ -263,9 +263,9 @@ private:
     std::vector<T> values_;
 };
 
-class MatrixStorageString : public CellStorage {
+class MatrixStringSeriesStorage : public SeriesStorage {
 public:
-    MatrixStorageString(Index rows, Index cols) : cell_rows_(rows), cell_cols_(cols) {}
+    MatrixStringSeriesStorage(Index rows, Index cols) : cell_rows_(rows), cell_cols_(cols) {}
 
     std::size_t size() const override { return rows_.size(); }
 
@@ -277,8 +277,8 @@ public:
         rows_.resize(rows, default_row());
     }
 
-    std::unique_ptr<CellStorage> clone() const override {
-        return std::unique_ptr<CellStorage>(new MatrixStorageString(*this));
+    std::unique_ptr<SeriesStorage> clone() const override {
+        return std::unique_ptr<SeriesStorage>(new MatrixStringSeriesStorage(*this));
     }
 
     Eigen::Tensor<std::string, 2>& value(Index row) { return rows_[static_cast<std::size_t>(row)]; }

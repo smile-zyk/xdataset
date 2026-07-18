@@ -1,4 +1,5 @@
 #include "block.h"
+#include "units_util.h"
 
 #include <iostream>
 #include <memory>
@@ -15,14 +16,15 @@ using namespace xdataset;
 
 namespace
 {
-    DataSeries doubles(const std::vector<double>& values)
+    DataSeries doubles(const std::vector<double>& values, const Unit& u = Unit())
     {
-        return DataSeries::CreateScalarFromVector<double>(values);
+        return DataSeries::CreateScalarFromVector<double>(values, u);
     }
 
-    DataSeries vectors(std::size_t rows, Index width)
+    DataSeries vectors(std::size_t rows, Index width, const Unit& u = Unit())
     {
         DataSeries s(DataKind::kVector, DTypeTag::kReal, {width});
+        s.set_unit(u);
         s.resize(rows);
         for (std::size_t i = 0; i < rows; ++i)
             for (Index j = 0; j < width; ++j)
@@ -30,9 +32,10 @@ namespace
         return s;
     }
 
-    DataSeries matrices(std::size_t rows, Index r, Index c)
+    DataSeries matrices(std::size_t rows, Index r, Index c, const Unit& u = Unit())
     {
         DataSeries s(DataKind::kMatrix, DTypeTag::kReal, {r, c});
+        s.set_unit(u);
         s.resize(rows);
         for (std::size_t i = 0; i < rows; ++i)
             for (Index ri = 0; ri < r; ++ri)
@@ -41,9 +44,9 @@ namespace
         return s;
     }
 
-    DataSeries strings(const std::vector<std::string>& vals)
+    DataSeries strings(const std::vector<std::string>& vals, const Unit& u = Unit())
     {
-        DataSeries s = DataSeries::CreateScalar<std::string>(vals.size());
+        DataSeries s = DataSeries::CreateScalar<std::string>(vals.size(), u);
         for (std::size_t i = 0; i < vals.size(); ++i)
             s.scalar_at<std::string>(static_cast<Index>(i)) = vals[i];
         return s;
@@ -73,11 +76,15 @@ int main()
         // =====================================================================
         section("1. Simple 2x3 regular block");
         {
+            auto m = parse_unit("m");
+            auto s = parse_unit("s");
+            auto V = parse_unit("V");
+
             BlockCreateInfo info;
             info.name = "simple";
-            info.independent_specs.push_back({"a", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
-            info.independent_specs.push_back({"b", doubles({10.0, 20.0, 30.0}), DimensionSpec::Regular(3)});
-            info.dependent_specs.push_back({"c", doubles({100.0, 101.0, 102.0, 103.0, 104.0, 105.0})});
+            info.independent_specs.push_back({"a", doubles({1.0, 2.0}, m), DimensionSpec::Regular(2)});
+            info.independent_specs.push_back({"b", doubles({10.0, 20.0, 30.0}, s), DimensionSpec::Regular(3)});
+            info.dependent_specs.push_back({"c", doubles({100.0, 101.0, 102.0, 103.0, 104.0, 105.0}, V)});
             Block block(info);
 
             const DataFrame& t = block.GetOrCreateDataFrame();
@@ -121,7 +128,7 @@ int main()
             info.name = "vectors";
             info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
-            info.dependent_specs.push_back({"vec", vectors(4, 3)});
+            info.dependent_specs.push_back({"vec", vectors(4, 3, parse_unit("m/s"))});
             Block block(info);
 
             const DataFrame& t = block.GetOrCreateDataFrame();
@@ -139,7 +146,7 @@ int main()
             info.name = "matrices";
             info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
-            info.dependent_specs.push_back({"mat", matrices(4, 2, 2)});
+            info.dependent_specs.push_back({"mat", matrices(4, 2, 2, parse_unit("N*m"))});
             Block block(info);
 
             const DataFrame& t = block.GetOrCreateDataFrame();
@@ -184,7 +191,7 @@ int main()
             info.independent_specs.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Ragged({1, 2})});
             info.independent_specs.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Regular(2)});
             info.dependent_specs.push_back({"w", doubles({1000.0, 1001.0, 1002.0, 1003.0, 1004.0, 1005.0})});
-            info.dependent_specs.push_back({"v", vectors(6, 2)});
+            info.dependent_specs.push_back({"v", vectors(6, 2, parse_unit("Hz"))});
             Block block(info);
 
             const DataFrame& t = block.GetOrCreateDataFrame();
@@ -283,18 +290,18 @@ int main()
         // =====================================================================
         section("10. Measurement type inspection");
         {
-            Measurement d(3.14);
-            Measurement i(42);
-            Measurement c(std::complex<double>(1.0, -2.0));
+            Measurement d(3.14, parse_unit("m/s"));
+            Measurement i(42, parse_unit("kg"));
+            Measurement c(std::complex<double>(1.0, -2.0), parse_unit("V"));
             Measurement s(std::string("hello"));
 
-            std::cout << "Measurement(3.14):        "
+            std::cout << "Measurement(3.14 m/s):     "
                       << "dtype=" << d.dtype_name()
                       << "  ToString=\"" << d.to_string() << "\"" << std::endl;
-            std::cout << "Measurement(42):          "
+            std::cout << "Measurement(42 kg):        "
                       << "dtype=" << i.dtype_name()
                       << "  ToString=\"" << i.to_string() << "\"" << std::endl;
-            std::cout << "Measurement(1-2i):        "
+            std::cout << "Measurement(1-2i V):       "
                       << "dtype=" << c.dtype_name()
                       << "  ToString=\"" << c.to_string() << "\"" << std::endl;
             std::cout << "Measurement(\"hello\"):   "

@@ -141,7 +141,7 @@ namespace xdataset
         if (is_self)
         {
             // Self: index = multi_index.back() for each leaf row.
-            DataSeries idx = DataSeries::CreateScalar<int>(total_rows, 0);
+            DataSeries idx = DataSeries::CreateScalar<int>(total_rows, Unit(), 0);
             result_spec.for_each_leaf_row(
                 [&](const MultiDimensionSpec::LeafRow& lr)
                 {

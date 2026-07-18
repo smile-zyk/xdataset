@@ -11,7 +11,7 @@ namespace xdataset
 
         inline DataSeries MakeScalarSeries(std::size_t size)
         {
-            return DataSeries::CreateScalar<double>(size, 0.0);
+            return DataSeries::CreateScalar<double>(size, Unit(), 0.0);
         }
 
         inline DataSeries MakeScalarSeriesFrom(const std::vector<double>& values)

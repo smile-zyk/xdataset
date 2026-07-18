@@ -13,20 +13,21 @@ using xdataset::DataSeries;
 using xdataset::Measurement;
 using xdataset::DTypeTag;
 using xdataset::Index;
+using xdataset::Unit;
 
 // ---------------------------------------------------------------------------
 // Scalar �� creation, write, read-back
 // ---------------------------------------------------------------------------
 
 TEST(ScalarTest, CreateWithFillValue) {
-    DataSeries s = DataSeries::CreateScalar<double>(3, 1.5);
+    DataSeries s = DataSeries::CreateScalar<double>(3, Unit(), 1.5);
     ASSERT_EQ(s.size(), 3u);
     for (Index i = 0; i < 3; ++i)
         EXPECT_DOUBLE_EQ(s.scalar_at<double>(i), 1.5);
 }
 
 TEST(ScalarTest, WriteAndRead) {
-    DataSeries s = DataSeries::CreateScalar<double>(4, 0.0);
+    DataSeries s = DataSeries::CreateScalar<double>(4, Unit(), 0.0);
     s.scalar_at<double>(0) = 9.5;
     s.scalar_at<double>(1) = 8.3;
     s.scalar_at<double>(2) = 7.1;
@@ -39,7 +40,7 @@ TEST(ScalarTest, WriteAndRead) {
 }
 
 TEST(ScalarTest, AppendGrowsSize) {
-    DataSeries s = DataSeries::CreateScalar<double>(2, 0.0);
+    DataSeries s = DataSeries::CreateScalar<double>(2, Unit(), 0.0);
     s.append(Measurement(5.9));
     EXPECT_EQ(s.size(), 3u);
     EXPECT_DOUBLE_EQ(s.scalar_at<double>(2), 5.9);
@@ -63,17 +64,17 @@ TEST(ScalarTest, FillOverwritesAllRows) {
 }
 
 TEST(ScalarTest, IntegerDtype) {
-    DataSeries s = DataSeries::CreateScalar<int>(3, 7);
+    DataSeries s = DataSeries::CreateScalar<int>(3, Unit(), 7);
     EXPECT_EQ(s.dtype(), DTypeTag::kInteger);
     EXPECT_EQ(s.dtype_name(), "Integer");
     EXPECT_EQ(s.data_kind(), DataKind::kScalar);
-    EXPECT_EQ(s.values_per_row(), 1);
+    EXPECT_EQ(s.element_count(), 1);
     EXPECT_TRUE(s.data_shape().empty());
 }
 
 TEST(ScalarTest, ComplexDtype) {
     using cd = std::complex<double>;
-    DataSeries s = DataSeries::CreateScalar<cd>(2, cd(1.0, -1.0));
+    DataSeries s = DataSeries::CreateScalar<cd>(2, Unit(), cd(1.0, -1.0));
     EXPECT_EQ(s.dtype(), DTypeTag::kComplex);
     EXPECT_EQ(s.dtype_name(), "Complex");
     EXPECT_DOUBLE_EQ(s.scalar_at<cd>(0).real(), 1.0);
@@ -81,7 +82,7 @@ TEST(ScalarTest, ComplexDtype) {
 }
 
 TEST(ScalarTest, StringDtype) {
-    DataSeries labels = DataSeries::CreateScalar<std::string>(3, std::string("unknown"));
+    DataSeries labels = DataSeries::CreateScalar<std::string>(3, Unit(), std::string("unknown"));
     EXPECT_EQ(labels.dtype(), DTypeTag::kString);
     EXPECT_EQ(labels.dtype_name(), "String");
     labels.scalar_at<std::string>(0) = "cat";
@@ -147,23 +148,23 @@ TEST(ScalarSliceTest, TailMoreThanSize) {
 // ---------------------------------------------------------------------------
 
 TEST(ScalarExceptionTest, ScalarAtOutOfRange) {
-    DataSeries s = DataSeries::CreateScalar<double>(2, 0.0);
+    DataSeries s = DataSeries::CreateScalar<double>(2, Unit(), 0.0);
     EXPECT_THROW(s.scalar_at<double>(2), std::out_of_range);
 }
 
 TEST(ScalarExceptionTest, IlocOutOfRange) {
-    DataSeries s = DataSeries::CreateScalar<double>(3, 0.0);
+    DataSeries s = DataSeries::CreateScalar<double>(3, Unit(), 0.0);
     EXPECT_THROW(s.iloc(1, 5), std::out_of_range);
     EXPECT_THROW(s.iloc(3, 2), std::out_of_range);
 }
 
 TEST(ScalarExceptionTest, CellAtOutOfRange) {
-    DataSeries s = DataSeries::CreateScalar<int>(2, 0);
+    DataSeries s = DataSeries::CreateScalar<int>(2, Unit(), 0);
     EXPECT_THROW(s.measurement_at(2), std::out_of_range);
 }
 
 TEST(ScalarExceptionTest, WrongTypeThrows) {
-    DataSeries s = DataSeries::CreateScalar<double>(2, 0.0);
+    DataSeries s = DataSeries::CreateScalar<double>(2, Unit(), 0.0);
     EXPECT_THROW(s.scalar_at<int>(0), std::bad_cast);
 }
 
@@ -180,7 +181,7 @@ TEST(EmptySeriesTest, DefaultState) {
 }
 
 TEST(EmptySeriesTest, ClearResetsSize) {
-    DataSeries s = DataSeries::CreateScalar<int>(5, 1);
+    DataSeries s = DataSeries::CreateScalar<int>(5, Unit(), 1);
     EXPECT_EQ(s.size(), 5u);
     s.clear();
     EXPECT_EQ(s.size(), 0u);
@@ -192,30 +193,30 @@ TEST(EmptySeriesTest, ClearResetsSize) {
 // ---------------------------------------------------------------------------
 
 TEST(CopyMoveTest, CopyConstructorIsDeep) {
-    DataSeries orig = DataSeries::CreateScalar<double>(3, 1.0);
+    DataSeries orig = DataSeries::CreateScalar<double>(3, Unit(), 1.0);
     DataSeries copy(orig);
     copy.scalar_at<double>(0) = 99.0;
     EXPECT_DOUBLE_EQ(orig.scalar_at<double>(0), 1.0);
 }
 
 TEST(CopyMoveTest, CopyAssignmentIsDeep) {
-    DataSeries orig = DataSeries::CreateScalar<double>(3, 2.0);
-    DataSeries copy = DataSeries::CreateScalar<double>(1, 0.0);
+    DataSeries orig = DataSeries::CreateScalar<double>(3, Unit(), 2.0);
+    DataSeries copy = DataSeries::CreateScalar<double>(1, Unit(), 0.0);
     copy = orig;
     copy.scalar_at<double>(1) = 77.0;
     EXPECT_DOUBLE_EQ(orig.scalar_at<double>(1), 2.0);
 }
 
 TEST(CopyMoveTest, MoveConstructorTransfersOwnership) {
-    DataSeries orig = DataSeries::CreateScalar<double>(3, 5.0);
+    DataSeries orig = DataSeries::CreateScalar<double>(3, Unit(), 5.0);
     DataSeries moved(std::move(orig));
     ASSERT_EQ(moved.size(), 3u);
     EXPECT_DOUBLE_EQ(moved.scalar_at<double>(0), 5.0);
 }
 
 TEST(CopyMoveTest, MoveAssignmentTransfersOwnership) {
-    DataSeries orig = DataSeries::CreateScalar<int>(4, 9);
-    DataSeries dst = DataSeries::CreateScalar<int>(1, 0);
+    DataSeries orig = DataSeries::CreateScalar<int>(4, Unit(), 9);
+    DataSeries dst = DataSeries::CreateScalar<int>(1, Unit(), 0);
     dst = std::move(orig);
     ASSERT_EQ(dst.size(), 4u);
     EXPECT_EQ(dst.scalar_at<int>(3), 9);
@@ -233,7 +234,7 @@ TEST(VectorTest, CreateAndWrite) {
     vecs.vector_at<double>(2) = Eigen::Vector4d(0, 0, 1, 0);
 
     EXPECT_EQ(vecs.size(), 3u);
-    EXPECT_EQ(vecs.values_per_row(), 4);
+    EXPECT_EQ(vecs.element_count(), 4);
     EXPECT_EQ(vecs.data_kind(), DataKind::kVector);
     ASSERT_EQ(vecs.data_shape().size(), 1u);
     EXPECT_EQ(vecs.data_shape()[0], 4);
@@ -310,7 +311,7 @@ TEST(VectorTest, StringVectorFill) {
 TEST(VectorTest, FromFlatDataVector) {
     DataSeries vecs = DataSeries::CreateVectorFromVector<double>(3, std::vector<double>{1, 2, 3, 4, 5, 6});
     ASSERT_EQ(vecs.size(), 2u);
-    EXPECT_EQ(vecs.values_per_row(), 3);
+    EXPECT_EQ(vecs.element_count(), 3);
     EXPECT_DOUBLE_EQ(vecs.vector_at<double>(0)(0), 1.0);
     EXPECT_DOUBLE_EQ(vecs.vector_at<double>(0)(2), 3.0);
     EXPECT_DOUBLE_EQ(vecs.vector_at<double>(1)(1), 5.0);
@@ -330,7 +331,7 @@ TEST(VectorTest, FromRowsNumeric) {
     // Rewritten: use VectorsFromFlat with flat data
     DataSeries vecs = DataSeries::CreateVectorFromVector<double>(3, std::vector<double>{1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
     ASSERT_EQ(vecs.size(), 2u);
-    EXPECT_EQ(vecs.values_per_row(), 3);
+    EXPECT_EQ(vecs.element_count(), 3);
     EXPECT_DOUBLE_EQ(vecs.vector_at<double>(0)(0), 1.0);
     EXPECT_DOUBLE_EQ(vecs.vector_at<double>(1)(2), 6.0);
 }
@@ -410,7 +411,7 @@ TEST(MatrixTest, CreateAndMetadata) {
     mats.resize(3);
     EXPECT_EQ(mats.size(), 3u);
     EXPECT_EQ(mats.data_kind(), DataKind::kMatrix);
-    EXPECT_EQ(mats.values_per_row(), 9);
+    EXPECT_EQ(mats.element_count(), 9);
     std::vector<Index> shape = mats.data_shape();
     ASSERT_EQ(shape.size(), 2u);
     EXPECT_EQ(shape[0], 3);
@@ -764,7 +765,7 @@ TEST(ContiguousTest, ScalarMemcpy) {
 }
 
 TEST(ContiguousTest, ScalarStringNotTrivial) {
-    DataSeries s = DataSeries::CreateScalar<std::string>(2, std::string("x"));
+    DataSeries s = DataSeries::CreateScalar<std::string>(2, Unit(), std::string("x"));
     EXPECT_FALSE(s.is_trivially_copyable());
     EXPECT_THROW(s.contiguous_bytes(), std::runtime_error);
 }
@@ -854,7 +855,7 @@ TEST(CellUnitTest, AssignPropagatesUnit)
 
 TEST(DataSeriesUnitTest, DefaultSeriesIsDimensionless)
 {
-    DataSeries s = DataSeries::CreateScalar<double>(3, 1.0);
+    DataSeries s = DataSeries::CreateScalar<double>(3, Unit(), 1.0);
     EXPECT_TRUE(xdataset::same_dimension(s.unit(), xdataset::Unit()));
 }
 
@@ -870,7 +871,7 @@ TEST(DataSeriesUnitTest, SetUnitByUnitObject)
 
 TEST(DataSeriesUnitTest, SetUnitByString)
 {
-    DataSeries s = DataSeries::CreateScalar<double>(2, 7.0);
+    DataSeries s = DataSeries::CreateScalar<double>(2, Unit(), 7.0);
     s.set_unit("Hz");
     EXPECT_TRUE(xdataset::same_dimension(s.unit(), xdataset::parse_unit("Hz")));
 }
@@ -930,7 +931,7 @@ TEST(DataSeriesUnitTest, CanonicalizedDoesNotModifyOriginal)
 
 TEST(DataSeriesUnitTest, CopyPropagatesUnit)
 {
-    DataSeries s = DataSeries::CreateScalar<double>(2, 0.0);
+    DataSeries s = DataSeries::CreateScalar<double>(2, Unit(), 0.0);
     s.set_unit("Pa");
     DataSeries s2(s);
     EXPECT_TRUE(xdataset::same_dimension(s2.unit(), xdataset::parse_unit("Pa")));
@@ -938,7 +939,7 @@ TEST(DataSeriesUnitTest, CopyPropagatesUnit)
 
 TEST(DataSeriesUnitTest, MovePropagatesUnit)
 {
-    DataSeries s = DataSeries::CreateScalar<double>(2, 0.0);
+    DataSeries s = DataSeries::CreateScalar<double>(2, Unit(), 0.0);
     s.set_unit("N");
     DataSeries s2(std::move(s));
     EXPECT_TRUE(xdataset::same_dimension(s2.unit(), xdataset::parse_unit("N")));
@@ -946,7 +947,7 @@ TEST(DataSeriesUnitTest, MovePropagatesUnit)
 
 TEST(DataSeriesUnitTest, AssignPropagatesUnit)
 {
-    DataSeries s1 = DataSeries::CreateScalar<double>(2, 0.0);
+    DataSeries s1 = DataSeries::CreateScalar<double>(2, Unit(), 0.0);
     s1.set_unit("J");
     DataSeries s2;
     s2 = s1;

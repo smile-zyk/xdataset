@@ -32,6 +32,11 @@ namespace xdataset
         return a.has_same_base(b);
     }
 
+    bool is_dimensionless(const Unit& u)
+    {
+        return same_dimension(u, Unit());
+    }
+
     double multiplier_of(const Unit& u)
     {
         return u.multiplier();

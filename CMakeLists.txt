@@ -28,6 +28,7 @@ add_executable(xdataset_test
 	src/data_array.cc
 	src/block.cc
 	src/data_frame.cc
+	src/data_series.cc
 	src/measurement.cc
 	src/units_util.cc
 )
@@ -40,6 +41,7 @@ add_executable(xdataset_playground
 	src/data_array.cc
 	src/block.cc
 	src/data_frame.cc
+	src/data_series.cc
 	src/measurement.cc
 	src/units_util.cc
 )

@@ -23,6 +23,9 @@ namespace xdataset
     // Uses has_same_base so that affine flags are ignored.
     bool same_dimension(const Unit& a, const Unit& b);
 
+    // True when u is dimensionless (no physical dimension).
+    bool is_dimensionless(const Unit& u);
+
     // Convenience: multiplier, but separately from the canonical-SI logic.
     double multiplier_of(const Unit& u);
 

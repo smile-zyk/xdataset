@@ -201,6 +201,9 @@ namespace xdataset
 
     struct MeasurementFormatter : public boost::static_visitor<std::string>
     {
+        MeasurementFormatter() = default;
+        explicit MeasurementFormatter(Unit u) : unit_(std::move(u)) {}
+
         std::string operator()(double v) const;
         std::string operator()(int v) const;
         std::string operator()(const std::complex<double>& v) const;
@@ -219,6 +222,9 @@ namespace xdataset
     private:
         static std::string format_complex(const std::complex<double>& v);
         static std::string format_scalar_string(const std::string& v);
+        std::string with_unit(const std::string& s) const;
+
+        Unit unit_;
     };
 
     // =========================================================================
