@@ -445,4 +445,93 @@ namespace xdataset
         return with_unit(oss.str());
     }
 
+// =========================================================================
+//  Measurement — canonicalized
+// =========================================================================
+
+Measurement Measurement::canonicalized() const {
+    if (dtype_ == DTypeTag::kString) {
+        Measurement result(*this);
+        result.unit_ = canonicalize(unit_);
+        return result;
+    }
+
+    double mult = multiplier_of(unit_);
+    Unit target = canonicalize(unit_);
+    bool affine = is_affine(unit_);
+
+    // Fast path: already canonical
+    if (!affine && mult == 1.0) {
+        Measurement result(*this);
+        result.unit_ = target;
+        return result;
+    }
+
+    // Promote integer to real when scaling is needed
+    DTypeTag res_dtype = (dtype_ == DTypeTag::kInteger) ? DTypeTag::kReal : dtype_;
+
+    Measurement result;
+    result.kind_  = kind_;
+    result.dtype_ = res_dtype;
+    result.shape_ = shape_;
+    result.unit_  = target;
+
+    Index count = 1;
+    if (kind_ == DataKind::kVector) count = shape_[0];
+    else if (kind_ == DataKind::kMatrix) count = shape_[0] * shape_[1];
+
+    if (kind_ == DataKind::kScalar) {
+        double v = (dtype_ == DTypeTag::kInteger)
+                   ? static_cast<double>(boost::get<int>(storage_))
+                   : boost::get<double>(storage_);
+        v = affine ? units::convert(v, unit_, target) : v * mult;
+        if (res_dtype == DTypeTag::kComplex) {
+            std::complex<double> cv = boost::get<std::complex<double> >(storage_);
+            if (!affine) cv *= mult;
+            result.storage_ = cv;
+        } else {
+            result.storage_ = v;
+        }
+        return result;
+    }
+
+    if (kind_ == DataKind::kVector) {
+        if (res_dtype == DTypeTag::kComplex) {
+            Eigen::VectorXcd vec = boost::get<Eigen::VectorXcd>(storage_);
+            if (!affine) vec *= mult;
+            result.storage_ = vec;
+        } else {
+            Eigen::VectorXd vec(count);
+            for (Index i = 0; i < count; ++i) {
+                double v = (dtype_ == DTypeTag::kInteger)
+                           ? static_cast<double>(boost::get<Eigen::VectorXi>(storage_)(i))
+                           : boost::get<Eigen::VectorXd>(storage_)(i);
+                vec(i) = affine ? units::convert(v, unit_, target) : v * mult;
+            }
+            result.storage_ = vec;
+        }
+        return result;
+    }
+
+    // Matrix
+    if (res_dtype == DTypeTag::kComplex) {
+        Eigen::MatrixXcd mat = boost::get<Eigen::MatrixXcd>(storage_);
+        if (!affine) mat *= mult;
+        result.storage_ = mat;
+    } else {
+        Index rows = shape_[0], cols = shape_[1];
+        Eigen::MatrixXd mat(rows, cols);
+        for (Index r = 0; r < rows; ++r) {
+            for (Index c = 0; c < cols; ++c) {
+                double v = (dtype_ == DTypeTag::kInteger)
+                           ? static_cast<double>(boost::get<Eigen::MatrixXi>(storage_)(r, c))
+                           : boost::get<Eigen::MatrixXd>(storage_)(r, c);
+                mat(r, c) = affine ? units::convert(v, unit_, target) : v * mult;
+            }
+        }
+        result.storage_ = mat;
+    }
+    return result;
+}
+
 } // namespace xdataset

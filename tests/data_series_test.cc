@@ -16,7 +16,7 @@ using xdataset::Index;
 using xdataset::Unit;
 
 // ---------------------------------------------------------------------------
-// Scalar �� creation, write, read-back
+// Scalar  creation, write, read-back
 // ---------------------------------------------------------------------------
 
 TEST(ScalarTest, CreateWithFillValue) {
@@ -97,7 +97,7 @@ TEST(ScalarTest, StringDtype) {
 }
 
 // ---------------------------------------------------------------------------
-// Scalar �� slicing (head / tail / iloc)
+// Scalar  slicing (head / tail / iloc)
 // ---------------------------------------------------------------------------
 
 TEST(ScalarSliceTest, Head) {
@@ -144,7 +144,7 @@ TEST(ScalarSliceTest, TailMoreThanSize) {
 }
 
 // ---------------------------------------------------------------------------
-// Scalar �� out-of-range and type mismatch
+// Scalar  out-of-range and type mismatch
 // ---------------------------------------------------------------------------
 
 TEST(ScalarExceptionTest, ScalarAtOutOfRange) {
@@ -223,7 +223,7 @@ TEST(CopyMoveTest, MoveAssignmentTransfersOwnership) {
 }
 
 // ---------------------------------------------------------------------------
-// Vector �� creation, write, read-back
+// Vector  creation, write, read-back
 // ---------------------------------------------------------------------------
 
 TEST(VectorTest, CreateAndWrite) {
@@ -379,7 +379,7 @@ TEST(VectorTest, ComplexVector) {
 }
 
 // ---------------------------------------------------------------------------
-// Vector �� out-of-range and size mismatch
+// Vector  out-of-range and size mismatch
 // ---------------------------------------------------------------------------
 
 TEST(VectorExceptionTest, VectorAtOutOfRange) {
@@ -403,7 +403,7 @@ TEST(VectorExceptionTest, FromRowsMismatchedWidthThrows) {
 }
 
 // ---------------------------------------------------------------------------
-// Matrix �� creation, write, read-back
+// Matrix  creation, write, read-back
 // ---------------------------------------------------------------------------
 
 TEST(MatrixTest, CreateAndMetadata) {
@@ -570,7 +570,7 @@ TEST(MatrixTest, DynamicAppendWithoutInitialRowCount) {
 }
 
 // ---------------------------------------------------------------------------
-// Matrix �� out-of-range and size mismatch
+// Matrix  out-of-range and size mismatch
 // ---------------------------------------------------------------------------
 
 TEST(MatrixExceptionTest, MatrixAtOutOfRange) {
@@ -604,103 +604,8 @@ TEST(FromExceptionTest, MatrixPointerLengthMismatchThrows) {
 }
 
 // ---------------------------------------------------------------------------
-// Cell �� standalone Cell objects
+// Cell  standalone Cell objects
 // ---------------------------------------------------------------------------
-
-TEST(CellTest, ScalarCellCreateAndMutate) {
-    Measurement m = Measurement(42.0);
-    EXPECT_EQ(m.kind(), DataKind::kScalar);
-    EXPECT_EQ(m.dtype(), DTypeTag::kReal);
-    EXPECT_EQ(m.dtype_name(), "Real");
-    EXPECT_DOUBLE_EQ(m.as_scalar<double>(), 42.0);
-
-    m = Measurement(3.5);
-    EXPECT_DOUBLE_EQ(m.as_scalar<double>(), 3.5);
-}
-
-TEST(CellTest, IntegerCellDtype) {
-    Measurement m = Measurement(7);
-    EXPECT_EQ(m.dtype(), DTypeTag::kInteger);
-    EXPECT_EQ(m.dtype_name(), "Integer");
-    EXPECT_EQ(m.as_scalar<int>(), 7);
-}
-
-TEST(CellTest, ComplexCellDtype) {
-    using cd = std::complex<double>;
-    Measurement m = Measurement(cd(1.0, 2.0));
-    EXPECT_EQ(m.dtype(), DTypeTag::kComplex);
-    EXPECT_EQ(m.dtype_name(), "Complex");
-    EXPECT_DOUBLE_EQ(m.as_scalar<cd>().real(), 1.0);
-    EXPECT_DOUBLE_EQ(m.as_scalar<cd>().imag(), 2.0);
-}
-
-TEST(CellTest, StringCellDtype) {
-    Measurement m = Measurement(std::string("hello"));
-    EXPECT_EQ(m.dtype(), DTypeTag::kString);
-    EXPECT_EQ(m.dtype_name(), "String");
-    EXPECT_EQ(m.as_scalar<std::string>(), "hello");
-}
-
-TEST(CellTest, AppendCellToSeries) {
-    Measurement m = Measurement(3.5);
-    DataSeries s = DataSeries::CreateScalar<double>(0);
-    s.append(Measurement(1.25));
-    s.append(m);
-    ASSERT_EQ(s.size(), 2u);
-    EXPECT_DOUBLE_EQ(s.scalar_at<double>(1), 3.5);
-}
-
-TEST(CellTest, AppendMismatchedCellThrows) {
-    Measurement int_cell = Measurement(10);
-    DataSeries s = DataSeries::CreateScalar<double>(0);
-    EXPECT_THROW(s.append(int_cell), std::bad_cast);
-}
-
-TEST(CellTest, AppendUnitMismatchThrows) {
-    // First append succeeds and sets the series unit.
-    Measurement m_m = Measurement(1.0, xdataset::parse_unit("m"));
-    DataSeries s = DataSeries::CreateScalar<double>(0);
-    s.append(m_m);
-    EXPECT_TRUE(xdataset::same_dimension(s.unit(), xdataset::parse_unit("m")));
-
-    // Subsequent append with incompatible unit must throw.
-    Measurement m_s = Measurement(2.0, xdataset::parse_unit("s"));
-    EXPECT_THROW(s.append(m_s), std::invalid_argument);
-}
-
-TEST(CellTest, CellAtRoundtripScalar) {
-    DataSeries s = DataSeries::CreateScalarFromVector<int>(std::vector<int>{1, 2, 3});
-    Measurement m = s.measurement_at(1);
-    EXPECT_EQ(m.kind(), DataKind::kScalar);
-    EXPECT_EQ(m.dtype(), DTypeTag::kInteger);
-    EXPECT_EQ(m.as_scalar<int>(), 2);
-}
-
-TEST(CellTest, CellAtRoundtripVector) {
-    DataSeries vecs(DataKind::kVector, DTypeTag::kReal, {3});
-    vecs.resize(2);
-    vecs.vector_at<double>(0) << 1.0, 2.0, 3.0;
-    vecs.vector_at<double>(1) << 4.0, 5.0, 6.0;
-    Measurement m = vecs.measurement_at(1);
-    EXPECT_EQ(m.kind(), DataKind::kVector);
-    EXPECT_DOUBLE_EQ(m.as_vector<double>()(0), 4.0);
-    EXPECT_DOUBLE_EQ(m.as_vector<double>()(2), 6.0);
-}
-
-TEST(CellTest, CellAtRoundtripMatrix) {
-    DataSeries mats(DataKind::kMatrix, DTypeTag::kReal, {2, 2});
-    mats.resize(1);
-    mats.matrix_at<double>(0) << 1.0, 2.0, 3.0, 4.0;
-    Measurement m = mats.measurement_at(0);
-    EXPECT_EQ(m.kind(), DataKind::kMatrix);
-    EXPECT_DOUBLE_EQ(m.as_matrix<double>()(0, 0), 1.0);
-    EXPECT_DOUBLE_EQ(m.as_matrix<double>()(1, 1), 4.0);
-}
-
-// ---------------------------------------------------------------------------
-// Iterator �� forward traversal
-// ---------------------------------------------------------------------------
-
 TEST(IteratorTest, MutableIteratorCollectsValues) {
     DataSeries s = DataSeries::CreateScalar<double>(0);
     s.append(Measurement(1.25));
@@ -815,43 +720,6 @@ TEST(ContiguousTest, MatrixMemcpyAndRowMajorLayout) {
 }
 
 // ---------------------------------------------------------------------------
-// Unit
-// ---------------------------------------------------------------------------
-
-TEST(CellUnitTest, DefaultCellIsDimensionless)
-{
-    Measurement m;
-    EXPECT_TRUE(xdataset::same_dimension(m.unit(), xdataset::Unit()));
-}
-
-TEST(CellUnitTest, CopyPropagatesUnit)
-{
-    Measurement m = Measurement(3.14);
-    m.set_unit(xdataset::parse_unit("m"));
-    Measurement m2(m);
-    EXPECT_TRUE(xdataset::same_dimension(m2.unit(), m.unit()));
-}
-
-TEST(CellUnitTest, MovePropagatesUnit)
-{
-    Measurement m = Measurement(2.72);
-    m.set_unit(xdataset::parse_unit("Hz"));
-    Measurement m2(std::move(m));
-    EXPECT_TRUE(xdataset::same_dimension(m2.unit(), xdataset::parse_unit("Hz")));
-}
-
-TEST(CellUnitTest, AssignPropagatesUnit)
-{
-    Measurement m1 = Measurement(1.0);
-    m1.set_unit(xdataset::parse_unit("m"));
-    Measurement m2;
-    m2 = m1;
-    EXPECT_TRUE(xdataset::same_dimension(m2.unit(), xdataset::parse_unit("m")));
-}
-
-// ---------------------------------------------------------------------------
-// Unit �� DataSeries set_unit / canonicalize / canonicalized
-// ---------------------------------------------------------------------------
 
 TEST(DataSeriesUnitTest, DefaultSeriesIsDimensionless)
 {
@@ -876,57 +744,8 @@ TEST(DataSeriesUnitTest, SetUnitByString)
     EXPECT_TRUE(xdataset::same_dimension(s.unit(), xdataset::parse_unit("Hz")));
 }
 
-TEST(DataSeriesUnitTest, CanonicalizeConvertsValues)
-{
-    DataSeries s = DataSeries::CreateScalarFromVector<double>(std::vector<double>{1.0, 5.0});
-    s.set_unit("km");
-    s.canonicalize();
-    // 1 km �� 1000 m,  5 km �� 5000 m
-    EXPECT_DOUBLE_EQ(s.scalar_at<double>(0), 1000.0);
-    EXPECT_DOUBLE_EQ(s.scalar_at<double>(1), 5000.0);
-    EXPECT_DOUBLE_EQ(s.unit().multiplier(), 1.0);
-    EXPECT_TRUE(xdataset::same_dimension(s.unit(), xdataset::parse_unit("m")));
-}
-
-TEST(DataSeriesUnitTest, CanonicalizeFastPathCoherentSI)
-{
-    DataSeries s = DataSeries::CreateScalarFromVector<double>(std::vector<double>{9.0, 10.0});
-    s.set_unit("Hz");  // multiplier == 1, non-affine
-    s.canonicalize();
-    // values unchanged
-    EXPECT_DOUBLE_EQ(s.scalar_at<double>(0), 9.0);
-    EXPECT_DOUBLE_EQ(s.scalar_at<double>(1), 10.0);
-    EXPECT_DOUBLE_EQ(s.unit().multiplier(), 1.0);
-}
-
-TEST(DataSeriesUnitTest, CanonicalizeAffineDegC)
-{
-    DataSeries s = DataSeries::CreateScalarFromVector<double>(std::vector<double>{0.0, 100.0});
-    s.set_unit("degC");
-    s.canonicalize();
-    // 0 ��C �� 273.15 K,  100 ��C �� 373.15 K
-    EXPECT_NEAR(s.scalar_at<double>(0), 273.15, 1e-10);
-    EXPECT_NEAR(s.scalar_at<double>(1), 373.15, 1e-10);
-    EXPECT_FALSE(xdataset::is_affine(s.unit()));
-}
-
-TEST(DataSeriesUnitTest, CanonicalizedDoesNotModifyOriginal)
-{
-    DataSeries orig = DataSeries::CreateScalarFromVector<double>(std::vector<double>{2.0, 4.0});
-    orig.set_unit("mm");
-
-    DataSeries copy = orig.canonicalized();
-    // copy: 2 mm �� 0.002 m, 4 mm �� 0.004 m
-    EXPECT_NEAR(copy.scalar_at<double>(0), 0.002, 1e-12);
-    EXPECT_TRUE(xdataset::same_dimension(copy.unit(), xdataset::parse_unit("m")));
-
-    // orig unchanged
-    EXPECT_DOUBLE_EQ(orig.scalar_at<double>(0), 2.0);
-    EXPECT_TRUE(xdataset::same_dimension(orig.unit(), xdataset::parse_unit("mm")));
-}
-
 // ---------------------------------------------------------------------------
-// Unit �� DataSeries propagation through copy / iloc / measurement_at
+// Unit  DataSeries propagation through copy / iloc / measurement_at
 // ---------------------------------------------------------------------------
 
 TEST(DataSeriesUnitTest, CopyPropagatesUnit)
@@ -987,3 +806,5 @@ TEST(DataSeriesUnitTest, CellAtCarriesUnit)
     EXPECT_TRUE(xdataset::same_dimension(m.unit(), xdataset::parse_unit("W")));
     EXPECT_DOUBLE_EQ(m.as_scalar<double>(), 42.0);
 }
+
+// =========================================================================

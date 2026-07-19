@@ -184,6 +184,11 @@ namespace xdataset
         /// Return a human-readable string representation.
         std::string to_string() const;
 
+        // ======== canonicalisation ======================================
+
+        /// Return a canonicalised copy (value scaled to SI, unit = base_units).
+        Measurement canonicalized() const;
+
     private:
         void infer_metadata();
 
@@ -344,6 +349,28 @@ namespace xdataset
                 std::to_string(static_cast<int>(kind_)) + ")");
         return boost::get<Eigen::Tensor<std::string, 2>>(storage_);
     }
+
+    // =========================================================================
+    //  Measurement arithmetic operators
+    // =========================================================================
+
+    /// DataKind promotion for binary ops (per the Scalar/Vector/Matrix table).
+    /// Returns the result kind, or throws on incompatible combinations.
+    DataKind promoted_kind(DataKind a, DataKind b);
+
+    /// dtype promotion: Integer ⊂ Real ⊂ Complex.  String throws.
+    DTypeTag promoted_dtype(DTypeTag a, DTypeTag b);
+
+    // Measurement – Measurement
+    Measurement operator+(const Measurement& lhs, const Measurement& rhs);
+    Measurement operator-(const Measurement& lhs, const Measurement& rhs);
+    Measurement operator*(const Measurement& lhs, const Measurement& rhs);
+    Measurement operator/(const Measurement& lhs, const Measurement& rhs);
+
+    /// pow(base, exponent): exponent must be dimensionless, non-String.
+    /// DataKind broadcasting applies (e.g. Scalar^Vector → Vector).
+    /// When exponent is non-scalar, base must also be dimensionless.
+    Measurement pow(const Measurement& base, const Measurement& exponent);
 
 } // namespace xdataset
 

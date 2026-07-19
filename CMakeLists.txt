@@ -17,6 +17,8 @@ enable_testing()
 
 add_executable(xdataset_test
 	tests/data_series_test.cc
+	tests/measurement_test.cc
+	tests/arithmetic_test.cc
 	tests/multi_dimension_test.cc
 	tests/block_test.cc
 	tests/data_array_test.cc
@@ -29,6 +31,7 @@ add_executable(xdataset_test
 	src/block.cc
 	src/data_frame.cc
 	src/data_series.cc
+	src/arithmetic.cc
 	src/measurement.cc
 	src/units_util.cc
 )
@@ -42,6 +45,7 @@ add_executable(xdataset_playground
 	src/block.cc
 	src/data_frame.cc
 	src/data_series.cc
+	src/arithmetic.cc
 	src/measurement.cc
 	src/units_util.cc
 )

@@ -803,6 +803,25 @@ inline DataSeries::const_iterator::reference DataSeries::const_iterator::operato
     return ConstRowView(owner_, idx_);
 }
 
+// =========================================================================
+//  Arithmetic operators for DataSeries
+// =========================================================================
+
+// DataSeries – DataSeries
+DataSeries operator+(const DataSeries& lhs, const DataSeries& rhs);
+DataSeries operator-(const DataSeries& lhs, const DataSeries& rhs);
+DataSeries operator*(const DataSeries& lhs, const DataSeries& rhs);
+DataSeries operator/(const DataSeries& lhs, const DataSeries& rhs);
+
+// DataSeries – Measurement (broadcast)
+DataSeries operator+(const DataSeries& lhs, const Measurement& rhs);
+DataSeries operator-(const DataSeries& lhs, const Measurement& rhs);
+DataSeries operator*(const DataSeries& lhs, const Measurement& rhs);
+DataSeries operator/(const DataSeries& lhs, const Measurement& rhs);
+
+/// pow(base, exponent): exponent must be a dimensionless, non-String scalar Measurement.
+DataSeries pow(const DataSeries& base, const Measurement& exp);
+
 }  // namespace xdataset
 
 #endif  // XDATASET_DATA_SERIES_H_
