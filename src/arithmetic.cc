@@ -9,6 +9,9 @@
 //    §2  Measurement ↔ Measurement  — + - * / pow
 //    §3  DataSeries ↔ DataSeries   — + - * / (delegates to §2)
 //    §4  DataSeries ↔ Measurement  — + - * / pow (delegates to §2)
+//    §5  DataArray ↔ DataArray     — + - * / (delegates to §3)
+//    §6  DataArray ↔ Measurement   — + - * / (delegates to §4)
+//    §7  pow(DataArray, Measurement)
 //
 //  Design principle: the Measurement operators (§2) are the sole "leaf"
 //  implementation that touches element-level storage.  DataSeries operators
@@ -18,6 +21,7 @@
 
 #include "data_series.h"
 #include "measurement.h"
+#include "data_array.h"
 
 #include <complex>
 #include <stdexcept>
@@ -692,6 +696,187 @@ DataSeries pow(const DataSeries& base, const Measurement& exp) {
         result.append(xdataset::pow(
             a.measurement_at(static_cast<Index>(i)), exp_c));
     return result;
+}
+
+// =============================================================================
+//  §5  DataArray ↔ DataArray
+// =============================================================================
+//
+//  Thin wrappers that:
+//    1. Validate MultiDimensionSpec compatibility (same rank, dims, sizes).
+//    2. Validate indep_datas have the same count of independents.
+//    3. Delegate to the corresponding DataSeries operator (§3).
+//    4. Assemble the result DataArray: name = placeholder, data = result DS,
+//       indep_datas / multi_dimension_spec / kind = inherited from lhs.
+//
+//  The template array_array_op encapsulates the boilerplate shared by all
+//  four operators (the only differences are the DataSeries-level op, the
+//  same-dimension-required flag, and the int-div→real flag).
+
+namespace {
+
+// ---- validation ----------------------------------------------------------
+
+/// Verify two MultiDimensionSpecs are structurally identical.
+void validate_spec_compatible(const MultiDimensionSpec& a, const MultiDimensionSpec& b,
+                               const char* op_name) {
+    if (a.rank() != b.rank())
+        throw std::invalid_argument(
+            std::string(op_name) + ": MultiDimensionSpec rank mismatch (" +
+            std::to_string(a.rank()) + " vs " + std::to_string(b.rank()) + ")");
+
+    const auto& da = a.dims();
+    const auto& db = b.dims();
+    for (std::size_t i = 0; i < da.size(); ++i) {
+        if (da[i].is_regular() != db[i].is_regular()) {
+            throw std::invalid_argument(
+                std::string(op_name) + ": dimension " + std::to_string(i) +
+                " regular/ragged mismatch");
+        }
+        if (da[i].is_regular()) {
+            if (da[i].regular_size() != db[i].regular_size())
+                throw std::invalid_argument(
+                    std::string(op_name) + ": dimension " + std::to_string(i) +
+                    " size mismatch (" + std::to_string(da[i].regular_size()) +
+                    " vs " + std::to_string(db[i].regular_size()) + ")");
+        } else {
+            if (da[i].ragged_sizes() != db[i].ragged_sizes())
+                throw std::invalid_argument(
+                    std::string(op_name) + ": dimension " + std::to_string(i) +
+                    " ragged sizes differ");
+        }
+    }
+}
+
+/// Verify two DataArrays have compatible independent-variable sets.
+/// Checks that the number of independents matches; the MultiDimensionSpec
+/// validation already ensures structural compatibility.
+void validate_indeps_compatible(const DataArray& a, const DataArray& b,
+                                 const char* op_name) {
+    auto na = a.indep_names();
+    auto nb = b.indep_names();
+    if (na.size() != nb.size())
+        throw std::invalid_argument(
+            std::string(op_name) + ": independent variable count mismatch (" +
+            std::to_string(na.size()) + " vs " + std::to_string(nb.size()) + ")");
+}
+
+/// Build the result name for a binary DataArray op.
+inline std::string result_name(const DataArray& lhs, const DataArray& rhs,
+                               const char* op_symbol) {
+    return lhs.name() + op_symbol + rhs.name();
+}
+
+// =========================================================================
+//  Generic DataArray ↔ DataArray operator
+// =========================================================================
+
+template <typename DataSeriesOp>
+std::shared_ptr<DataArray> array_array_op(const DataArray& lhs, const DataArray& rhs,
+                                           const char* op_name, const char* op_symbol,
+                                           DataSeriesOp ds_op) {
+    // --- validation --------------------------------------------------------
+    validate_spec_compatible(lhs.multi_dimension_spec(), rhs.multi_dimension_spec(),
+                              op_name);
+    validate_indeps_compatible(lhs, rhs, op_name);
+
+    // --- delegate to DataSeries --------------------------------------------
+    DataSeries result_ds = ds_op(lhs.data(), rhs.data());
+
+    // --- assemble result DataArray -----------------------------------------
+    DataArrayCreateInfo info;
+    info.name                = result_name(lhs, rhs, op_symbol);
+    info.data                = std::move(result_ds);
+    info.indep_datas         = lhs.indep_datas();         // inherit from lhs
+    info.multi_dimension_spec = lhs.multi_dimension_spec(); // inherit from lhs
+    info.kind                = lhs.kind();                // inherit from lhs
+    return std::make_shared<DataArray>(std::move(info));
+}
+
+}  // anonymous namespace
+
+std::shared_ptr<DataArray> operator+(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator+", "+",
+        [](const DataSeries& a, const DataSeries& b) { return a + b; });
+}
+
+std::shared_ptr<DataArray> operator-(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator-", "-",
+        [](const DataSeries& a, const DataSeries& b) { return a - b; });
+}
+
+std::shared_ptr<DataArray> operator*(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator*", "·",
+        [](const DataSeries& a, const DataSeries& b) { return a * b; });
+}
+
+std::shared_ptr<DataArray> operator/(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator/", "/",
+        [](const DataSeries& a, const DataSeries& b) { return a / b; });
+}
+
+// =============================================================================
+//  §6  DataArray ↔ Measurement
+// =============================================================================
+//
+//  Identical pattern to §5 except the right operand is a single Measurement
+//  broadcast to every row of the DataArray's DataSeries.
+
+namespace {
+
+template <typename DataSeriesMeasOp>
+std::shared_ptr<DataArray> array_meas_op(const DataArray& lhs, const Measurement& rhs,
+                                          const char* op_name, const char* op_symbol,
+                                          DataSeriesMeasOp ds_meas_op) {
+    // --- delegate to DataSeries --------------------------------------------
+    DataSeries result_ds = ds_meas_op(lhs.data(), rhs);
+
+    // --- assemble result DataArray -----------------------------------------
+    DataArrayCreateInfo info;
+    info.name                 = lhs.name() + op_symbol + rhs.to_string();
+    info.data                 = std::move(result_ds);
+    info.indep_datas          = lhs.indep_datas();
+    info.multi_dimension_spec = lhs.multi_dimension_spec();
+    info.kind                 = lhs.kind();
+    return std::make_shared<DataArray>(std::move(info));
+}
+
+}  // anonymous namespace
+
+std::shared_ptr<DataArray> operator+(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator+", "+",
+        [](const DataSeries& a, const Measurement& b) { return a + b; });
+}
+
+std::shared_ptr<DataArray> operator-(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator-", "-",
+        [](const DataSeries& a, const Measurement& b) { return a - b; });
+}
+
+std::shared_ptr<DataArray> operator*(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator*", "·",
+        [](const DataSeries& a, const Measurement& b) { return a * b; });
+}
+
+std::shared_ptr<DataArray> operator/(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator/", "/",
+        [](const DataSeries& a, const Measurement& b) { return a / b; });
+}
+
+// =============================================================================
+//  §7  pow(DataArray, Measurement)
+// =============================================================================
+
+std::shared_ptr<DataArray> pow(const DataArray& base, const Measurement& exp) {
+    DataSeries result_ds = xdataset::pow(base.data(), exp);
+
+    DataArrayCreateInfo info;
+    info.name                 = base.name() + "^(" + exp.to_string() + ")";
+    info.data                 = std::move(result_ds);
+    info.indep_datas          = base.indep_datas();
+    info.multi_dimension_spec = base.multi_dimension_spec();
+    info.kind                 = base.kind();
+    return std::make_shared<DataArray>(std::move(info));
 }
 
 }  // namespace xdataset

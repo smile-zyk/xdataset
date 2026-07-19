@@ -63,6 +63,9 @@ namespace xdataset
             return indep_datas_;
         }
 
+        /// Ordered names of independent variables (keys of indep_datas_).
+        std::vector<std::string> indep_names() const;
+
         const DataSeries& indep_data(Index index) const;
 
         const DataSeries& indep_data(const std::string& name) const;
@@ -94,6 +97,29 @@ namespace xdataset
         DataArrayKind kind_;
         mutable std::unique_ptr<DataFrame> data_frame_cache_;
     };
+} // namespace xdataset
+
+// =========================================================================
+//  DataArray arithmetic operators
+// =========================================================================
+
+namespace xdataset {
+
+// DataArray – DataArray
+std::shared_ptr<DataArray> operator+(const DataArray& lhs, const DataArray& rhs);
+std::shared_ptr<DataArray> operator-(const DataArray& lhs, const DataArray& rhs);
+std::shared_ptr<DataArray> operator*(const DataArray& lhs, const DataArray& rhs);
+std::shared_ptr<DataArray> operator/(const DataArray& lhs, const DataArray& rhs);
+
+// DataArray – Measurement (broadcast)
+std::shared_ptr<DataArray> operator+(const DataArray& lhs, const Measurement& rhs);
+std::shared_ptr<DataArray> operator-(const DataArray& lhs, const Measurement& rhs);
+std::shared_ptr<DataArray> operator*(const DataArray& lhs, const Measurement& rhs);
+std::shared_ptr<DataArray> operator/(const DataArray& lhs, const Measurement& rhs);
+
+/// pow(base, exponent): exponent must be a dimensionless, non-String scalar Measurement.
+std::shared_ptr<DataArray> pow(const DataArray& base, const Measurement& exp);
+
 } // namespace xdataset
 
 #endif // DATA_ARRAY_H

@@ -62,6 +62,15 @@ namespace xdataset
         name_ = name;
     }
 
+    std::vector<std::string> DataArray::indep_names() const
+    {
+        std::vector<std::string> names;
+        names.reserve(indep_datas_.size());
+        for (const auto& item : indep_datas_)
+            names.push_back(item.first);
+        return names;
+    }
+
     const DataFrame& DataArray::GetOrCreateDataFrame() const
     {
         if (!data_frame_cache_)

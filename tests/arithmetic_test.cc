@@ -1,4 +1,5 @@
 #include "data_series.h"
+#include "data_array.h"
 
 #include <gtest/gtest.h>
 
@@ -14,6 +15,10 @@ using xdataset::Measurement;
 using xdataset::DTypeTag;
 using xdataset::Index;
 using xdataset::Unit;
+using xdataset::DataArray;
+using xdataset::DataArrayKind;
+using xdataset::MultiDimensionSpec;
+using xdataset::DimensionSpec;
 
 // ---------------------------------------------------------------------------
 
@@ -1019,4 +1024,268 @@ TEST(DataSeriesPowMeasTest, PowVectorDSWithScalarExponent)
     auto row0 = r.vector_at<double>(0);
     EXPECT_DOUBLE_EQ(row0(0), 4.0);  // 2^2
     EXPECT_DOUBLE_EQ(row0(1), 9.0);  // 3^2
+}
+
+// =========================================================================
+//  DataArray indep_names
+// =========================================================================
+
+TEST(DataArrayMetaTest, IndepNamesReturnsKeys)
+{
+    auto indep = DataArray::CreateIndependent("x",
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0}));
+    auto names = indep->indep_names();
+    ASSERT_EQ(names.size(), 1u);
+    EXPECT_EQ(names[0], "x");
+}
+
+// =========================================================================
+//  DataArray + DataArray
+// =========================================================================
+
+TEST(DataArrayArithTest, AddScalarIndependentArrays)
+{
+    auto ds_a = DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
+    ds_a.set_unit(xdataset::parse_unit("m"));
+    auto a = DataArray::CreateIndependent("a", std::move(ds_a));
+
+    auto ds_b = DataSeries::CreateScalarFromVector<double>({4.0, 5.0, 6.0});
+    ds_b.set_unit(xdataset::parse_unit("m"));
+    auto b = DataArray::CreateIndependent("b", std::move(ds_b));
+
+    auto r = *a + *b;
+    EXPECT_EQ(r->data().data_kind(), DataKind::kScalar);
+    EXPECT_EQ(r->data().size(), 3u);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(0), 5.0);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(2), 9.0);
+    EXPECT_TRUE(xdataset::same_dimension(r->data().unit(), xdataset::parse_unit("m")));
+    // Result inherits structure from left operand
+    EXPECT_EQ(r->multi_dimension_spec().rank(), a->multi_dimension_spec().rank());
+    EXPECT_EQ(r->kind(), a->kind());
+}
+
+TEST(DataArrayArithTest, AddArrayUnitMismatchThrows)
+{
+    auto ds_a = DataSeries::CreateScalarFromVector<double>({1.0});
+    ds_a.set_unit(xdataset::parse_unit("m"));
+    auto a = DataArray::CreateIndependent("a", std::move(ds_a));
+
+    auto ds_b = DataSeries::CreateScalarFromVector<double>({1.0});
+    ds_b.set_unit(xdataset::parse_unit("s"));
+    auto b = DataArray::CreateIndependent("b", std::move(ds_b));
+
+    EXPECT_THROW(*a + *b, std::invalid_argument);
+}
+
+TEST(DataArrayArithTest, AddArraySpecMismatchThrows)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0}));
+
+    auto b = DataArray::CreateIndependent("b",
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0}));
+
+    EXPECT_THROW(*a + *b, std::invalid_argument);
+}
+
+TEST(DataArrayArithTest, AddArrayIndepMismatchThrows)
+{
+    // Create an independent array (1 indep = self)
+    auto a = DataArray::CreateIndependent("x",
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0}));
+
+    // Create a dependent array with 2 independents
+    auto indep1 = DataArray::CreateIndependent("p",
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0}));
+    auto indep2 = DataArray::CreateIndependent("q",
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0}));
+    auto b = DataArray::CreateDependent("y",
+        DataSeries::CreateScalarFromVector<double>({10.0, 20.0, 30.0, 40.0}),
+        {indep1, indep2});
+
+    EXPECT_THROW(*a + *b, std::invalid_argument);
+}
+
+TEST(DataArrayArithTest, SubtractArrays)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({10.0, 20.0}));
+    auto b = DataArray::CreateIndependent("b",
+        DataSeries::CreateScalarFromVector<double>({3.0, 7.0}));
+
+    auto r = *a - *b;
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(0), 7.0);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(1), 13.0);
+}
+
+TEST(DataArrayArithTest, MultiplyArrays)
+{
+    auto ds_a = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    ds_a.set_unit(xdataset::parse_unit("m"));
+    auto a = DataArray::CreateIndependent("a", std::move(ds_a));
+
+    auto ds_b = DataSeries::CreateScalarFromVector<double>({4.0, 5.0});
+    ds_b.set_unit(xdataset::parse_unit("m"));
+    auto b = DataArray::CreateIndependent("b", std::move(ds_b));
+
+    auto r = *a * *b;
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(0), 8.0);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(1), 15.0);
+    EXPECT_TRUE(xdataset::same_dimension(r->data().unit(),
+        xdataset::canonicalize(xdataset::parse_unit("m^2"))));
+}
+
+TEST(DataArrayArithTest, DivideArrays)
+{
+    auto ds_a = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+    ds_a.set_unit(xdataset::parse_unit("m"));
+    auto a = DataArray::CreateIndependent("a", std::move(ds_a));
+
+    auto ds_b = DataSeries::CreateScalarFromVector<double>({2.0, 4.0});
+    ds_b.set_unit(xdataset::parse_unit("s"));
+    auto b = DataArray::CreateIndependent("b", std::move(ds_b));
+
+    auto r = *a / *b;
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(0), 5.0);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(1), 5.0);
+    EXPECT_TRUE(xdataset::same_dimension(r->data().unit(),
+        xdataset::canonicalize(xdataset::parse_unit("m/s"))));
+}
+
+// =========================================================================
+//  DataArray + Measurement
+// =========================================================================
+
+TEST(DataArrayMeasArithTest, AddMeasurement)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0}));
+    Measurement m(10.0);
+
+    auto r = *a + m;
+    EXPECT_EQ(r->data().size(), 3u);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(0), 11.0);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(2), 13.0);
+    EXPECT_EQ(r->kind(), a->kind());
+}
+
+TEST(DataArrayMeasArithTest, SubtractMeasurement)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({10.0, 20.0}));
+    Measurement m(3.0);
+
+    auto r = *a - m;
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(0), 7.0);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(1), 17.0);
+}
+
+TEST(DataArrayMeasArithTest, MultiplyMeasurement)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({2.0, 3.0, 4.0}));
+    Measurement m(10.0);
+
+    auto r = *a * m;
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(0), 20.0);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(1), 30.0);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(2), 40.0);
+}
+
+TEST(DataArrayMeasArithTest, DivideMeasurement)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({10.0, 20.0, 30.0}));
+    Measurement m(2.0);
+
+    auto r = *a / m;
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(0), 5.0);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(2), 15.0);
+}
+
+TEST(DataArrayMeasArithTest, AddMeasurementWithUnitMismatchThrows)
+{
+    auto ds_a = DataSeries::CreateScalarFromVector<double>({1.0});
+    ds_a.set_unit(xdataset::parse_unit("m"));
+    auto a = DataArray::CreateIndependent("a", std::move(ds_a));
+    Measurement m(1.0, xdataset::parse_unit("s"));
+
+    EXPECT_THROW(*a + m, std::invalid_argument);
+}
+
+// =========================================================================
+//  pow(DataArray, Measurement)
+// =========================================================================
+
+TEST(DataArrayPowMeasTest, PowWithIntegerExponent)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({2.0, 3.0, 4.0}));
+    Measurement exp(2);
+
+    auto r = xdataset::pow(*a, exp);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(0), 4.0);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(1), 9.0);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(2), 16.0);
+    EXPECT_EQ(r->multi_dimension_spec().rank(), a->multi_dimension_spec().rank());
+}
+
+TEST(DataArrayPowMeasTest, PowWithUnitDerivesUnit)
+{
+    auto ds_a = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    ds_a.set_unit(xdataset::parse_unit("m"));
+    auto a = DataArray::CreateIndependent("a", std::move(ds_a));
+    Measurement exp(2);
+
+    auto r = xdataset::pow(*a, exp);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(0), 4.0);
+    EXPECT_DOUBLE_EQ(r->data().scalar_at<double>(1), 9.0);
+    EXPECT_TRUE(xdataset::same_dimension(r->data().unit(),
+        xdataset::canonicalize(xdataset::parse_unit("m^2"))));
+}
+
+TEST(DataArrayPowMeasTest, PowExponentMustBeDimless)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({2.0}));
+    Measurement exp(2, xdataset::parse_unit("m"));
+    EXPECT_THROW(xdataset::pow(*a, exp), std::invalid_argument);
+}
+
+// =========================================================================
+//  DataArray with Vector DataSeries (DataKind broadcast)
+// =========================================================================
+
+TEST(DataArrayArithTest, ScalarArrayPlusVectorArrayYieldsVector)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({10.0, 20.0}));
+    auto b = DataArray::CreateIndependent("b",
+        DataSeries::CreateVectorFromVector<double>(3,
+            std::vector<double>{1.0, 2.0, 3.0, 4.0, 5.0, 6.0}));
+
+    auto r = *a + *b;
+    EXPECT_EQ(r->data().data_kind(), DataKind::kVector);
+    EXPECT_EQ(r->data().size(), 2u);
+    auto row0 = r->data().vector_at<double>(0);
+    auto row1 = r->data().vector_at<double>(1);
+    EXPECT_DOUBLE_EQ(row0(0), 11.0); EXPECT_DOUBLE_EQ(row0(2), 13.0);
+    EXPECT_DOUBLE_EQ(row1(0), 24.0); EXPECT_DOUBLE_EQ(row1(2), 26.0);
+}
+
+// =========================================================================
+//  DataArray result name
+// =========================================================================
+
+TEST(DataArrayArithTest, ResultHasAutoName)
+{
+    auto a = DataArray::CreateIndependent("temperature",
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0}));
+    auto b = DataArray::CreateIndependent("offset",
+        DataSeries::CreateScalarFromVector<double>({10.0, 20.0}));
+
+    auto r = *a + *b;
+    EXPECT_NE(r->name().find("temperature"), std::string::npos);
+    EXPECT_NE(r->name().find("+"), std::string::npos);
+    EXPECT_NE(r->name().find("offset"), std::string::npos);
 }
