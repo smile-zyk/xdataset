@@ -49,18 +49,18 @@ namespace xdataset
 
         const DependentSpec& dependent_spec(const std::string& name) const;
 
-        std::shared_ptr<DataArray> GetOrCreateDataArray(const std::string& name);
+        const DataArray& GetOrCreateDataArray(const std::string& name);
         const DataFrame& GetOrCreateDataFrame() const;
 
     private:
-        std::shared_ptr<DataArray> CreateDataArray(const IndependentSpec& info) const;
+        DataArray CreateDataArray(const IndependentSpec& info) const;
 
         void ensure_unique_name(const std::string& name) const;
 
         std::string                                           name_;
         tsl::ordered_map<std::string, IndependentSpec> independent_spec_map_;
         tsl::ordered_map<std::string, DependentSpec>   dependent_spec_map_;
-        tsl::ordered_map<std::string, std::shared_ptr<DataArray>> data_array_cache_;
+        tsl::ordered_map<std::string, std::unique_ptr<DataArray>> data_array_cache_;
         mutable std::unique_ptr<DataFrame>                    data_frame_cache_;
     };
 }

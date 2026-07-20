@@ -189,6 +189,9 @@ namespace xdataset
         /// Return a canonicalised copy (value scaled to SI, unit = base_units).
         Measurement canonicalized() const;
 
+        /// True when the stored unit is already canonical (multiplier == 1, non-affine).
+        bool is_canonicalized() const;
+
     private:
         void infer_metadata();
 

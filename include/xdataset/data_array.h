@@ -31,8 +31,19 @@ namespace xdataset
     class DataArray
     {
     public:
+        /// Placeholder name for temporary / derived DataArrays.
+        static const char* kUnnamed;
+
         explicit DataArray(const DataArrayCreateInfo& info);
         explicit DataArray(DataArrayCreateInfo&& info);
+
+        // Copy: deep-copies data, resets the data_frame cache.
+        DataArray(const DataArray& other);
+        DataArray& operator=(const DataArray& other);
+
+        // Move: default (all members are movable).
+        DataArray(DataArray&&) = default;
+        DataArray& operator=(DataArray&&) = default;
 
         const DataSeries& data() const
         {
@@ -70,24 +81,24 @@ namespace xdataset
 
         const DataSeries& indep_data(const std::string& name) const;
 
-        std::shared_ptr<DataArray> indep(Index index = 1) const;
+        DataArray indep(Index index = 1) const;
 
-        std::shared_ptr<DataArray> indep(const std::string& name) const;
+        DataArray indep(const std::string& name) const;
 
-        std::shared_ptr<DataArray> at(const std::vector<MultiIndexSelector>& selectors) const;
+        DataArray at(const std::vector<MultiIndexSelector>& selectors) const;
 
-        std::shared_ptr<DataArray> select(const std::vector<MultiIndexSelector>& selectors) const;
+        DataArray select(const std::vector<MultiIndexSelector>& selectors) const;
 
         // Standalone independent variable (no prior independents).
-        static std::shared_ptr<DataArray> CreateIndependent(
+        static DataArray CreateIndependent(
             std::string name,
             DataSeries data);
 
         // Dependent variable from existing independent DataArray objects.
-        static std::shared_ptr<DataArray> CreateDependent(
+        static DataArray CreateDependent(
             std::string name,
             DataSeries data,
-            const std::vector<std::shared_ptr<DataArray>>& indep_variables);
+            const std::vector<const DataArray*>& indep_variables);
 
     private:
         std::string name_;
@@ -106,19 +117,19 @@ namespace xdataset
 namespace xdataset {
 
 // DataArray – DataArray
-std::shared_ptr<DataArray> operator+(const DataArray& lhs, const DataArray& rhs);
-std::shared_ptr<DataArray> operator-(const DataArray& lhs, const DataArray& rhs);
-std::shared_ptr<DataArray> operator*(const DataArray& lhs, const DataArray& rhs);
-std::shared_ptr<DataArray> operator/(const DataArray& lhs, const DataArray& rhs);
+DataArray operator+(const DataArray& lhs, const DataArray& rhs);
+DataArray operator-(const DataArray& lhs, const DataArray& rhs);
+DataArray operator*(const DataArray& lhs, const DataArray& rhs);
+DataArray operator/(const DataArray& lhs, const DataArray& rhs);
 
 // DataArray – Measurement (broadcast)
-std::shared_ptr<DataArray> operator+(const DataArray& lhs, const Measurement& rhs);
-std::shared_ptr<DataArray> operator-(const DataArray& lhs, const Measurement& rhs);
-std::shared_ptr<DataArray> operator*(const DataArray& lhs, const Measurement& rhs);
-std::shared_ptr<DataArray> operator/(const DataArray& lhs, const Measurement& rhs);
+DataArray operator+(const DataArray& lhs, const Measurement& rhs);
+DataArray operator-(const DataArray& lhs, const Measurement& rhs);
+DataArray operator*(const DataArray& lhs, const Measurement& rhs);
+DataArray operator/(const DataArray& lhs, const Measurement& rhs);
 
 /// pow(base, exponent): exponent must be a dimensionless, non-String scalar Measurement.
-std::shared_ptr<DataArray> pow(const DataArray& base, const Measurement& exp);
+DataArray pow(const DataArray& base, const Measurement& exp);
 
 } // namespace xdataset
 

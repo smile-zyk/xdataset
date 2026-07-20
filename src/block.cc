@@ -103,7 +103,7 @@ namespace xdataset
         return it->second;
     }
 
-    std::shared_ptr<DataArray> Block::CreateDataArray(const IndependentSpec& info) const
+    DataArray Block::CreateDataArray(const IndependentSpec& info) const
     {
         DataArrayCreateInfo vinfo;
         vinfo.name = info.name;
@@ -149,23 +149,23 @@ namespace xdataset
         // Self: raw.
         vinfo.indep_datas.emplace(info.name, info.data);
         vinfo.multi_dimension_spec = composed_multi_dim;
-        return std::make_shared<DataArray>(std::move(vinfo));
+        return DataArray(std::move(vinfo));
     }
 
-    std::shared_ptr<DataArray> Block::GetOrCreateDataArray(const std::string& name)
+    const DataArray& Block::GetOrCreateDataArray(const std::string& name)
     {
         auto cached_it = data_array_cache_.find(name);
         if (cached_it != data_array_cache_.end())
-            return cached_it->second;
+            return *cached_it->second;
 
         // Try independent first.
         auto it = independent_spec_map_.find(name);
         if (it != independent_spec_map_.end())
         {
-            auto var = CreateDataArray(it->second);
-            if (var)
-                data_array_cache_[name] = var;
-            return var;
+            std::unique_ptr<DataArray> var(new DataArray(CreateDataArray(it->second)));
+            auto& ref = *var;
+            data_array_cache_[name] = std::move(var);
+            return ref;
         }
 
         // Dependent.
@@ -186,9 +186,10 @@ namespace xdataset
             }
             vinfo.multi_dimension_spec = multi_dim;
 
-            auto var = std::make_shared<DataArray>(std::move(vinfo));
-            data_array_cache_[name] = var;
-            return var;
+            std::unique_ptr<DataArray> var(new DataArray(std::move(vinfo)));
+            auto& ref = *var;
+            data_array_cache_[name] = std::move(var);
+            return ref;
         }
 
         throw std::invalid_argument("DataArray not found: " + name);

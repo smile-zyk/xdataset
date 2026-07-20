@@ -105,6 +105,10 @@ DataSeries DataSeries::canonicalized() const {
     return result;
 }
 
+bool DataSeries::is_canonicalized() const {
+    return is_canonical(unit_);
+}
+
 // =========================================================================
 // DataSeries — slicing
 // =========================================================================

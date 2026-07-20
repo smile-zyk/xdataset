@@ -347,6 +347,9 @@ public:
     // Return a canonicalised copy without modifying *this.
     DataSeries canonicalized() const;
 
+    /// True when the stored unit is already canonical (multiplier == 1, non-affine).
+    bool is_canonicalized() const;
+
     //---------------------------------------------------------------------
 
     Index element_count() const {

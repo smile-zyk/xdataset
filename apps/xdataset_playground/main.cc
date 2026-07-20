@@ -237,20 +237,20 @@ int main()
             Block block(info);
 
             auto w = block.GetOrCreateDataArray("w");           // dependent
-            std::cout << "w.kind() = " << (w->kind() == DataArrayKind::kDependent ? "dependent" : "independent") << std::endl;
+            std::cout << "w.kind() = " << (w.kind() == DataArrayKind::kDependent ? "dependent" : "independent") << std::endl;
 
-            auto z_var = w->indep(1);                         // dependent w -> indep(1) = z
-            std::cout << "w.indep(1).name() = " << z_var->name() << ", rank = " << z_var->multi_dimension_spec().rank() << std::endl;
+            auto z_var = w.indep(1);                         // dependent w -> indep(1) = z
+            std::cout << "w.indep(1).name() = " << z_var.name() << ", rank = " << z_var.multi_dimension_spec().rank() << std::endl;
 
-            auto y_var = z_var->indep(2);                     // z -> indep(2) = y
-            std::cout << "z.indep(2).name() = " << y_var->name() << ", rank = " << y_var->multi_dimension_spec().rank() << std::endl;
+            auto y_var = z_var.indep(2);                     // z -> indep(2) = y
+            std::cout << "z.indep(2).name() = " << y_var.name() << ", rank = " << y_var.multi_dimension_spec().rank() << std::endl;
 
-            auto by_name = w->indep("y");                     // by name
-            std::cout << "w.indep(\"y\").name() = " << by_name->name() << std::endl;
+            auto by_name = w.indep("y");                     // by name
+            std::cout << "w.indep(\"y\").name() = " << by_name.name() << std::endl;
 
             // grid model from indep(1)
             std::cout << "\nGrid from w.indep(1):" << std::endl;
-            const DataFrame& zt = z_var->GetOrCreateDataFrame();
+            const DataFrame& zt = z_var.GetOrCreateDataFrame();
             std::cout << "  headers: ";
             for (const auto& h : zt.headers()) std::cout << h << " ";
             std::cout << "\n  rows: " << zt.row_count() << std::endl;
@@ -274,13 +274,13 @@ int main()
             auto w = block.GetOrCreateDataArray("w");
 
             // select where x=1, y=any, z=any -> collapses first dim
-            auto sel = w->select({MultiIndexSelector::Equal(1),
+            auto sel = w.select({MultiIndexSelector::Equal(1),
                                   MultiIndexSelector::Any(),
                                   MultiIndexSelector::Any()});
             std::cout << "w.select(Equal(1), Any, Any) -> rank "
-                      << sel->multi_dimension_spec().rank() << ", "
-                      << sel->data().size() << " rows" << std::endl;
-            const DataFrame& st = sel->GetOrCreateDataFrame();
+                      << sel.multi_dimension_spec().rank() << ", "
+                      << sel.data().size() << " rows" << std::endl;
+            const DataFrame& st = sel.GetOrCreateDataFrame();
             for (std::size_t i = 0; i < st.row_count(); ++i)
                 print_row(st.GetRow(static_cast<Index>(i)));
         }

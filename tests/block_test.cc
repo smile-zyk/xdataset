@@ -34,7 +34,7 @@ namespace xdataset
         EXPECT_TRUE(x_info.dimension.is_regular());
         EXPECT_EQ(x_info.dimension.regular_size(), 2u);
 
-        // z is dependent ¡ª independent_spec("z") should throw
+        // z is dependent ï¿½ï¿½ independent_spec("z") should throw
         EXPECT_THROW({ block.independent_spec("z"); }, std::invalid_argument);
     }
 
@@ -107,89 +107,72 @@ namespace xdataset
     {
         Block block(MakeBaseCreateInfo());
 
-        const std::shared_ptr<DataArray> first = block.GetOrCreateDataArray("z");
-        const std::shared_ptr<DataArray> second = block.GetOrCreateDataArray("z");
-
-        ASSERT_NE(first, nullptr);
-        ASSERT_NE(second, nullptr);
-        EXPECT_EQ(first.get(), second.get());
+        const DataArray& first = block.GetOrCreateDataArray("z");
+        const DataArray& second = block.GetOrCreateDataArray("z");  EXPECT_EQ(&first, &second);
     }
 
     TEST(BlockVariableCacheTest, BuildsIndependentVariableWithPrefixDims)
     {
         Block block(MakeBaseCreateInfo());
 
-        const std::shared_ptr<DataArray> x_data = block.GetOrCreateDataArray("x");
-        ASSERT_NE(x_data, nullptr);
-        EXPECT_EQ(x_data->kind(), DataArrayKind::kIndependent);
-        ASSERT_EQ(x_data->multi_dimension_spec().rank(), 1u);
-        ASSERT_EQ(x_data->multi_dimension_spec().dims().size(), 1u);
-        EXPECT_EQ(x_data->multi_dimension_spec().dims()[0].regular_size(), 2);
-        EXPECT_EQ(x_data->data().size(), 2u);
+        const DataArray& x_data = block.GetOrCreateDataArray("x"); EXPECT_EQ(x_data.kind(), DataArrayKind::kIndependent);
+        ASSERT_EQ(x_data.multi_dimension_spec().rank(), 1u);
+        ASSERT_EQ(x_data.multi_dimension_spec().dims().size(), 1u);
+        EXPECT_EQ(x_data.multi_dimension_spec().dims()[0].regular_size(), 2);
+        EXPECT_EQ(x_data.data().size(), 2u);
 
-        const std::shared_ptr<DataArray> y_data = block.GetOrCreateDataArray("y");
-        ASSERT_NE(y_data, nullptr);
-        EXPECT_EQ(y_data->kind(), DataArrayKind::kIndependent);
-        ASSERT_EQ(y_data->multi_dimension_spec().rank(), 2u);
-        ASSERT_EQ(y_data->multi_dimension_spec().dims().size(), 2u);
-        EXPECT_EQ(y_data->multi_dimension_spec().dims()[0].regular_size(), 2);
-        EXPECT_EQ(y_data->multi_dimension_spec().dims()[1].regular_size(), 3);
-        EXPECT_EQ(y_data->data().size(), 6u);   // expanded: 2*3
+        const DataArray& y_data = block.GetOrCreateDataArray("y"); EXPECT_EQ(y_data.kind(), DataArrayKind::kIndependent);
+        ASSERT_EQ(y_data.multi_dimension_spec().rank(), 2u);
+        ASSERT_EQ(y_data.multi_dimension_spec().dims().size(), 2u);
+        EXPECT_EQ(y_data.multi_dimension_spec().dims()[0].regular_size(), 2);
+        EXPECT_EQ(y_data.multi_dimension_spec().dims()[1].regular_size(), 3);
+        EXPECT_EQ(y_data.data().size(), 6u);   // expanded: 2*3
     }
 
     TEST(BlockVariableCacheTest, BuildsDependentVariableFromDescriptor)
     {
         Block block(MakeBaseCreateInfo());
 
-        const std::shared_ptr<DataArray> z_data = block.GetOrCreateDataArray("z");
-        ASSERT_NE(z_data, nullptr);
-
-        EXPECT_EQ(z_data->kind(), DataArrayKind::kDependent);
-        ASSERT_EQ(z_data->multi_dimension_spec().rank(), 2u);
-        ASSERT_EQ(z_data->multi_dimension_spec().dims().size(), 2u);
-        EXPECT_EQ(z_data->multi_dimension_spec().dims()[0].regular_size(), 2);
-        EXPECT_EQ(z_data->multi_dimension_spec().dims()[1].regular_size(), 3);
-        EXPECT_EQ(z_data->data().size(), 6u);
+        const DataArray& z_data = block.GetOrCreateDataArray("z"); EXPECT_EQ(z_data.kind(), DataArrayKind::kDependent);
+        ASSERT_EQ(z_data.multi_dimension_spec().rank(), 2u);
+        ASSERT_EQ(z_data.multi_dimension_spec().dims().size(), 2u);
+        EXPECT_EQ(z_data.multi_dimension_spec().dims()[0].regular_size(), 2);
+        EXPECT_EQ(z_data.multi_dimension_spec().dims()[1].regular_size(), 3);
+        EXPECT_EQ(z_data.data().size(), 6u);
     }
 
     TEST(BlockVariableCacheTest, BuildsJaggedVariableWithPrefixDims)
     {
         Block block(MakeRaggedCreateInfo());
 
-        const std::shared_ptr<DataArray> y_data = block.GetOrCreateDataArray("y");
-        ASSERT_NE(y_data, nullptr);
-
-        EXPECT_EQ(y_data->kind(), DataArrayKind::kIndependent);
-        ASSERT_EQ(y_data->multi_dimension_spec().rank(), 2u);
-        ASSERT_EQ(y_data->multi_dimension_spec().dims().size(), 2u);
-        EXPECT_TRUE(y_data->multi_dimension_spec().dims()[0].is_regular());
-        EXPECT_TRUE(y_data->multi_dimension_spec().dims()[1].is_ragged());
-        EXPECT_EQ(y_data->multi_dimension_spec().dims()[0].regular_size(), 2);
-        ASSERT_EQ(y_data->multi_dimension_spec().dims()[1].ragged_sizes().size(), 2u);
-        EXPECT_EQ(y_data->multi_dimension_spec().dims()[1].ragged_sizes()[0], 1);
-        EXPECT_EQ(y_data->multi_dimension_spec().dims()[1].ragged_sizes()[1], 2);
-        EXPECT_EQ(y_data->data().size(), 3u);
+        const DataArray& y_data = block.GetOrCreateDataArray("y"); EXPECT_EQ(y_data.kind(), DataArrayKind::kIndependent);
+        ASSERT_EQ(y_data.multi_dimension_spec().rank(), 2u);
+        ASSERT_EQ(y_data.multi_dimension_spec().dims().size(), 2u);
+        EXPECT_TRUE(y_data.multi_dimension_spec().dims()[0].is_regular());
+        EXPECT_TRUE(y_data.multi_dimension_spec().dims()[1].is_ragged());
+        EXPECT_EQ(y_data.multi_dimension_spec().dims()[0].regular_size(), 2);
+        ASSERT_EQ(y_data.multi_dimension_spec().dims()[1].ragged_sizes().size(), 2u);
+        EXPECT_EQ(y_data.multi_dimension_spec().dims()[1].ragged_sizes()[0], 1);
+        EXPECT_EQ(y_data.multi_dimension_spec().dims()[1].ragged_sizes()[1], 2);
+        EXPECT_EQ(y_data.data().size(), 3u);
     }
 
     TEST(BlockVariableCacheTest, BuildsInterleavedJaggedVariableWithPrefixDims)
     {
         Block block(MakeInterleavedCreateInfo());
 
-        const std::shared_ptr<DataArray> z_data = block.GetOrCreateDataArray("z");
-        ASSERT_NE(z_data, nullptr);
-
-        EXPECT_EQ(z_data->kind(), DataArrayKind::kIndependent);
-        ASSERT_EQ(z_data->multi_dimension_spec().rank(), 3u);
-        ASSERT_EQ(z_data->multi_dimension_spec().dims().size(), 3u);
-        EXPECT_TRUE(z_data->multi_dimension_spec().dims()[0].is_regular());
-        EXPECT_TRUE(z_data->multi_dimension_spec().dims()[1].is_ragged());
-        EXPECT_TRUE(z_data->multi_dimension_spec().dims()[2].is_regular());
-        EXPECT_EQ(z_data->multi_dimension_spec().dims()[0].regular_size(), 2);
-        ASSERT_EQ(z_data->multi_dimension_spec().dims()[1].ragged_sizes().size(), 2u);
-        EXPECT_EQ(z_data->multi_dimension_spec().dims()[1].ragged_sizes()[0], 1);
-        EXPECT_EQ(z_data->multi_dimension_spec().dims()[1].ragged_sizes()[1], 2);
-        EXPECT_EQ(z_data->multi_dimension_spec().dims()[2].regular_size(), 2);
-        EXPECT_EQ(z_data->data().size(), 6u);   // expanded: 2*3 [Ragged 1+2=3 rows * 2]
+        const DataArray& z_data = block.GetOrCreateDataArray("z"); EXPECT_EQ(z_data.kind(), DataArrayKind::kIndependent);
+        ASSERT_EQ(z_data.multi_dimension_spec().rank(), 3u);
+        ASSERT_EQ(z_data.multi_dimension_spec().dims().size(), 3u);
+        EXPECT_TRUE(z_data.multi_dimension_spec().dims()[0].is_regular());
+        EXPECT_TRUE(z_data.multi_dimension_spec().dims()[1].is_ragged());
+        EXPECT_TRUE(z_data.multi_dimension_spec().dims()[2].is_regular());
+        EXPECT_EQ(z_data.multi_dimension_spec().dims()[0].regular_size(), 2);
+        ASSERT_EQ(z_data.multi_dimension_spec().dims()[1].ragged_sizes().size(), 2u);
+        EXPECT_EQ(z_data.multi_dimension_spec().dims()[1].ragged_sizes()[0], 1);
+        EXPECT_EQ(z_data.multi_dimension_spec().dims()[1].ragged_sizes()[1], 2);
+        EXPECT_EQ(z_data.multi_dimension_spec().dims()[2].regular_size(), 2);
+        EXPECT_EQ(z_data.data().size(), 6u);   // expanded: 2*3 [Ragged 1+2=3 rows * 2]
     }
 
     TEST(BlockDataFrameTest, AggregatesAllVariablesIntoOneTable)
@@ -412,15 +395,15 @@ namespace xdataset
     TEST(BlockVariableCacheTest, MultiDependentVariablesAreBuiltCorrectly)
     {
         Block block(MakeThreeDimMultiDepCreateInfo());
-        const std::shared_ptr<DataArray> a = block.GetOrCreateDataArray("a");
-        const std::shared_ptr<DataArray> p = block.GetOrCreateDataArray("p");
-        const std::shared_ptr<DataArray> q = block.GetOrCreateDataArray("q");
+        const DataArray& a = block.GetOrCreateDataArray("a");
+        const DataArray& p = block.GetOrCreateDataArray("p");
+        const DataArray& q = block.GetOrCreateDataArray("q");
 
-        EXPECT_EQ(a->kind(), DataArrayKind::kIndependent);
-        EXPECT_EQ(a->multi_dimension_spec().rank(), 1u);
-        EXPECT_EQ(p->kind(), DataArrayKind::kDependent);
-        EXPECT_EQ(p->multi_dimension_spec().rank(), 3u);
-        EXPECT_EQ(q->kind(), DataArrayKind::kDependent);
-        EXPECT_EQ(q->multi_dimension_spec().rank(), 3u);
+        EXPECT_EQ(a.kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(a.multi_dimension_spec().rank(), 1u);
+        EXPECT_EQ(p.kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(p.multi_dimension_spec().rank(), 3u);
+        EXPECT_EQ(q.kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(q.multi_dimension_spec().rank(), 3u);
     }
 } // namespace xdataset

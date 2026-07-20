@@ -12,6 +12,8 @@
 namespace xdataset
 {
 
+    const char* DataArray::kUnnamed = "";
+
     DataArray::DataArray(const DataArrayCreateInfo& info)
         : name_(info.name),
           data_(info.data),
@@ -19,6 +21,10 @@ namespace xdataset
           multi_dimension_spec_(info.multi_dimension_spec),
           kind_(info.kind)
     {
+        data_.canonicalize();
+        for (auto it = indep_datas_.begin(); it != indep_datas_.end(); ++it)
+            it.value().canonicalize();
+
         if (!multi_dimension_spec_.empty())
         {
             const std::size_t expected = multi_dimension_spec_.compute_cell_count();
@@ -38,6 +44,10 @@ namespace xdataset
           multi_dimension_spec_(std::move(info.multi_dimension_spec)),
           kind_(info.kind)
     {
+        data_.canonicalize();
+        for (auto it = indep_datas_.begin(); it != indep_datas_.end(); ++it)
+            it.value().canonicalize();
+
         if (!multi_dimension_spec_.empty())
         {
             const std::size_t expected = multi_dimension_spec_.compute_cell_count();
@@ -48,6 +58,30 @@ namespace xdataset
                     " does not match multi_dimension_spec cell count " + std::to_string(expected));
             }
         }
+    }
+
+    DataArray::DataArray(const DataArray& other)
+        : name_(other.name_),
+          data_(other.data_),
+          indep_datas_(other.indep_datas_),
+          multi_dimension_spec_(other.multi_dimension_spec_),
+          kind_(other.kind_)
+    {
+        // data_frame_cache_ intentionally left as nullptr.
+    }
+
+    DataArray& DataArray::operator=(const DataArray& other)
+    {
+        if (this != &other)
+        {
+            name_ = other.name_;
+            data_ = other.data_;
+            indep_datas_ = other.indep_datas_;
+            multi_dimension_spec_ = other.multi_dimension_spec_;
+            kind_ = other.kind_;
+            data_frame_cache_.reset();
+        }
+        return *this;
     }
 
     void DataArray::set_name(const std::string& name)
@@ -107,7 +141,7 @@ namespace xdataset
         return it->second;
     }
 
-    std::shared_ptr<DataArray> DataArray::indep(Index index) const
+    DataArray DataArray::indep(Index index) const
     {
         if (index <= 0)
             throw std::invalid_argument("indep index must be 1-based and greater than 0");
@@ -174,10 +208,10 @@ namespace xdataset
         info.indep_datas[info.name] = info.data;
 
         info.multi_dimension_spec = result_spec;
-        return std::make_shared<DataArray>(std::move(info));
+        return DataArray(std::move(info));
     }
 
-    std::shared_ptr<DataArray> DataArray::indep(const std::string& name) const
+    DataArray DataArray::indep(const std::string& name) const
     {
         if (name.empty())
         {
@@ -204,7 +238,7 @@ namespace xdataset
         throw std::invalid_argument("indep name not found: " + name);
     }
 
-    std::shared_ptr<DataArray> DataArray::at(const std::vector<MultiIndexSelector>& selectors) const
+    DataArray DataArray::at(const std::vector<MultiIndexSelector>& selectors) const
     {
         if (data().data_kind() == DataKind::kScalar)
         {
@@ -212,7 +246,7 @@ namespace xdataset
         }
 
         DataArrayCreateInfo info;
-        info.name = name_;
+        info.name = DataArray::kUnnamed;
         info.kind = kind_;
         info.indep_datas = indep_datas_;
         info.multi_dimension_spec = multi_dimension_spec_;
@@ -227,7 +261,7 @@ namespace xdataset
             const std::vector<Index> selected = selectors[0].resolve(data().data_shape()[0]);
             info.data = data().at(selected, selectors[0].is_equal());
 
-            return std::make_shared<DataArray>(std::move(info));
+            return DataArray(std::move(info));
         }
 
         if (selectors.size() != 2)
@@ -243,10 +277,10 @@ namespace xdataset
             selectors[0].is_equal(),
             selectors[1].is_equal());
 
-        return std::make_shared<DataArray>(std::move(info));
+        return DataArray(std::move(info));
     }
 
-    std::shared_ptr<DataArray> DataArray::select(
+    DataArray DataArray::select(
         const std::vector<MultiIndexSelector>& selectors) const
     {
         const std::size_t rank = multi_dimension_spec_.rank();
@@ -391,7 +425,7 @@ namespace xdataset
         }
 
         DataArrayCreateInfo info;
-        info.name = name_;
+        info.name = DataArray::kUnnamed;
         info.kind = kind_;
         info.multi_dimension_spec = selected_multi_dim;
         DataSeries selected_data = DataSeries(data().data_kind(), data().dtype(), data().data_shape());
@@ -423,12 +457,12 @@ namespace xdataset
             info.indep_datas[info.name] = info.data;
         }
 
-        return std::make_shared<DataArray>(std::move(info));
+        return DataArray(std::move(info));
     }
 
-    // ���� Static factory methods ��������������������������������������������������������������������������������������������������
+    // Static factory methods
 
-    std::shared_ptr<DataArray> DataArray::CreateIndependent(
+    DataArray DataArray::CreateIndependent(
         std::string name,
         DataSeries data)
     {
@@ -439,13 +473,13 @@ namespace xdataset
         vinfo.data = std::move(data);            // expanded = self for single-dim
         vinfo.multi_dimension_spec = MultiDimensionSpec({DimensionSpec::Regular(size)});
         vinfo.kind = DataArrayKind::kIndependent;
-        return std::make_shared<DataArray>(std::move(vinfo));
+        return DataArray(std::move(vinfo));
     }
 
-    std::shared_ptr<DataArray> DataArray::CreateDependent(
+    DataArray DataArray::CreateDependent(
         std::string name,
         DataSeries data,
-        const std::vector<std::shared_ptr<DataArray>>& indep_variables)
+        const std::vector<const DataArray*>& indep_variables)
     {
         if (indep_variables.empty())
         {
@@ -456,7 +490,7 @@ namespace xdataset
         tsl::ordered_map<std::string, DataSeries> indep_datas;
         MultiDimensionSpec spec;
 
-        for (const auto& var : indep_variables)
+        for (const auto* var : indep_variables)
         {
             if (!var)
             {
@@ -488,6 +522,6 @@ namespace xdataset
         vinfo.indep_datas = std::move(indep_datas);
         vinfo.multi_dimension_spec = std::move(spec);
         vinfo.kind = DataArrayKind::kDependent;
-        return std::make_shared<DataArray>(std::move(vinfo));
+        return DataArray(std::move(vinfo));
     }
 } // namespace xdataset

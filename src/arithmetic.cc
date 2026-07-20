@@ -1,21 +1,21 @@
 // =============================================================================
-//  xdataset — arithmetic operators
+//  xdataset -- arithmetic operators
 // =============================================================================
 //
 //  All binary arithmetic for the type system lives in this single translation
 //  unit, organised in four sections:
 //
-//    §1  Type promotion helpers  — promoted_dtype / promoted_kind
-//    §2  Measurement ↔ Measurement  — + - * / pow
-//    §3  DataSeries ↔ DataSeries   — + - * / (delegates to §2)
-//    §4  DataSeries ↔ Measurement  — + - * / pow (delegates to §2)
-//    §5  DataArray ↔ DataArray     — + - * / (delegates to §3)
-//    §6  DataArray ↔ Measurement   — + - * / (delegates to §4)
-//    §7  pow(DataArray, Measurement)
+//    Sec.1  Type promotion helpers  -- promoted_dtype / promoted_kind
+//    Sec.2  Measurement  vs  Measurement  -- + - * / pow
+//    Sec.3  DataSeries  vs  DataSeries   -- + - * / (delegates to Sec.2)
+//    Sec.4  DataSeries  vs  Measurement  -- + - * / pow (delegates to Sec.2)
+//    Sec.5  DataArray  vs  DataArray     -- + - * / (delegates to Sec.3)
+//    Sec.6  DataArray  vs  Measurement   -- + - * / (delegates to Sec.4)
+//    Sec.7  pow(DataArray, Measurement)
 //
-//  Design principle: the Measurement operators (§2) are the sole "leaf"
+//  Design principle: the Measurement operators (Sec.2) are the sole "leaf"
 //  implementation that touches element-level storage.  DataSeries operators
-//  (§3, §4) are thin wrappers: they canonicalise, validate, then delegate
+//  (Sec.3, Sec.4) are thin wrappers: they canonicalise, validate, then delegate
 //  per-row work to the Measurement layer.
 // =============================================================================
 
@@ -31,10 +31,10 @@
 namespace xdataset {
 
 // =============================================================================
-//  §1  Type promotion helpers
+//  Sec.1  Type promotion helpers
 // =============================================================================
 
-// --- dtype promotion: Integer ⊂ Real ⊂ Complex -------------------------------
+// --- dtype promotion: Integer  <  Real  <  Complex -------------------------------
 
 DTypeTag promoted_dtype(DTypeTag a, DTypeTag b) {
     if (a == DTypeTag::kString || b == DTypeTag::kString)
@@ -51,9 +51,9 @@ DTypeTag promoted_dtype(DTypeTag a, DTypeTag b) {
 //
 //         | Scalar  Vector  Matrix
 //    -----+-----------------------
-//    Scalar| Scalar  Vector  Matrix   ← broadcast
-//    Vector| Vector  Vector  ✗        ← Vector↔Matrix forbidden
-//    Matrix| Matrix  ✗       Matrix   ← same-shape required for Matrix↔Matrix
+//    Scalar| Scalar  Vector  Matrix   <- broadcast
+//    Vector| Vector  Vector  X        <- Vector vs Matrix forbidden
+//    Matrix| Matrix  X       Matrix   <- same-shape required for Matrix vs Matrix
 
 DataKind promoted_kind(DataKind a, DataKind b) {
     if (a == DataKind::kMatrix && b == DataKind::kVector) goto incompatible;
@@ -69,7 +69,7 @@ incompatible:
 }
 
 // =============================================================================
-//  §2  Measurement ↔ Measurement
+//  Sec.2  Measurement  vs  Measurement
 // =============================================================================
 //
 //  Each binary operator follows the same pattern:
@@ -77,7 +77,7 @@ incompatible:
 //    2. canonicalise both operands (original objects unchanged)
 //    3. (+ - only) verify same physical dimension
 //    4. derive result kind / dtype / shape / unit
-//    5. iterate over elements (with Scalar→Vector/Matrix broadcast)
+//    5. iterate over elements (with Scalar->Vector/Matrix broadcast)
 //    6. assemble result Measurement
 //
 //  The template meas_binop<trait> encapsulates steps 1-6 so the four concrete
@@ -89,7 +89,7 @@ namespace {
 //  Helpers: element-level access
 // =========================================================================
 
-/// Flat element count: Scalar=1, Vector=width, Matrix=rows×cols.
+/// Flat element count: Scalar=1, Vector=width, Matrix=rowsxcols.
 Index meas_element_count(const Measurement& m) {
     switch (m.kind()) {
         case DataKind::kScalar: return 1;
@@ -99,7 +99,7 @@ Index meas_element_count(const Measurement& m) {
     return 0;  // unreachable
 }
 
-/// Read element at flat index, promoting Integer → double.
+/// Read element at flat index, promoting Integer -> double.
 double meas_as_double(const Measurement& m, Index i) {
     switch (m.kind()) {
         case DataKind::kScalar:
@@ -121,7 +121,7 @@ double meas_as_double(const Measurement& m, Index i) {
     return 0;
 }
 
-/// Read element at flat index, promoting Integer/Real → complex.
+/// Read element at flat index, promoting Integer/Real -> complex.
 std::complex<double> meas_as_complex(const Measurement& m, Index i) {
     switch (m.kind()) {
         case DataKind::kScalar:
@@ -209,7 +209,7 @@ Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
     if (lhs.dtype() == DTypeTag::kString || rhs.dtype() == DTypeTag::kString)
         throw std::invalid_argument(
             std::string(tr.op_name) + ": string cannot participate in arithmetic");
-    promoted_kind(lhs.kind(), rhs.kind());  // throws on Vector×Matrix
+    promoted_kind(lhs.kind(), rhs.kind());  // throws on VectorxMatrix
 
     // --- Step 2: canonicalise ----------------------------------------------
     Measurement a = lhs.canonicalized();
@@ -330,15 +330,28 @@ inline int    op_mul_i(int a, int b)    { return a * b; }
 inline std::complex<double> op_mul_c(std::complex<double> a, std::complex<double> b) { return a * b; }
 
 inline double op_div_d(double a, double b) { return a / b; }
-inline int    op_div_i(int, int)       { return 0; }   // never actually used: int÷int→Real
+inline int    op_div_i(int, int)       { return 0; }   // never actually used: int/int->Real
 inline std::complex<double> op_div_c(std::complex<double> a, std::complex<double> b) { return a / b; }
 
 inline Unit unit_left(const Unit& a, const Unit&) { return a; }
 
+/// Resolve the result unit for addition/subtraction.
+/// - Same dimension    -> use a's unit
+/// - One dimensionless  -> use the other's unit
+/// - Both have different non-dimensionless units -> throw
+inline Unit resolve_add_sub_unit(const Unit& a, const Unit& b) {
+    if (same_dimension(a, b)) return a;
+    if (is_dimensionless(a))  return b;
+    if (is_dimensionless(b))  return a;
+    throw std::invalid_argument(
+        "operator +/-: unit dimension mismatch [" +
+        unit_string(a) + "] vs [" + unit_string(b) + "]");
+}
+
 const MeasOpTraits kMeasAdd = {
-    "operator+", true,  false, unit_left,     op_add_d, op_add_c, op_add_i};
+    "operator+", false, false, resolve_add_sub_unit, op_add_d, op_add_c, op_add_i};
 const MeasOpTraits kMeasSub = {
-    "operator-", true,  false, unit_left,     op_sub_d, op_sub_c, op_sub_i};
+    "operator-", false, false, resolve_add_sub_unit, op_sub_d, op_sub_c, op_sub_i};
 const MeasOpTraits kMeasMul = {
     "operator*", false, false, multiply_dim,  op_mul_d, op_mul_c, op_mul_i};
 const MeasOpTraits kMeasDiv = {
@@ -385,8 +398,8 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
     // --- canonicalise -----------------------------------------------------
     Measurement a = base.canonicalized();
 
-    // --- non-scalar exponent → base must be dimensionless ----------------
-    //     If exponent = [2, 3], we'd need both u² and u³ — a single Unit
+    // --- non-scalar exponent -> base must be dimensionless ----------------
+    //     If exponent = [2, 3], we'd need both u^2 and u^3 -- a single Unit
     //     cannot represent the mixed result, so we forbid it outright.
     if (exponent.kind() != DataKind::kScalar && !is_dimensionless(a.unit()))
         throw std::invalid_argument(
@@ -406,7 +419,7 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
     if (exponent.kind() == DataKind::kScalar && exponent.dtype() == DTypeTag::kInteger)
         result_unit = pow_dim(a.unit(), meas_as_int(exponent, 0));
     else
-        result_unit = Unit();  // dimensionless fallback
+        result_unit = a.unit();  // preserve base unit
 
     // --- complex path -----------------------------------------------------
     if (res_dtype == DTypeTag::kComplex) {
@@ -458,7 +471,7 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
 }
 
 // =============================================================================
-//  §3  DataSeries ↔ DataSeries
+//  Sec.3  DataSeries  vs  DataSeries
 // =============================================================================
 //
 //  Thin wrappers.  Each operator:
@@ -467,7 +480,7 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
 //    3. (+ - only) verifies same physical dimension.
 //    4. Derives result kind / dtype / shape / unit.
 //    5. Iterates rows, delegating each row's computation to
-//       the corresponding Measurement operator (§2).
+//       the corresponding Measurement operator (Sec.2).
 
 namespace {
 
@@ -481,12 +494,12 @@ void validate_ds_ds(const DataSeries& a, const DataSeries& b,
     if (a.dtype() == DTypeTag::kString || b.dtype() == DTypeTag::kString)
         throw std::invalid_argument(
             std::string(op_name) + ": string series cannot participate in arithmetic");
-    promoted_kind(a.data_kind(), b.data_kind());  // throws on Vector×Matrix
+    promoted_kind(a.data_kind(), b.data_kind());  // throws on VectorxMatrix
 }
 
-// --- result shape for DataSeries↔DataSeries ----------------------------------
+// --- result shape for DataSeries vs DataSeries ----------------------------------
 //     Returns the shape of the non-Scalar side; validates same-shape when
-//     both sides are non-Scalar (Vector↔Vector, Matrix↔Matrix).
+//     both sides are non-Scalar (Vector vs Vector, Matrix vs Matrix).
 std::vector<Index> ds_ds_result_shape(const DataSeries& a, const DataSeries& b) {
     if (a.data_kind() == DataKind::kScalar && b.data_kind() == DataKind::kScalar)
         return {};
@@ -495,16 +508,16 @@ std::vector<Index> ds_ds_result_shape(const DataSeries& a, const DataSeries& b) 
 
     if (a.data_shape() != b.data_shape())
         throw std::invalid_argument(
-            "operator: shape mismatch — lhs has " +
+            "operator: shape mismatch -- lhs has " +
             std::to_string(a.data_shape()[0]) +
-            (a.data_shape().size() > 1 ? "×" + std::to_string(a.data_shape()[1]) : "") +
+            (a.data_shape().size() > 1 ? "x" + std::to_string(a.data_shape()[1]) : "") +
             ", rhs has " + std::to_string(b.data_shape()[0]) +
-            (b.data_shape().size() > 1 ? "×" + std::to_string(b.data_shape()[1]) : ""));
+            (b.data_shape().size() > 1 ? "x" + std::to_string(b.data_shape()[1]) : ""));
     return a.data_shape();
 }
 
 // =========================================================================
-//  Generic row-wise application: DataSeries ↔ DataSeries
+//  Generic row-wise application: DataSeries  vs  DataSeries
 // =========================================================================
 //
 //  MeasOp: the Measurement-level operator (e.g. operator+ for Measurements)
@@ -545,15 +558,15 @@ DataSeries ds_ds_apply(const DataSeries& lhs, const DataSeries& rhs,
 DataSeries operator+(const DataSeries& lhs, const DataSeries& rhs) {
     return ds_ds_apply(lhs, rhs, "operator+",
         [](const Measurement& a, const Measurement& b) { return a + b; },
-        unit_left,
-        /*same_dim*/ true, /*int_div_real*/ false);
+        resolve_add_sub_unit,
+        /*same_dim*/ false, /*int_div_real*/ false);
 }
 
 DataSeries operator-(const DataSeries& lhs, const DataSeries& rhs) {
     return ds_ds_apply(lhs, rhs, "operator-",
         [](const Measurement& a, const Measurement& b) { return a - b; },
-        unit_left,
-        /*same_dim*/ true, /*int_div_real*/ false);
+        resolve_add_sub_unit,
+        /*same_dim*/ false, /*int_div_real*/ false);
 }
 
 DataSeries operator*(const DataSeries& lhs, const DataSeries& rhs) {
@@ -571,10 +584,10 @@ DataSeries operator/(const DataSeries& lhs, const DataSeries& rhs) {
 }
 
 // =============================================================================
-//  §4  DataSeries ↔ Measurement
+//  Sec.4  DataSeries  vs  Measurement
 // =============================================================================
 //
-//  Identical pattern to §3 except the right operand is a single Measurement
+//  Identical pattern to Sec.3 except the right operand is a single Measurement
 //  broadcast to every row.
 
 namespace {
@@ -588,14 +601,14 @@ void validate_ds_meas(const DataSeries& a, const Measurement& m,
     promoted_kind(a.data_kind(), m.kind());
 }
 
-// --- result shape for DataSeries↔Measurement ---------------------------------
+// --- result shape for DataSeries vs Measurement ---------------------------------
 std::vector<Index> ds_meas_result_shape(const DataSeries& ds, const Measurement& m) {
     if (ds.data_kind() == DataKind::kScalar) return m.shape();
     return ds.data_shape();
 }
 
 // =========================================================================
-//  Generic row-wise application: DataSeries ↔ Measurement
+//  Generic row-wise application: DataSeries  vs  Measurement
 // =========================================================================
 
 template <typename MeasOp, typename UnitOp>
@@ -632,15 +645,15 @@ DataSeries ds_meas_apply(const DataSeries& lhs, const Measurement& rhs,
 DataSeries operator+(const DataSeries& lhs, const Measurement& rhs) {
     return ds_meas_apply(lhs, rhs, "operator+",
         [](const Measurement& a, const Measurement& b) { return a + b; },
-        unit_left,
-        /*same_dim*/ true, /*int_div_real*/ false);
+        resolve_add_sub_unit,
+        /*same_dim*/ false, /*int_div_real*/ false);
 }
 
 DataSeries operator-(const DataSeries& lhs, const Measurement& rhs) {
     return ds_meas_apply(lhs, rhs, "operator-",
         [](const Measurement& a, const Measurement& b) { return a - b; },
-        unit_left,
-        /*same_dim*/ true, /*int_div_real*/ false);
+        resolve_add_sub_unit,
+        /*same_dim*/ false, /*int_div_real*/ false);
 }
 
 DataSeries operator*(const DataSeries& lhs, const Measurement& rhs) {
@@ -658,11 +671,11 @@ DataSeries operator/(const DataSeries& lhs, const Measurement& rhs) {
 }
 
 // =============================================================================
-//  §5  pow(DataSeries, Measurement)
+//  Sec.5  pow(DataSeries, Measurement)
 // =============================================================================
 //
 //  Exponent must be dimensionless, non-String, and (for now) Scalar.
-//  For each row we delegate to pow(Measurement, Measurement) from §2.
+//  For each row we delegate to pow(Measurement, Measurement) from Sec.2.
 
 DataSeries pow(const DataSeries& base, const Measurement& exp) {
     // --- validation ---------------------------------------------------------
@@ -699,19 +712,19 @@ DataSeries pow(const DataSeries& base, const Measurement& exp) {
 }
 
 // =============================================================================
-//  §5  DataArray ↔ DataArray
+//  Sec.5  DataArray  vs  DataArray
 // =============================================================================
 //
 //  Thin wrappers that:
 //    1. Validate MultiDimensionSpec compatibility (same rank, dims, sizes).
 //    2. Validate indep_datas have the same count of independents.
-//    3. Delegate to the corresponding DataSeries operator (§3).
+//    3. Delegate to the corresponding DataSeries operator (Sec.3).
 //    4. Assemble the result DataArray: name = placeholder, data = result DS,
 //       indep_datas / multi_dimension_spec / kind = inherited from lhs.
 //
 //  The template array_array_op encapsulates the boilerplate shared by all
 //  four operators (the only differences are the DataSeries-level op, the
-//  same-dimension-required flag, and the int-div→real flag).
+//  same-dimension-required flag, and the int-div->real flag).
 
 namespace {
 
@@ -749,8 +762,8 @@ void validate_spec_compatible(const MultiDimensionSpec& a, const MultiDimensionS
 }
 
 /// Verify two DataArrays have compatible independent-variable sets.
-/// Checks that the number of independents matches; the MultiDimensionSpec
-/// validation already ensures structural compatibility.
+/// For independent arrays the last indep name (the array's own name) is
+/// excluded since it naturally differs between two different arrays.
 void validate_indeps_compatible(const DataArray& a, const DataArray& b,
                                  const char* op_name) {
     auto na = a.indep_names();
@@ -759,22 +772,33 @@ void validate_indeps_compatible(const DataArray& a, const DataArray& b,
         throw std::invalid_argument(
             std::string(op_name) + ": independent variable count mismatch (" +
             std::to_string(na.size()) + " vs " + std::to_string(nb.size()) + ")");
+
+    std::size_t n = na.size();
+    if (a.kind() == DataArrayKind::kIndependent && b.kind() == DataArrayKind::kIndependent)
+        --n;  // skip the last name (the array's own name)
+
+    for (std::size_t i = 0; i < n; ++i) {
+        if (na[i] != nb[i])
+            throw std::invalid_argument(
+                std::string(op_name) + ": independent variable names differ at position " +
+                std::to_string(i) + " (" + na[i] + " vs " + nb[i] + ")");
+    }
 }
 
 /// Build the result name for a binary DataArray op.
-inline std::string result_name(const DataArray& lhs, const DataArray& rhs,
-                               const char* op_symbol) {
-    return lhs.name() + op_symbol + rhs.name();
+inline std::string result_name(const DataArray&, const DataArray&,
+                               const char*) {
+    return DataArray::kUnnamed;
 }
 
 // =========================================================================
-//  Generic DataArray ↔ DataArray operator
+//  Generic DataArray  vs  DataArray operator
 // =========================================================================
 
 template <typename DataSeriesOp>
-std::shared_ptr<DataArray> array_array_op(const DataArray& lhs, const DataArray& rhs,
-                                           const char* op_name, const char* op_symbol,
-                                           DataSeriesOp ds_op) {
+DataArray array_array_op(const DataArray& lhs, const DataArray& rhs,
+                          const char* op_name, const char* op_symbol,
+                          DataSeriesOp ds_op) {
     // --- validation --------------------------------------------------------
     validate_spec_compatible(lhs.multi_dimension_spec(), rhs.multi_dimension_spec(),
                               op_name);
@@ -790,93 +814,93 @@ std::shared_ptr<DataArray> array_array_op(const DataArray& lhs, const DataArray&
     info.indep_datas         = lhs.indep_datas();         // inherit from lhs
     info.multi_dimension_spec = lhs.multi_dimension_spec(); // inherit from lhs
     info.kind                = lhs.kind();                // inherit from lhs
-    return std::make_shared<DataArray>(std::move(info));
+    return DataArray(std::move(info));
 }
 
 }  // anonymous namespace
 
-std::shared_ptr<DataArray> operator+(const DataArray& lhs, const DataArray& rhs) {
+DataArray operator+(const DataArray& lhs, const DataArray& rhs) {
     return array_array_op(lhs, rhs, "operator+", "+",
         [](const DataSeries& a, const DataSeries& b) { return a + b; });
 }
 
-std::shared_ptr<DataArray> operator-(const DataArray& lhs, const DataArray& rhs) {
+DataArray operator-(const DataArray& lhs, const DataArray& rhs) {
     return array_array_op(lhs, rhs, "operator-", "-",
         [](const DataSeries& a, const DataSeries& b) { return a - b; });
 }
 
-std::shared_ptr<DataArray> operator*(const DataArray& lhs, const DataArray& rhs) {
-    return array_array_op(lhs, rhs, "operator*", "·",
+DataArray operator*(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator*", "*",
         [](const DataSeries& a, const DataSeries& b) { return a * b; });
 }
 
-std::shared_ptr<DataArray> operator/(const DataArray& lhs, const DataArray& rhs) {
+DataArray operator/(const DataArray& lhs, const DataArray& rhs) {
     return array_array_op(lhs, rhs, "operator/", "/",
         [](const DataSeries& a, const DataSeries& b) { return a / b; });
 }
 
 // =============================================================================
-//  §6  DataArray ↔ Measurement
+//  Sec.6  DataArray  vs  Measurement
 // =============================================================================
 //
-//  Identical pattern to §5 except the right operand is a single Measurement
+//  Identical pattern to Sec.5 except the right operand is a single Measurement
 //  broadcast to every row of the DataArray's DataSeries.
 
 namespace {
 
 template <typename DataSeriesMeasOp>
-std::shared_ptr<DataArray> array_meas_op(const DataArray& lhs, const Measurement& rhs,
-                                          const char* op_name, const char* op_symbol,
-                                          DataSeriesMeasOp ds_meas_op) {
+DataArray array_meas_op(const DataArray& lhs, const Measurement& rhs,
+                         const char* op_name, const char* op_symbol,
+                         DataSeriesMeasOp ds_meas_op) {
     // --- delegate to DataSeries --------------------------------------------
     DataSeries result_ds = ds_meas_op(lhs.data(), rhs);
 
     // --- assemble result DataArray -----------------------------------------
     DataArrayCreateInfo info;
-    info.name                 = lhs.name() + op_symbol + rhs.to_string();
+    info.name                 = DataArray::kUnnamed;
     info.data                 = std::move(result_ds);
     info.indep_datas          = lhs.indep_datas();
     info.multi_dimension_spec = lhs.multi_dimension_spec();
     info.kind                 = lhs.kind();
-    return std::make_shared<DataArray>(std::move(info));
+    return DataArray(std::move(info));
 }
 
 }  // anonymous namespace
 
-std::shared_ptr<DataArray> operator+(const DataArray& lhs, const Measurement& rhs) {
+DataArray operator+(const DataArray& lhs, const Measurement& rhs) {
     return array_meas_op(lhs, rhs, "operator+", "+",
         [](const DataSeries& a, const Measurement& b) { return a + b; });
 }
 
-std::shared_ptr<DataArray> operator-(const DataArray& lhs, const Measurement& rhs) {
+DataArray operator-(const DataArray& lhs, const Measurement& rhs) {
     return array_meas_op(lhs, rhs, "operator-", "-",
         [](const DataSeries& a, const Measurement& b) { return a - b; });
 }
 
-std::shared_ptr<DataArray> operator*(const DataArray& lhs, const Measurement& rhs) {
-    return array_meas_op(lhs, rhs, "operator*", "·",
+DataArray operator*(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator*", "*",
         [](const DataSeries& a, const Measurement& b) { return a * b; });
 }
 
-std::shared_ptr<DataArray> operator/(const DataArray& lhs, const Measurement& rhs) {
+DataArray operator/(const DataArray& lhs, const Measurement& rhs) {
     return array_meas_op(lhs, rhs, "operator/", "/",
         [](const DataSeries& a, const Measurement& b) { return a / b; });
 }
 
 // =============================================================================
-//  §7  pow(DataArray, Measurement)
+//  Sec.7  pow(DataArray, Measurement)
 // =============================================================================
 
-std::shared_ptr<DataArray> pow(const DataArray& base, const Measurement& exp) {
+DataArray pow(const DataArray& base, const Measurement& exp) {
     DataSeries result_ds = xdataset::pow(base.data(), exp);
 
     DataArrayCreateInfo info;
-    info.name                 = base.name() + "^(" + exp.to_string() + ")";
+    info.name                 = DataArray::kUnnamed;
     info.data                 = std::move(result_ds);
     info.indep_datas          = base.indep_datas();
     info.multi_dimension_spec = base.multi_dimension_spec();
     info.kind                 = base.kind();
-    return std::make_shared<DataArray>(std::move(info));
+    return DataArray(std::move(info));
 }
 
 }  // namespace xdataset

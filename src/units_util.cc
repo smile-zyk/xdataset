@@ -26,6 +26,11 @@ namespace xdataset
         return u.base_units().has_e_flag();
     }
 
+    bool is_canonical(const Unit& u)
+    {
+        return !is_affine(u) && multiplier_of(u) == 1.0;
+    }
+
     bool same_dimension(const Unit& a, const Unit& b)
     {
         // has_same_base ignores e_flag / i_flag, so e.g. degC ≡ K.

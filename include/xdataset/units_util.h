@@ -19,6 +19,9 @@ namespace xdataset
     // True when base_units has the e_flag set (degC, degF, etc.).
     bool is_affine(const Unit& u);
 
+    // True when u is in canonical form (multiplier == 1, non-affine).
+    bool is_canonical(const Unit& u);
+
     // True when a and b represent the same physical dimension.
     // Uses has_same_base so that affine flags are ignored.
     bool same_dimension(const Unit& a, const Unit& b);

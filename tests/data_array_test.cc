@@ -10,10 +10,7 @@ namespace xdataset
     TEST(DataArrayDataFrameTest, IndependentTableExpandsPrefixDimensions)
     {
         Block block(MakeValueRichCreateInfo());
-        std::shared_ptr<DataArray> y_data = block.GetOrCreateDataArray("y");
-        ASSERT_NE(y_data, nullptr);
-
-        const DataFrame& table = y_data->GetOrCreateDataFrame();
+        DataArray y_data = block.GetOrCreateDataArray("y"); const DataFrame& table = y_data.GetOrCreateDataFrame();
         ASSERT_EQ(table.headers().size(), 2u);
         EXPECT_EQ(table.headers()[0], "x");
         EXPECT_EQ(table.headers()[1], "y");
@@ -33,10 +30,7 @@ namespace xdataset
     TEST(DataArrayDataFrameTest, DependentTableContainsDataColumnAndCsv)
     {
         Block block(MakeValueRichCreateInfo());
-        std::shared_ptr<DataArray> z_data = block.GetOrCreateDataArray("z");
-        ASSERT_NE(z_data, nullptr);
-
-        const DataFrame& table = z_data->GetOrCreateDataFrame();
+        DataArray z_data = block.GetOrCreateDataArray("z"); const DataFrame& table = z_data.GetOrCreateDataFrame();
         ASSERT_EQ(table.headers().size(), 3u);
         EXPECT_EQ(table.headers()[0], "x");
         EXPECT_EQ(table.headers()[1], "y");
@@ -60,10 +54,7 @@ namespace xdataset
     TEST(DataArrayDataFrameTest, RaggedIndependentTableExpandsPrefixDimensions)
     {
         Block block(MakeRaggedCreateInfo());
-        std::shared_ptr<DataArray> y_data = block.GetOrCreateDataArray("y");
-        ASSERT_NE(y_data, nullptr);
-
-        const DataFrame& table = y_data->GetOrCreateDataFrame();
+        DataArray y_data = block.GetOrCreateDataArray("y"); const DataFrame& table = y_data.GetOrCreateDataFrame();
         ASSERT_EQ(table.headers().size(), 2u);
         EXPECT_EQ(table.headers()[0], "x");
         EXPECT_EQ(table.headers()[1], "y");
@@ -89,10 +80,7 @@ namespace xdataset
     TEST(DataArrayDataFrameTest, RaggedDependentTableContainsDataColumnAndCsv)
     {
         Block block(MakeRaggedCreateInfo());
-        std::shared_ptr<DataArray> z_data = block.GetOrCreateDataArray("z");
-        ASSERT_NE(z_data, nullptr);
-
-        const DataFrame& table = z_data->GetOrCreateDataFrame();
+        DataArray z_data = block.GetOrCreateDataArray("z"); const DataFrame& table = z_data.GetOrCreateDataFrame();
         ASSERT_EQ(table.headers().size(), 3u);
         EXPECT_EQ(table.headers()[0], "x");
         EXPECT_EQ(table.headers()[1], "y");
@@ -123,10 +111,7 @@ namespace xdataset
     TEST(DataArrayDataFrameTest, InterleavedRaggedIndependentTableExpandsPrefixDimensions)
     {
         Block block(MakeInterleavedCreateInfo());
-        std::shared_ptr<DataArray> z_data = block.GetOrCreateDataArray("z");
-        ASSERT_NE(z_data, nullptr);
-
-        const DataFrame& table = z_data->GetOrCreateDataFrame();
+        DataArray z_data = block.GetOrCreateDataArray("z"); const DataFrame& table = z_data.GetOrCreateDataFrame();
         ASSERT_EQ(table.headers().size(), 3u);
         EXPECT_EQ(table.headers()[0], "x");
         EXPECT_EQ(table.headers()[1], "y");
@@ -172,10 +157,7 @@ namespace xdataset
     TEST(DataArrayDataFrameTest, InterleavedRaggedDependentTableContainsDataColumnAndCsv)
     {
         Block block(MakeInterleavedCreateInfo());
-        std::shared_ptr<DataArray> w_data = block.GetOrCreateDataArray("w");
-        ASSERT_NE(w_data, nullptr);
-
-        const DataFrame& table = w_data->GetOrCreateDataFrame();
+        DataArray w_data = block.GetOrCreateDataArray("w"); const DataFrame& table = w_data.GetOrCreateDataFrame();
         ASSERT_EQ(table.headers().size(), 4u);
         EXPECT_EQ(table.headers()[0], "x");
         EXPECT_EQ(table.headers()[1], "y");
@@ -228,26 +210,17 @@ namespace xdataset
     TEST(DataArrayIndepTest, DependentIndepFromInsideOutByIndexAndName)
     {
         Block block(MakeInterleavedCreateInfo());
-        std::shared_ptr<DataArray> w_data = block.GetOrCreateDataArray("w");
-        ASSERT_NE(w_data, nullptr);
+        DataArray w_data = block.GetOrCreateDataArray("w"); DataArray indep1 = w_data.indep(1); EXPECT_EQ(indep1.name(), "z");
+        EXPECT_EQ(indep1.kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(indep1.indep("x").name(), "x");
+        EXPECT_EQ(indep1.indep("y").name(), "y");
+        EXPECT_EQ(indep1.multi_dimension_spec().rank(), 3u);
 
-        std::shared_ptr<DataArray> indep1 = w_data->indep(1);
-        ASSERT_NE(indep1, nullptr);
-        EXPECT_EQ(indep1->name(), "z");
-        EXPECT_EQ(indep1->kind(), DataArrayKind::kIndependent);
-        EXPECT_EQ(indep1->indep("x")->name(), "x");
-        EXPECT_EQ(indep1->indep("y")->name(), "y");
-        EXPECT_EQ(indep1->multi_dimension_spec().rank(), 3u);
+        DataArray indep2 = w_data.indep(2); EXPECT_EQ(indep2.name(), "y");
+        EXPECT_EQ(indep2.multi_dimension_spec().rank(), 2u);
 
-        std::shared_ptr<DataArray> indep2 = w_data->indep(2);
-        ASSERT_NE(indep2, nullptr);
-        EXPECT_EQ(indep2->name(), "y");
-        EXPECT_EQ(indep2->multi_dimension_spec().rank(), 2u);
-
-        std::shared_ptr<DataArray> by_name = w_data->indep("z");
-        ASSERT_NE(by_name, nullptr);
-        EXPECT_EQ(by_name->name(), indep1->name());
-        EXPECT_EQ(by_name->multi_dimension_spec().rank(), indep1->multi_dimension_spec().rank());
+        DataArray by_name = w_data.indep("z"); EXPECT_EQ(by_name.name(), indep1.name());
+        EXPECT_EQ(by_name.multi_dimension_spec().rank(), indep1.multi_dimension_spec().rank());
     }
 
     // IndependentIndepOneReturnsIndexSeries ??indep(1) on an Independent returns
@@ -256,52 +229,38 @@ namespace xdataset
     TEST(DataArrayIndepTest, IndependentIndepOneReturnsIndexSeries)
     {
         Block block(MakeInterleavedCreateInfo());
-        std::shared_ptr<DataArray> z_data = block.GetOrCreateDataArray("z");
-        ASSERT_NE(z_data, nullptr);
-
-        std::shared_ptr<DataArray> self_indep = z_data->indep(1);
-        ASSERT_NE(self_indep, nullptr);
-        EXPECT_EQ(self_indep->name(), "z");
-        EXPECT_EQ(self_indep->kind(), DataArrayKind::kIndependent);
-        EXPECT_EQ(self_indep->data().size(), 6u);   // expanded product
+        DataArray z_data = block.GetOrCreateDataArray("z"); DataArray self_indep = z_data.indep(1); EXPECT_EQ(self_indep.name(), "z");
+        EXPECT_EQ(self_indep.kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(self_indep.data().size(), 6u);   // expanded product
 
         // Index series: last-dim cycle 0,1 repeating
         const int expected[] = {0, 1, 0, 1, 0, 1};
         for (std::size_t i = 0; i < 6; ++i)
-            EXPECT_EQ(self_indep->data().scalar_at<int>(i), expected[i]);
+            EXPECT_EQ(self_indep.data().scalar_at<int>(i), expected[i]);
 
-        std::shared_ptr<DataArray> from_name = z_data->indep("z");
-        ASSERT_NE(from_name, nullptr);
-        ASSERT_EQ(from_name->data().size(), self_indep->data().size());
+        DataArray from_name = z_data.indep("z"); ASSERT_EQ(from_name.data().size(), self_indep.data().size());
         for (std::size_t i = 0; i < 6; ++i)
-            EXPECT_EQ(from_name->data().scalar_at<int>(i), self_indep->data().scalar_at<int>(i));
+            EXPECT_EQ(from_name.data().scalar_at<int>(i), self_indep.data().scalar_at<int>(i));
 
-        std::shared_ptr<DataArray> indep2 = z_data->indep(2);
-        ASSERT_NE(indep2, nullptr);
-        EXPECT_EQ(indep2->name(), "y");
-        EXPECT_EQ(indep2->multi_dimension_spec().rank(), 2u);
+        DataArray indep2 = z_data.indep(2); EXPECT_EQ(indep2.name(), "y");
+        EXPECT_EQ(indep2.multi_dimension_spec().rank(), 2u);
     }
 
     TEST(DataArraySelectTest, DependentSelectReturnsCompleteVariable)
     {
         Block block(MakeInterleavedCreateInfo());
-        std::shared_ptr<DataArray> w_data = block.GetOrCreateDataArray("w");
-        ASSERT_NE(w_data, nullptr);
-
-        std::vector<MultiIndexSelector> selectors;
+        DataArray w_data = block.GetOrCreateDataArray("w"); std::vector<MultiIndexSelector> selectors;
         selectors.push_back(MultiIndexSelector::Equal(1));
         selectors.push_back(MultiIndexSelector::Any());
         selectors.push_back(MultiIndexSelector::In(std::vector<Index>{0, 1}));
 
-        std::shared_ptr<DataArray> selected = w_data->select(selectors);
-        ASSERT_NE(selected, nullptr);
-        EXPECT_EQ(selected->kind(), DataArrayKind::kDependent);
-        EXPECT_EQ(selected->multi_dimension_spec().rank(), 2u);
+        DataArray selected = w_data.select(selectors); EXPECT_EQ(selected.kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(selected.multi_dimension_spec().rank(), 2u);
 
-        EXPECT_EQ(selected->multi_dimension_spec().dims()[0].as_regular()->size, 2u);
-        EXPECT_EQ(selected->multi_dimension_spec().dims()[1].as_regular()->size, 2u);
+        EXPECT_EQ(selected.multi_dimension_spec().dims()[0].as_regular()->size, 2u);
+        EXPECT_EQ(selected.multi_dimension_spec().dims()[1].as_regular()->size, 2u);
 
-        const DataFrame& table = selected->GetOrCreateDataFrame();
+        const DataFrame& table = selected.GetOrCreateDataFrame();
         ASSERT_EQ(table.headers().size(), 3u);
         EXPECT_EQ(table.headers()[0], "y");
         EXPECT_EQ(table.headers()[1], "z");
@@ -319,12 +278,9 @@ namespace xdataset
     TEST(DataArraySelectTest, DependentSelectRejectsOutOfRangeIndices)
     {
         Block block(MakeInterleavedCreateInfo());
-        std::shared_ptr<DataArray> w_data = block.GetOrCreateDataArray("w");
-        ASSERT_NE(w_data, nullptr);
-
-        EXPECT_THROW(
+        DataArray w_data = block.GetOrCreateDataArray("w"); EXPECT_THROW(
             {
-                w_data->select({MultiIndexSelector::In(std::vector<Index>{0, 2})});
+                w_data.select({MultiIndexSelector::In(std::vector<Index>{0, 2})});
             },
             std::out_of_range);
     }
@@ -332,12 +288,9 @@ namespace xdataset
     TEST(DataArraySelectTest, DependentSelectRejectsOutOfRangeIndicesOnRaggedDimension)
     {
         Block block(MakeInterleavedCreateInfo());
-        std::shared_ptr<DataArray> w_data = block.GetOrCreateDataArray("w");
-        ASSERT_NE(w_data, nullptr);
-
-        EXPECT_THROW(
+        DataArray w_data = block.GetOrCreateDataArray("w"); EXPECT_THROW(
             {
-                w_data->select(
+                w_data.select(
                     {MultiIndexSelector::Any(),
                      MultiIndexSelector::In(std::vector<Index>{2}),
                      MultiIndexSelector::Any()});
@@ -360,19 +313,14 @@ namespace xdataset
                 MakeScalarSeriesFrom({100.0, 200.0, 300.0, 400.0})});
 
         Block block(info);
-        std::shared_ptr<DataArray> z_data = block.GetOrCreateDataArray("z");
-        ASSERT_NE(z_data, nullptr);
-
-        std::vector<MultiIndexSelector> selectors;
+        DataArray z_data = block.GetOrCreateDataArray("z"); std::vector<MultiIndexSelector> selectors;
         selectors.push_back(MultiIndexSelector::In(std::vector<Index>{1, 3}));
 
-        std::shared_ptr<DataArray> selected = z_data->select(selectors);
-        ASSERT_NE(selected, nullptr);
-        EXPECT_EQ(selected->kind(), DataArrayKind::kDependent);
-        EXPECT_EQ(selected->multi_dimension_spec().rank(), 1u);
-        EXPECT_EQ(selected->multi_dimension_spec().dims()[0].as_regular()->size, 2u);
+        DataArray selected = z_data.select(selectors); EXPECT_EQ(selected.kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(selected.multi_dimension_spec().rank(), 1u);
+        EXPECT_EQ(selected.multi_dimension_spec().dims()[0].as_regular()->size, 2u);
 
-        const DataFrame& table = selected->GetOrCreateDataFrame();
+        const DataFrame& table = selected.GetOrCreateDataFrame();
         ASSERT_EQ(table.headers().size(), 2u);
         EXPECT_EQ(table.headers()[0], "x");
         EXPECT_EQ(table.headers()[1], "data");
@@ -387,30 +335,25 @@ namespace xdataset
     TEST(DataArraySelectTest, DependentSelectProducesJaggedResultWhenInnerDimCollapsed)
     {
         Block block(MakeInterleavedCreateInfo());
-        std::shared_ptr<DataArray> w_data = block.GetOrCreateDataArray("w");
-        ASSERT_NE(w_data, nullptr);
-
-        // Collapse z (Regular(2)) with Equal(0); retain x (Regular(2)) and y (Ragged({1,2})).
+        DataArray w_data = block.GetOrCreateDataArray("w"); // Collapse z (Regular(2)) with Equal(0); retain x (Regular(2)) and y (Ragged({1,2})).
         std::vector<MultiIndexSelector> selectors;
         selectors.push_back(MultiIndexSelector::Any());
         selectors.push_back(MultiIndexSelector::Any());
         selectors.push_back(MultiIndexSelector::Equal(0));
 
-        std::shared_ptr<DataArray> selected = w_data->select(selectors);
-        ASSERT_NE(selected, nullptr);
-        EXPECT_EQ(selected->kind(), DataArrayKind::kDependent);
-        EXPECT_EQ(selected->multi_dimension_spec().rank(), 2u);
+        DataArray selected = w_data.select(selectors); EXPECT_EQ(selected.kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(selected.multi_dimension_spec().rank(), 2u);
 
-        EXPECT_NE(selected->multi_dimension_spec().dims()[0].as_regular(), nullptr);
-        EXPECT_EQ(selected->multi_dimension_spec().dims()[0].as_regular()->size, 2u);
+        EXPECT_NE(selected.multi_dimension_spec().dims()[0].as_regular(), nullptr);
+        EXPECT_EQ(selected.multi_dimension_spec().dims()[0].as_regular()->size, 2u);
 
-        EXPECT_NE(selected->multi_dimension_spec().dims()[1].as_ragged(), nullptr);
-        const auto* ragged = selected->multi_dimension_spec().dims()[1].as_ragged();
+        EXPECT_NE(selected.multi_dimension_spec().dims()[1].as_ragged(), nullptr);
+        const auto* ragged = selected.multi_dimension_spec().dims()[1].as_ragged();
         ASSERT_EQ(ragged->sizes.size(), 2u);
         EXPECT_EQ(ragged->sizes[0], 1);
         EXPECT_EQ(ragged->sizes[1], 2);
 
-        const DataFrame& table = selected->GetOrCreateDataFrame();
+        const DataFrame& table = selected.GetOrCreateDataFrame();
         ASSERT_EQ(table.headers().size(), 3u);
         EXPECT_EQ(table.headers()[0], "x");
         EXPECT_EQ(table.headers()[1], "y");
@@ -433,16 +376,13 @@ namespace xdataset
         // For ragged independent variables, equal selection must still be in range.
 
         Block block(MakeRaggedCreateInfo());
-        std::shared_ptr<DataArray> y_data = block.GetOrCreateDataArray("y");
-        ASSERT_NE(y_data, nullptr);
-
-        std::vector<MultiIndexSelector> selectors;
+        DataArray y_data = block.GetOrCreateDataArray("y"); std::vector<MultiIndexSelector> selectors;
         selectors.push_back(MultiIndexSelector::Any());
         selectors.push_back(MultiIndexSelector::Equal(1));
 
         EXPECT_THROW(
             {
-                y_data->select(selectors);
+                y_data.select(selectors);
             },
             std::out_of_range);
 
@@ -452,7 +392,7 @@ namespace xdataset
 
         EXPECT_THROW(
             {
-                y_data->select(selectors);
+                y_data.select(selectors);
             },
             std::out_of_range);
     }
@@ -471,17 +411,14 @@ namespace xdataset
             std::vector<DimensionSpec>{DimensionSpec::Regular(2)});
 
         DataArray v(info);
-        std::shared_ptr<DataArray> selected =
-            v.at({MultiIndexSelector::Equal(1)});
+        DataArray selected =
+            v.at({MultiIndexSelector::Equal(1)}); EXPECT_EQ(selected.data().data_kind(), DataKind::kScalar);
+        EXPECT_EQ(selected.data().size(), 2u);
+        EXPECT_EQ(selected.data().scalar_at<double>(0), 2.0);
+        EXPECT_EQ(selected.data().scalar_at<double>(1), 5.0);
+        EXPECT_EQ(selected.multi_dimension_spec().rank(), v.multi_dimension_spec().rank());
 
-        ASSERT_NE(selected, nullptr);
-        EXPECT_EQ(selected->data().data_kind(), DataKind::kScalar);
-        EXPECT_EQ(selected->data().size(), 2u);
-        EXPECT_EQ(selected->data().scalar_at<double>(0), 2.0);
-        EXPECT_EQ(selected->data().scalar_at<double>(1), 5.0);
-        EXPECT_EQ(selected->multi_dimension_spec().rank(), v.multi_dimension_spec().rank());
-
-        const DataFrame& table = selected->GetOrCreateDataFrame();
+        const DataFrame& table = selected.GetOrCreateDataFrame();
         ASSERT_EQ(table.row_count(), 2u);
         EXPECT_EQ(table.GetRow(0).fields[0].to_string(), "10");
         EXPECT_EQ(table.GetRow(0).fields[1].to_string(), "2");
@@ -505,19 +442,16 @@ namespace xdataset
             std::vector<DimensionSpec>{DimensionSpec::Regular(2)});
 
         DataArray m(info);
-        std::shared_ptr<DataArray> selected = m.at(
-            {MultiIndexSelector::Equal(1), MultiIndexSelector::In({0, 2})});
-
-        ASSERT_NE(selected, nullptr);
-        EXPECT_EQ(selected->data().data_kind(), DataKind::kVector);
-        ASSERT_EQ(selected->data().data_shape().size(), 1u);
-        EXPECT_EQ(selected->data().data_shape()[0], 2);
-        EXPECT_EQ(selected->data().size(), 2u);
-        EXPECT_EQ(selected->data().vector_at<int>(0)(0), 4);
-        EXPECT_EQ(selected->data().vector_at<int>(0)(1), 6);
-        EXPECT_EQ(selected->data().vector_at<int>(1)(0), 10);
-        EXPECT_EQ(selected->data().vector_at<int>(1)(1), 12);
-        EXPECT_EQ(selected->multi_dimension_spec().rank(), m.multi_dimension_spec().rank());
+        DataArray selected = m.at(
+            {MultiIndexSelector::Equal(1), MultiIndexSelector::In({0, 2})}); EXPECT_EQ(selected.data().data_kind(), DataKind::kVector);
+        ASSERT_EQ(selected.data().data_shape().size(), 1u);
+        EXPECT_EQ(selected.data().data_shape()[0], 2);
+        EXPECT_EQ(selected.data().size(), 2u);
+        EXPECT_EQ(selected.data().vector_at<int>(0)(0), 4);
+        EXPECT_EQ(selected.data().vector_at<int>(0)(1), 6);
+        EXPECT_EQ(selected.data().vector_at<int>(1)(0), 10);
+        EXPECT_EQ(selected.data().vector_at<int>(1)(1), 12);
+        EXPECT_EQ(selected.multi_dimension_spec().rank(), m.multi_dimension_spec().rank());
     }
 
     TEST(DataArrayAtTest, ScalarAtIsInvalid)
@@ -545,8 +479,8 @@ namespace xdataset
     TEST(DataArrayDataFrameTest, StringTypedIndependentTable)
     {
         Block block(MakeStringTypedCreateInfo());
-        std::shared_ptr<DataArray> sy_var = block.GetOrCreateDataArray("sy");
-        const DataFrame& table = sy_var->GetOrCreateDataFrame();
+        DataArray sy_var = block.GetOrCreateDataArray("sy");
+        const DataFrame& table = sy_var.GetOrCreateDataFrame();
 
         ASSERT_EQ(table.headers().size(), 2u);
         EXPECT_EQ(table.headers()[0], "sx");
@@ -562,8 +496,8 @@ namespace xdataset
     TEST(DataArrayDataFrameTest, StringTypedDependentTable)
     {
         Block block(MakeStringTypedCreateInfo());
-        std::shared_ptr<DataArray> sz_var = block.GetOrCreateDataArray("sz");
-        const DataFrame& table = sz_var->GetOrCreateDataFrame();
+        DataArray sz_var = block.GetOrCreateDataArray("sz");
+        const DataFrame& table = sz_var.GetOrCreateDataFrame();
 
         ASSERT_EQ(table.headers().size(), 3u);
         EXPECT_EQ(table.headers()[0], "sx");
@@ -580,8 +514,8 @@ namespace xdataset
     TEST(DataArrayDataFrameTest, VectorDependentColumnsExpand)
     {
         Block block(MakeVectorCellCreateInfo());
-        std::shared_ptr<DataArray> vecs_var = block.GetOrCreateDataArray("vecs");
-        const DataFrame& table = vecs_var->GetOrCreateDataFrame();
+        DataArray vecs_var = block.GetOrCreateDataArray("vecs");
+        const DataFrame& table = vecs_var.GetOrCreateDataFrame();
 
         ASSERT_EQ(table.headers().size(), 5u);
         EXPECT_EQ(table.headers()[2], "data(1)");
@@ -597,8 +531,8 @@ namespace xdataset
     TEST(DataArrayDataFrameTest, MatrixDependentColumnsExpand)
     {
         Block block(MakeMatrixCellCreateInfo());
-        std::shared_ptr<DataArray> mats_var = block.GetOrCreateDataArray("mats");
-        const DataFrame& table = mats_var->GetOrCreateDataFrame();
+        DataArray mats_var = block.GetOrCreateDataArray("mats");
+        const DataFrame& table = mats_var.GetOrCreateDataFrame();
 
         ASSERT_EQ(table.headers().size(), 6u);
         EXPECT_EQ(table.headers()[2], "data(1,1)");
@@ -613,8 +547,8 @@ namespace xdataset
     TEST(DataArrayDataFrameTest, RaggedVectorDependentColumnsExpand)
     {
         Block block(MakeRaggedVectorCreateInfo());
-        std::shared_ptr<DataArray> v_var = block.GetOrCreateDataArray("v");
-        const DataFrame& table = v_var->GetOrCreateDataFrame();
+        DataArray v_var = block.GetOrCreateDataArray("v");
+        const DataFrame& table = v_var.GetOrCreateDataFrame();
 
         ASSERT_EQ(table.headers().size(), 4u);
         EXPECT_EQ(table.headers()[2], "data(1)");

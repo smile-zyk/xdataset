@@ -152,8 +152,8 @@ namespace xdataset
     TEST(DataFrameCsvTest, ToCsvFromDataArray)
     {
         Block block(MakeRaggedCreateInfo());
-        std::shared_ptr<DataArray> y = block.GetOrCreateDataArray("y");
-        const DataFrame& table = y->GetOrCreateDataFrame();
+        DataArray y = block.GetOrCreateDataArray("y");
+        const DataFrame& table = y.GetOrCreateDataFrame();
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y"), std::string::npos);

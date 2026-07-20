@@ -534,4 +534,8 @@ Measurement Measurement::canonicalized() const {
     return result;
 }
 
+bool Measurement::is_canonicalized() const {
+    return is_canonical(unit_);
+}
+
 } // namespace xdataset
