@@ -724,14 +724,14 @@ TEST(ContiguousTest, MatrixMemcpyAndRowMajorLayout) {
 TEST(DataSeriesUnitTest, DefaultSeriesIsDimensionless)
 {
     DataSeries s = DataSeries::CreateScalar<double>(3, Unit(), 1.0);
-    EXPECT_TRUE(xdataset::same_dimension(s.unit(), xdataset::Unit()));
+    EXPECT_TRUE(s.unit().same_dimension(xdataset::Unit()));
 }
 
 TEST(DataSeriesUnitTest, SetUnitByUnitObject)
 {
     DataSeries s = DataSeries::CreateScalarFromVector<double>(std::vector<double>{1.0, 2.0, 3.0});
-    s.set_unit(xdataset::parse_unit("m"));
-    EXPECT_TRUE(xdataset::same_dimension(s.unit(), xdataset::parse_unit("m")));
+    s.set_unit(xdataset::Unit::parse("meter"));
+    EXPECT_TRUE(s.unit().same_dimension(xdataset::Unit::parse("meter")));
     // values unchanged (set_unit only tags)
     EXPECT_DOUBLE_EQ(s.scalar_at<double>(0), 1.0);
     EXPECT_DOUBLE_EQ(s.scalar_at<double>(2), 3.0);
@@ -741,7 +741,7 @@ TEST(DataSeriesUnitTest, SetUnitByString)
 {
     DataSeries s = DataSeries::CreateScalar<double>(2, Unit(), 7.0);
     s.set_unit("Hz");
-    EXPECT_TRUE(xdataset::same_dimension(s.unit(), xdataset::parse_unit("Hz")));
+    EXPECT_TRUE(s.unit().same_dimension(xdataset::Unit::parse("Hz")));
 }
 
 // ---------------------------------------------------------------------------
@@ -751,59 +751,59 @@ TEST(DataSeriesUnitTest, SetUnitByString)
 TEST(DataSeriesUnitTest, CopyPropagatesUnit)
 {
     DataSeries s = DataSeries::CreateScalar<double>(2, Unit(), 0.0);
-    s.set_unit("Pa");
+    s.set_unit(Unit::parse("V"));
     DataSeries s2(s);
-    EXPECT_TRUE(xdataset::same_dimension(s2.unit(), xdataset::parse_unit("Pa")));
+    EXPECT_TRUE(s2.unit().same_dimension(xdataset::Unit::parse("V")));
 }
 
 TEST(DataSeriesUnitTest, MovePropagatesUnit)
 {
     DataSeries s = DataSeries::CreateScalar<double>(2, Unit(), 0.0);
-    s.set_unit("N");
+    s.set_unit(Unit::parse("Hz"));
     DataSeries s2(std::move(s));
-    EXPECT_TRUE(xdataset::same_dimension(s2.unit(), xdataset::parse_unit("N")));
+    EXPECT_TRUE(s2.unit().same_dimension(xdataset::Unit::parse("Hz")));
 }
 
 TEST(DataSeriesUnitTest, AssignPropagatesUnit)
 {
     DataSeries s1 = DataSeries::CreateScalar<double>(2, Unit(), 0.0);
-    s1.set_unit("J");
+    s1.set_unit(Unit::parse("W"));
     DataSeries s2;
     s2 = s1;
-    EXPECT_TRUE(xdataset::same_dimension(s2.unit(), xdataset::parse_unit("J")));
+    EXPECT_TRUE(s2.unit().same_dimension(xdataset::Unit::parse("W")));
 }
 
 TEST(DataSeriesUnitTest, IlocPropagatesUnit)
 {
     DataSeries s = DataSeries::CreateScalarFromVector<double>(std::vector<double>{10.0, 20.0, 30.0});
-    s.set_unit("m");
+    s.set_unit("meter");
     DataSeries sub = s.iloc(0, 2);
-    EXPECT_TRUE(xdataset::same_dimension(sub.unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(sub.unit().same_dimension(xdataset::Unit::parse("meter")));
     EXPECT_EQ(sub.size(), 2u);
 }
 
 TEST(DataSeriesUnitTest, HeadPropagatesUnit)
 {
     DataSeries s = DataSeries::CreateScalarFromVector<double>(std::vector<double>{1.0, 2.0, 3.0});
-    s.set_unit("s");
+    s.set_unit(Unit::parse("sec"));
     DataSeries h = s.head(2);
-    EXPECT_TRUE(xdataset::same_dimension(h.unit(), xdataset::parse_unit("s")));
+    EXPECT_TRUE(h.unit().same_dimension(xdataset::Unit::parse("sec")));
 }
 
 TEST(DataSeriesUnitTest, TailPropagatesUnit)
 {
     DataSeries s = DataSeries::CreateScalarFromVector<double>(std::vector<double>{1.0, 2.0, 3.0});
-    s.set_unit("K");
+    s.set_unit(Unit::parse("meter"));
     DataSeries t = s.tail(2);
-    EXPECT_TRUE(xdataset::same_dimension(t.unit(), xdataset::parse_unit("K")));
+    EXPECT_TRUE(t.unit().same_dimension(xdataset::Unit::parse("meter")));
 }
 
 TEST(DataSeriesUnitTest, CellAtCarriesUnit)
 {
     DataSeries s = DataSeries::CreateScalarFromVector<double>(std::vector<double>{42.0});
-    s.set_unit("W");
+    s.set_unit(Unit::parse("W"));
     Measurement m = s.measurement_at(0);
-    EXPECT_TRUE(xdataset::same_dimension(m.unit(), xdataset::parse_unit("W")));
+    EXPECT_TRUE(m.unit().same_dimension(xdataset::Unit::parse("W")));
     EXPECT_DOUBLE_EQ(m.as_scalar<double>(), 42.0);
 }
 

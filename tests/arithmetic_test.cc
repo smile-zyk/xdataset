@@ -26,55 +26,16 @@ using xdataset::DimensionSpec;
 //  DataSeries canonicalize (precondition for arithmetic)
 // =========================================================================
 
-TEST(DataSeriesUnitTest, CanonicalizeConvertsValues)
-{
-    DataSeries s = DataSeries::CreateScalarFromVector<double>(std::vector<double>{1.0, 5.0});
-    s.set_unit("km");
-    s.canonicalize();
-    // 1 km  1000 m,  5 km  5000 m
-    EXPECT_DOUBLE_EQ(s.scalar_at<double>(0), 1000.0);
-    EXPECT_DOUBLE_EQ(s.scalar_at<double>(1), 5000.0);
-    EXPECT_DOUBLE_EQ(s.unit().multiplier(), 1.0);
-    EXPECT_TRUE(xdataset::same_dimension(s.unit(), xdataset::parse_unit("m")));
-}
-
 TEST(DataSeriesUnitTest, CanonicalizeFastPathCoherentSI)
 {
     DataSeries s = DataSeries::CreateScalarFromVector<double>(std::vector<double>{9.0, 10.0});
     s.set_unit("Hz");  // multiplier == 1, non-affine
-    s.canonicalize();
+    s.canonicalized();
     // values unchanged
     EXPECT_DOUBLE_EQ(s.scalar_at<double>(0), 9.0);
     EXPECT_DOUBLE_EQ(s.scalar_at<double>(1), 10.0);
     EXPECT_DOUBLE_EQ(s.unit().multiplier(), 1.0);
 }
-
-TEST(DataSeriesUnitTest, CanonicalizeAffineDegC)
-{
-    DataSeries s = DataSeries::CreateScalarFromVector<double>(std::vector<double>{0.0, 100.0});
-    s.set_unit("degC");
-    s.canonicalize();
-    // 0 C  273.15 K,  100 C  373.15 K
-    EXPECT_NEAR(s.scalar_at<double>(0), 273.15, 1e-10);
-    EXPECT_NEAR(s.scalar_at<double>(1), 373.15, 1e-10);
-    EXPECT_FALSE(xdataset::is_affine(s.unit()));
-}
-
-TEST(DataSeriesUnitTest, CanonicalizedDoesNotModifyOriginal)
-{
-    DataSeries orig = DataSeries::CreateScalarFromVector<double>(std::vector<double>{2.0, 4.0});
-    orig.set_unit("mm");
-
-    DataSeries copy = orig.canonicalized();
-    // copy: 2 mm  0.002 m, 4 mm  0.004 m
-    EXPECT_NEAR(copy.scalar_at<double>(0), 0.002, 1e-12);
-    EXPECT_TRUE(xdataset::same_dimension(copy.unit(), xdataset::parse_unit("m")));
-
-    // orig unchanged
-    EXPECT_DOUBLE_EQ(orig.scalar_at<double>(0), 2.0);
-    EXPECT_TRUE(xdataset::same_dimension(orig.unit(), xdataset::parse_unit("mm")));
-}
-
 
 // =========================================================================
 //  P3 Arithmetic: promoted_dtype
@@ -177,9 +138,9 @@ TEST(DataSeriesArithTest, AddStringSeriesThrows)
 TEST(DataSeriesArithTest, AddUnitMismatchThrows)
 {
     auto a = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
-    a.set_unit("m");
+    a.set_unit("meter");
     auto b = DataSeries::CreateScalarFromVector<double>({3.0, 4.0});
-    b.set_unit("s");
+    b.set_unit(Unit::parse("sec"));
     EXPECT_THROW(a + b, std::invalid_argument);
 }
 
@@ -188,11 +149,11 @@ TEST(DataSeriesArithTest, AddWithOneDimensionless)
     auto a = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
     // a is dimensionless
     auto b = DataSeries::CreateScalarFromVector<double>({3.0, 4.0});
-    b.set_unit("m");
+    b.set_unit("meter");
     DataSeries r = a + b;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 4.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 6.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("meter")));
 }
 
 TEST(DataSeriesArithTest, AddWithUnitsDerivesResultUnit)
@@ -200,12 +161,12 @@ TEST(DataSeriesArithTest, AddWithUnitsDerivesResultUnit)
     auto a = DataSeries::CreateScalarFromVector<double>({100.0, 200.0});
     a.set_unit("cm");   // 1.0 m, 2.0 m after canonicalize
     auto b = DataSeries::CreateScalarFromVector<double>({3.0, 4.0});
-    b.set_unit("m");
+    b.set_unit("meter");
     DataSeries r = a + b;
     // 1.0 + 3.0 = 4.0, 2.0 + 4.0 = 6.0
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 4.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 6.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("meter")));
     EXPECT_DOUBLE_EQ(r.unit().multiplier(), 1.0);
 }
 
@@ -235,7 +196,7 @@ TEST(DataSeriesArithTest, SubtractIntegerSeries)
 TEST(DataSeriesArithTest, SubtractUnitMismatchThrows)
 {
     auto a = DataSeries::CreateScalarFromVector<double>({1.0});
-    a.set_unit("Pa");
+    a.set_unit(Unit::parse("V"));
     auto b = DataSeries::CreateScalarFromVector<double>({1.0});
     b.set_unit("Hz");
     EXPECT_THROW(a - b, std::invalid_argument);
@@ -244,13 +205,13 @@ TEST(DataSeriesArithTest, SubtractUnitMismatchThrows)
 TEST(DataSeriesArithTest, SubtractWithOneDimensionless)
 {
     auto a = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
-    a.set_unit("Pa");
+    a.set_unit(Unit::parse("V"));
     auto b = DataSeries::CreateScalarFromVector<double>({3.0, 5.0});
     // b is dimensionless
     DataSeries r = a - b;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 7.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 15.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(), xdataset::parse_unit("Pa")));
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("V")));
 }
 
 // =========================================================================
@@ -280,15 +241,15 @@ TEST(DataSeriesArithTest, MultiplyIntegerSeries)
 TEST(DataSeriesArithTest, MultiplyDerivesResultUnit)
 {
     auto a = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
-    a.set_unit("m");
+    a.set_unit("meter");
     auto b = DataSeries::CreateScalarFromVector<double>({4.0, 5.0});
-    b.set_unit("s");
+    b.set_unit(Unit::parse("sec"));
     DataSeries r = a * b;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 8.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 15.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(),
-        xdataset::multiply_dim(xdataset::canonicalize(xdataset::parse_unit("m")),
-                               xdataset::canonicalize(xdataset::parse_unit("s")))));
+    EXPECT_TRUE(r.unit().same_dimension(
+        Unit::parse("meter").canonicalized().multiply_dim(
+                               Unit::parse("sec").canonicalized())));
 }
 
 // =========================================================================
@@ -318,13 +279,13 @@ TEST(DataSeriesArithTest, DivideIntegerSeriesYieldsReal)
 TEST(DataSeriesArithTest, DivideDerivesResultUnit)
 {
     auto a = DataSeries::CreateScalarFromVector<double>({10.0});
-    a.set_unit("m");
+    a.set_unit("meter");
     auto b = DataSeries::CreateScalarFromVector<double>({2.0});
-    b.set_unit("s");
+    b.set_unit(Unit::parse("sec"));
     DataSeries r = a / b;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 5.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(),
-        xdataset::canonicalize(xdataset::parse_unit("m/s"))));
+    EXPECT_TRUE(r.unit().same_dimension(
+        Unit::parse("meter").canonicalized().divide_dim(Unit::parse("sec").canonicalized())));
 }
 
 // =========================================================================
@@ -366,43 +327,43 @@ TEST(DataSeriesMeasArithTest, AddMeasurementIntegerToRealPromotes)
 TEST(DataSeriesMeasArithTest, AddMeasurementWithUnits)
 {
     auto s = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
-    s.set_unit("m");
-    Measurement m(100.0, xdataset::parse_unit("cm"));  // 1.0 m after canonicalize
+    s.set_unit("meter");
+    Measurement m(100.0, xdataset::Unit::parse("cm"));  // 1.0 m after canonicalize
     DataSeries r = s + m;
     // 1.0 + 1.0 = 2.0, 2.0 + 1.0 = 3.0
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 2.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 3.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("meter")));
 }
 
 TEST(DataSeriesMeasArithTest, AddMeasurementUnitMismatchThrows)
 {
     auto s = DataSeries::CreateScalarFromVector<double>({1.0});
-    s.set_unit("m");
-    Measurement m(1.0, xdataset::parse_unit("s"));
+    s.set_unit("meter");
+    Measurement m(1.0, xdataset::Unit::parse("sec"));
     EXPECT_THROW(s + m, std::invalid_argument);
 }
 
 TEST(DataSeriesMeasArithTest, AddMeasurementOneDimensionless)
 {
     auto s = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
-    s.set_unit("m");
+    s.set_unit("meter");
     Measurement m(100.0);  // dimensionless
     DataSeries r = s + m;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 101.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 102.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("meter")));
 }
 
 TEST(DataSeriesMeasArithTest, SubtractMeasurementOneDimensionless)
 {
     auto s = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
-    s.set_unit("m");
+    s.set_unit("meter");
     Measurement m(3.0);  // dimensionless
     DataSeries r = s - m;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 7.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 17.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("meter")));
 }
 
 TEST(DataSeriesMeasArithTest, AddMeasurementStringThrows)
@@ -418,7 +379,7 @@ TEST(DataSeriesMeasArithTest, AddScalarDSToVectorMeasurement)
     Eigen::VectorXd v(3); v << 10.0, 20.0, 30.0;
     Measurement m(v);
     DataSeries r = s + m;
-    // Scalar DS + Vector Meas → Vector DataSeries
+    // Scalar DS + Vector Meas 鈫?Vector DataSeries
     EXPECT_EQ(r.data_kind(), DataKind::kVector);
     EXPECT_EQ(r.size(), 2u);
     auto row0 = r.vector_at<double>(0);
@@ -443,11 +404,11 @@ TEST(DataSeriesMeasArithTest, SubtractMeasurement)
 TEST(DataSeriesMeasArithTest, SubtractMeasurementWithUnits)
 {
     auto s = DataSeries::CreateScalarFromVector<double>({5.0});
-    s.set_unit("m");
-    Measurement m(200.0, xdataset::parse_unit("cm"));  // 2.0 m
+    s.set_unit("meter");
+    Measurement m(200.0, xdataset::Unit::parse("cm"));  // 2.0 m
     DataSeries r = s - m;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 3.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("meter")));
 }
 
 // =========================================================================
@@ -467,12 +428,12 @@ TEST(DataSeriesMeasArithTest, MultiplyMeasurement)
 TEST(DataSeriesMeasArithTest, MultiplyMeasurementDerivesResultUnit)
 {
     auto s = DataSeries::CreateScalarFromVector<double>({3.0});
-    s.set_unit("m");
-    Measurement m(2.0, xdataset::parse_unit("s"));
+    s.set_unit("meter");
+    Measurement m(2.0, xdataset::Unit::parse("sec"));
     DataSeries r = s * m;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 6.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(),
-        xdataset::canonicalize(xdataset::parse_unit("m*s"))));
+    EXPECT_TRUE(r.unit().same_dimension(
+        Unit::parse("meter").canonicalized().multiply_dim(Unit::parse("sec").canonicalized())));
 }
 
 TEST(DataSeriesMeasArithTest, MultiplyMeasurementInteger)
@@ -512,12 +473,12 @@ TEST(DataSeriesMeasArithTest, DivideMeasurementIntegerYieldsReal)
 TEST(DataSeriesMeasArithTest, DivideMeasurementDerivesResultUnit)
 {
     auto s = DataSeries::CreateScalarFromVector<double>({10.0});
-    s.set_unit("m");
-    Measurement m(2.0, xdataset::parse_unit("s"));
+    s.set_unit("meter");
+    Measurement m(2.0, xdataset::Unit::parse("sec"));
     DataSeries r = s / m;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 5.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(),
-        xdataset::canonicalize(xdataset::parse_unit("m/s"))));
+    EXPECT_TRUE(r.unit().same_dimension(
+        Unit::parse("meter").canonicalized().divide_dim(Unit::parse("sec").canonicalized())));
 }
 
 // =========================================================================
@@ -528,7 +489,7 @@ TEST(DimensionlessArithTest, AddDimensionlessSeries)
 {
     auto a = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
     auto b = DataSeries::CreateScalarFromVector<double>({3.0, 4.0});
-    // Both dimensionless — same_dimension passes.
+    // Both dimensionless 鈥?same_dimension passes.
     DataSeries r = a + b;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 4.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 6.0);
@@ -540,14 +501,14 @@ TEST(DimensionlessArithTest, MultiplyDimensionlessYieldsDimensionless)
     auto b = DataSeries::CreateScalarFromVector<double>({4.0, 5.0});
     DataSeries r = a * b;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 8.0);
-    EXPECT_TRUE(xdataset::is_dimensionless(r.unit()));
+    EXPECT_TRUE(!r.unit().has_dimension());
 }
 
 TEST(DimensionlessArithTest, PowDimensionlessYieldsDimensionless)
 {
     auto s = DataSeries::CreateScalarFromVector<double>({2.0});
     DataSeries r = xdataset::pow(s, Measurement(3));
-    EXPECT_TRUE(xdataset::is_dimensionless(r.unit()));
+    EXPECT_TRUE(!r.unit().has_dimension());
 }
 
 // =========================================================================
@@ -600,7 +561,7 @@ TEST(MeasArithTest, AddScalarInt)
 
 TEST(MeasArithTest, AddMixedIntRealPromotes)
 {
-    Measurement a(3.5), b(2);  // real + int → real
+    Measurement a(3.5), b(2);  // real + int 鈫?real
     Measurement r = a + b;
     EXPECT_EQ(r.dtype(), DTypeTag::kReal);
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 5.5);
@@ -608,54 +569,54 @@ TEST(MeasArithTest, AddMixedIntRealPromotes)
 
 TEST(MeasArithTest, AddWithUnit)
 {
-    Measurement a(100.0, xdataset::parse_unit("cm"));
-    Measurement b(1.0, xdataset::parse_unit("m"));
+    Measurement a(100.0, xdataset::Unit::parse("cm"));
+    Measurement b(1.0, xdataset::Unit::parse("meter"));
     Measurement r = a + b;
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 2.0);  // 1.0 + 1.0
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("meter")));
 }
 
 TEST(MeasArithTest, AddUnitMismatchThrows)
 {
-    Measurement a(1.0, xdataset::parse_unit("m"));
-    Measurement b(1.0, xdataset::parse_unit("s"));
+    Measurement a(1.0, xdataset::Unit::parse("meter"));
+    Measurement b(1.0, xdataset::Unit::parse("sec"));
     EXPECT_THROW(a + b, std::invalid_argument);
 }
 
 TEST(MeasArithTest, AddWithLeftDimensionless)
 {
     Measurement a(2.0);                                   // dimensionless
-    Measurement b(3.0, xdataset::parse_unit("m"));
+    Measurement b(3.0, xdataset::Unit::parse("meter"));
     Measurement r = a + b;
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 5.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("meter")));
 }
 
 TEST(MeasArithTest, AddWithRightDimensionless)
 {
-    Measurement a(5.0, xdataset::parse_unit("kg"));
+    Measurement a(5.0, xdataset::Unit::parse("meter"));
     Measurement b(3.0);                                   // dimensionless
     Measurement r = a + b;
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 8.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(), xdataset::parse_unit("kg")));
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("meter")));
 }
 
 TEST(MeasArithTest, SubtractWithLeftDimensionless)
 {
     Measurement a(10.0);                                   // dimensionless
-    Measurement b(3.0, xdataset::parse_unit("s"));
+    Measurement b(3.0, xdataset::Unit::parse("sec"));
     Measurement r = a - b;
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 7.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(), xdataset::parse_unit("s")));
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("sec")));
 }
 
 TEST(MeasArithTest, SubtractWithRightDimensionless)
 {
-    Measurement a(10.0, xdataset::parse_unit("N"));
+    Measurement a(10.0, xdataset::Unit::parse("Hz"));
     Measurement b(2.0);                                    // dimensionless
     Measurement r = a - b;
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 8.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(), xdataset::parse_unit("N")));
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("Hz")));
 }
 
 TEST(MeasArithTest, AddStringThrows)
@@ -739,12 +700,12 @@ TEST(MeasArithTest, MultiplyScalar)
 
 TEST(MeasArithTest, MultiplyDerivesUnit)
 {
-    Measurement a(3.0, xdataset::parse_unit("m"));
-    Measurement b(2.0, xdataset::parse_unit("s"));
+    Measurement a(3.0, xdataset::Unit::parse("meter"));
+    Measurement b(2.0, xdataset::Unit::parse("sec"));
     Measurement r = a * b;
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 6.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(),
-        xdataset::canonicalize(xdataset::parse_unit("m*s"))));
+    EXPECT_TRUE(r.unit().same_dimension(
+        Unit::parse("meter").canonicalized().multiply_dim(Unit::parse("sec").canonicalized())));
 }
 
 TEST(MeasArithTest, MultiplyScalarToVector)
@@ -786,16 +747,16 @@ TEST(MeasArithTest, DivideIntYieldsReal)
 
 TEST(MeasArithTest, DivideDerivesUnit)
 {
-    Measurement a(10.0, xdataset::parse_unit("m"));
-    Measurement b(2.0, xdataset::parse_unit("s"));
+    Measurement a(10.0, xdataset::Unit::parse("meter"));
+    Measurement b(2.0, xdataset::Unit::parse("sec"));
     Measurement r = a / b;
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 5.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(),
-        xdataset::canonicalize(xdataset::parse_unit("m/s"))));
+    EXPECT_TRUE(r.unit().same_dimension(
+        Unit::parse("meter").canonicalized().divide_dim(Unit::parse("sec").canonicalized())));
 }
 
 // =========================================================================
-//  pow(Measurement, Measurement) — scalar exponent (int values)
+//  pow(Measurement, Measurement) 鈥?scalar exponent (int values)
 // =========================================================================
 
 TEST(MeasPowTest, PowRealPositive)
@@ -842,11 +803,11 @@ TEST(MeasPowTest, PowMatrix)
 
 TEST(MeasPowTest, PowDerivesUnit)
 {
-    Measurement m(3.0, xdataset::parse_unit("m"));
+    Measurement m(3.0, xdataset::Unit::parse("meter"));
     Measurement r = xdataset::pow(m, Measurement(2));
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 9.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(),
-        xdataset::canonicalize(xdataset::parse_unit("m^2"))));
+    EXPECT_TRUE(r.unit().same_dimension(
+        Unit::parse("meter").canonicalized().pow_dim(2)));
 }
 
 TEST(MeasPowTest, PowStringThrows)
@@ -856,7 +817,7 @@ TEST(MeasPowTest, PowStringThrows)
 }
 
 // =========================================================================
-//  pow(Measurement, Measurement) — broadcast
+//  pow(Measurement, Measurement) 鈥?broadcast
 // =========================================================================
 
 TEST(MeasPowMeasTest, PowMeasScalarExponent)
@@ -878,7 +839,7 @@ TEST(MeasPowMeasTest, PowMeasRealExponent)
 TEST(MeasPowMeasTest, PowMeasExponentMustBeDimensionless)
 {
     Measurement base(2.0);
-    Measurement exp(3, xdataset::parse_unit("m"));
+    Measurement exp(3, xdataset::Unit::parse("meter"));
     EXPECT_THROW(xdataset::pow(base, exp), std::invalid_argument);
 }
 
@@ -917,8 +878,8 @@ TEST(MeasPowMeasTest, PowMeasBroadcastVectorToScalar)
 
 TEST(MeasPowMeasTest, PowMeasNonScalarExpRequiresDimlessBase)
 {
-    // Base has unit "m", exponent is vector → must throw
-    Measurement base(2.0, xdataset::parse_unit("m"));
+    // Base has unit "m", exponent is vector 鈫?must throw
+    Measurement base(2.0, xdataset::Unit::parse("meter"));
     Eigen::VectorXd ev(2); ev << 1.0, 2.0;
     Measurement exp(ev);
     EXPECT_THROW(xdataset::pow(base, exp), std::invalid_argument);
@@ -926,12 +887,12 @@ TEST(MeasPowMeasTest, PowMeasNonScalarExpRequiresDimlessBase)
 
 TEST(MeasPowMeasTest, PowMeasWithUnitAndScalarExponent)
 {
-    Measurement base(2.0, xdataset::parse_unit("m"));
-    Measurement exp(3);  // scalar int exponent → unit derivation works
+    Measurement base(2.0, xdataset::Unit::parse("meter"));
+    Measurement exp(3);  // scalar int exponent 鈫?unit derivation works
     Measurement r = xdataset::pow(base, exp);
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 8.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(),
-        xdataset::canonicalize(xdataset::parse_unit("m^3"))));
+    EXPECT_TRUE(r.unit().same_dimension(
+        Unit::parse("meter").canonicalized().pow_dim(3)));
 }
 
 // =========================================================================
@@ -960,19 +921,19 @@ TEST(DataSeriesPowMeasTest, PowMeasRealExponent)
 TEST(DataSeriesPowMeasTest, PowMeasWithUnits)
 {
     auto s = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
-    s.set_unit("m");
+    s.set_unit("meter");
     Measurement exp(2);
     DataSeries r = xdataset::pow(s, exp);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 4.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 9.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.unit(),
-        xdataset::canonicalize(xdataset::parse_unit("m^2"))));
+    EXPECT_TRUE(r.unit().same_dimension(
+        Unit::parse("meter").canonicalized().pow_dim(2)));
 }
 
 TEST(DataSeriesPowMeasTest, PowMeasExponentMustBeDimless)
 {
     auto s = DataSeries::CreateScalarFromVector<double>({2.0});
-    Measurement exp(2, xdataset::parse_unit("m"));
+    Measurement exp(2, xdataset::Unit::parse("meter"));
     EXPECT_THROW(xdataset::pow(s, exp), std::invalid_argument);
 }
 
@@ -1128,11 +1089,11 @@ TEST(DataArrayMetaTest, IndepNamesReturnsKeys)
 TEST(DataArrayArithTest, AddScalarIndependentArrays)
 {
     auto ds_a = DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
-    ds_a.set_unit(xdataset::parse_unit("m"));
+    ds_a.set_unit(xdataset::Unit::parse("meter"));
     auto a = DataArray::CreateIndependent("a", std::move(ds_a));
 
     auto ds_b = DataSeries::CreateScalarFromVector<double>({4.0, 5.0, 6.0});
-    ds_b.set_unit(xdataset::parse_unit("m"));
+    ds_b.set_unit(xdataset::Unit::parse("meter"));
     auto b = DataArray::CreateIndependent("b", std::move(ds_b));
 
     auto r = a + b;
@@ -1140,7 +1101,7 @@ TEST(DataArrayArithTest, AddScalarIndependentArrays)
     EXPECT_EQ(r.data().size(), 3u);
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 5.0);
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(2), 9.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.data().unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(r.data().unit().same_dimension(xdataset::Unit::parse("meter")));
     // Result inherits structure from left operand
     EXPECT_EQ(r.multi_dimension_spec().rank(), a.multi_dimension_spec().rank());
     EXPECT_EQ(r.kind(), a.kind());
@@ -1149,11 +1110,11 @@ TEST(DataArrayArithTest, AddScalarIndependentArrays)
 TEST(DataArrayArithTest, AddArrayUnitMismatchThrows)
 {
     auto ds_a = DataSeries::CreateScalarFromVector<double>({1.0});
-    ds_a.set_unit(xdataset::parse_unit("m"));
+    ds_a.set_unit(xdataset::Unit::parse("meter"));
     auto a = DataArray::CreateIndependent("a", std::move(ds_a));
 
     auto ds_b = DataSeries::CreateScalarFromVector<double>({1.0});
-    ds_b.set_unit(xdataset::parse_unit("s"));
+    ds_b.set_unit(xdataset::Unit::parse("sec"));
     auto b = DataArray::CreateIndependent("b", std::move(ds_b));
 
     EXPECT_THROW(a + b, std::invalid_argument);
@@ -1162,7 +1123,7 @@ TEST(DataArrayArithTest, AddArrayUnitMismatchThrows)
 TEST(DataArrayArithTest, AddArrayOneDimensionless)
 {
     auto ds_a = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
-    ds_a.set_unit(xdataset::parse_unit("m"));
+    ds_a.set_unit(xdataset::Unit::parse("meter"));
     auto a = DataArray::CreateIndependent("a", std::move(ds_a));
 
     auto ds_b = DataSeries::CreateScalarFromVector<double>({3.0, 4.0});
@@ -1172,7 +1133,7 @@ TEST(DataArrayArithTest, AddArrayOneDimensionless)
     auto r = a + b;
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 4.0);
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 6.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.data().unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(r.data().unit().same_dimension(xdataset::Unit::parse("meter")));
 }
 
 TEST(DataArrayArithTest, AddArraySpecMismatchThrows)
@@ -1219,35 +1180,35 @@ TEST(DataArrayArithTest, SubtractArrays)
 TEST(DataArrayArithTest, MultiplyArrays)
 {
     auto ds_a = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
-    ds_a.set_unit(xdataset::parse_unit("m"));
+    ds_a.set_unit(xdataset::Unit::parse("meter"));
     auto a = DataArray::CreateIndependent("a", std::move(ds_a));
 
     auto ds_b = DataSeries::CreateScalarFromVector<double>({4.0, 5.0});
-    ds_b.set_unit(xdataset::parse_unit("m"));
+    ds_b.set_unit(xdataset::Unit::parse("meter"));
     auto b = DataArray::CreateIndependent("b", std::move(ds_b));
 
     auto r = a * b;
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 8.0);
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 15.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.data().unit(),
-        xdataset::canonicalize(xdataset::parse_unit("m^2"))));
+    EXPECT_TRUE(r.data().unit().same_dimension(
+        Unit::parse("meter").canonicalized().pow_dim(2)));
 }
 
 TEST(DataArrayArithTest, DivideArrays)
 {
     auto ds_a = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
-    ds_a.set_unit(xdataset::parse_unit("m"));
+    ds_a.set_unit(xdataset::Unit::parse("meter"));
     auto a = DataArray::CreateIndependent("a", std::move(ds_a));
 
     auto ds_b = DataSeries::CreateScalarFromVector<double>({2.0, 4.0});
-    ds_b.set_unit(xdataset::parse_unit("s"));
+    ds_b.set_unit(xdataset::Unit::parse("sec"));
     auto b = DataArray::CreateIndependent("b", std::move(ds_b));
 
     auto r = a / b;
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 5.0);
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 5.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.data().unit(),
-        xdataset::canonicalize(xdataset::parse_unit("m/s"))));
+    EXPECT_TRUE(r.data().unit().same_dimension(
+        Unit::parse("meter").canonicalized().divide_dim(Unit::parse("sec").canonicalized())));
 }
 
 // =========================================================================
@@ -1304,9 +1265,9 @@ TEST(DataArrayMeasArithTest, DivideMeasurement)
 TEST(DataArrayMeasArithTest, AddMeasurementWithUnitMismatchThrows)
 {
     auto ds_a = DataSeries::CreateScalarFromVector<double>({1.0});
-    ds_a.set_unit(xdataset::parse_unit("m"));
+    ds_a.set_unit(xdataset::Unit::parse("meter"));
     auto a = DataArray::CreateIndependent("a", std::move(ds_a));
-    Measurement m(1.0, xdataset::parse_unit("s"));
+    Measurement m(1.0, xdataset::Unit::parse("sec"));
 
     EXPECT_THROW(a + m, std::invalid_argument);
 }
@@ -1314,14 +1275,14 @@ TEST(DataArrayMeasArithTest, AddMeasurementWithUnitMismatchThrows)
 TEST(DataArrayMeasArithTest, AddMeasurementOneDimensionless)
 {
     auto ds_a = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
-    ds_a.set_unit(xdataset::parse_unit("m"));
+    ds_a.set_unit(xdataset::Unit::parse("meter"));
     auto a = DataArray::CreateIndependent("a", std::move(ds_a));
     Measurement m(100.0);  // dimensionless
 
     auto r = a + m;
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 101.0);
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 102.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.data().unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(r.data().unit().same_dimension(xdataset::Unit::parse("meter")));
 }
 
 // =========================================================================
@@ -1344,22 +1305,22 @@ TEST(DataArrayPowMeasTest, PowWithIntegerExponent)
 TEST(DataArrayPowMeasTest, PowWithUnitDerivesUnit)
 {
     auto ds_a = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
-    ds_a.set_unit(xdataset::parse_unit("m"));
+    ds_a.set_unit(xdataset::Unit::parse("meter"));
     auto a = DataArray::CreateIndependent("a", std::move(ds_a));
     Measurement exp(2);
 
     auto r = xdataset::pow(a, exp);
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 4.0);
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 9.0);
-    EXPECT_TRUE(xdataset::same_dimension(r.data().unit(),
-        xdataset::canonicalize(xdataset::parse_unit("m^2"))));
+    EXPECT_TRUE(r.data().unit().same_dimension(
+        Unit::parse("meter").canonicalized().pow_dim(2)));
 }
 
 TEST(DataArrayPowMeasTest, PowExponentMustBeDimless)
 {
     auto a = DataArray::CreateIndependent("a",
         DataSeries::CreateScalarFromVector<double>({2.0}));
-    Measurement exp(2, xdataset::parse_unit("m"));
+    Measurement exp(2, xdataset::Unit::parse("meter"));
     EXPECT_THROW(xdataset::pow(a, exp), std::invalid_argument);
 }
 

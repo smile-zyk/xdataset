@@ -24,6 +24,7 @@
 #include "data_array.h"
 
 #include <complex>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -190,7 +191,7 @@ struct MeasOpTraits {
     const char*  op_name;
     bool         require_same_dim;   // + - require it; * / pow do not
     bool         int_div_to_real;    // / needs it; + - * pow do not
-    Unit (*derive_unit)(const Unit&, const Unit&);
+    std::function<Unit(const Unit&, const Unit&)> derive_unit;
 
     // The scalar element operation (all operands are canonicalised double or
     // complex; int-overflow comes from meas_as_int directly).
@@ -216,10 +217,10 @@ Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
     Measurement b = rhs.canonicalized();
 
     // --- Step 3: unit check (+ / -) ----------------------------------------
-    if (tr.require_same_dim && !same_dimension(a.unit(), b.unit()))
+    if (tr.require_same_dim && !a.unit().same_dimension(b.unit()))
         throw std::invalid_argument(
             std::string(tr.op_name) + ": unit dimension mismatch [" +
-            unit_string(a.unit()) + "] vs [" + unit_string(b.unit()) + "]");
+            a.unit().to_string() + "] vs [" + b.unit().to_string() + "]");
 
     // --- Step 4: result metadata -------------------------------------------
     DataKind  res_kind  = promoted_kind(a.kind(), b.kind());
@@ -340,12 +341,12 @@ inline Unit unit_left(const Unit& a, const Unit&) { return a; }
 /// - One dimensionless  -> use the other's unit
 /// - Both have different non-dimensionless units -> throw
 inline Unit resolve_add_sub_unit(const Unit& a, const Unit& b) {
-    if (same_dimension(a, b)) return a;
-    if (is_dimensionless(a))  return b;
-    if (is_dimensionless(b))  return a;
+    if (a.same_dimension(b)) return a;
+    if (!a.has_dimension())  return b;
+    if (!b.has_dimension())  return a;
     throw std::invalid_argument(
         "operator +/-: unit dimension mismatch [" +
-        unit_string(a) + "] vs [" + unit_string(b) + "]");
+        a.to_string() + "] vs [" + b.to_string() + "]");
 }
 
 const MeasOpTraits kMeasAdd = {
@@ -353,9 +354,13 @@ const MeasOpTraits kMeasAdd = {
 const MeasOpTraits kMeasSub = {
     "operator-", false, false, resolve_add_sub_unit, op_sub_d, op_sub_c, op_sub_i};
 const MeasOpTraits kMeasMul = {
-    "operator*", false, false, multiply_dim,  op_mul_d, op_mul_c, op_mul_i};
+    "operator*", false, false,
+    [](const Unit& a, const Unit& b) { return a.multiply_dim(b); },
+    op_mul_d, op_mul_c, op_mul_i};
 const MeasOpTraits kMeasDiv = {
-    "operator/", false, true,  divide_dim,    op_div_d, op_div_c, op_div_i};
+    "operator/", false, true,
+    [](const Unit& a, const Unit& b) { return a.divide_dim(b); },
+    op_div_d, op_div_c, op_div_i};
 
 }  // anonymous namespace
 
@@ -388,7 +393,7 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
     if (exponent.dtype() == DTypeTag::kString)
         throw std::invalid_argument(
             "pow: exponent cannot be string");
-    if (!is_dimensionless(exponent.unit()))
+    if (!exponent.unit().has_dimension())
         throw std::invalid_argument(
             "pow: exponent must be dimensionless (it carries a physical unit)");
     if (base.dtype() == DTypeTag::kString)
@@ -401,7 +406,7 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
     // --- non-scalar exponent -> base must be dimensionless ----------------
     //     If exponent = [2, 3], we'd need both u^2 and u^3 -- a single Unit
     //     cannot represent the mixed result, so we forbid it outright.
-    if (exponent.kind() != DataKind::kScalar && !is_dimensionless(a.unit()))
+    if (exponent.kind() != DataKind::kScalar && !a.unit().has_dimension())
         throw std::invalid_argument(
             "pow: non-scalar exponent requires a dimensionless base");
 
@@ -417,7 +422,7 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
 
     Unit result_unit;
     if (exponent.kind() == DataKind::kScalar && exponent.dtype() == DTypeTag::kInteger)
-        result_unit = pow_dim(a.unit(), meas_as_int(exponent, 0));
+        result_unit = a.unit().pow_dim(meas_as_int(exponent, 0));
     else
         result_unit = a.unit();  // preserve base unit
 
@@ -532,10 +537,10 @@ DataSeries ds_ds_apply(const DataSeries& lhs, const DataSeries& rhs,
     DataSeries a = lhs.canonicalized();
     DataSeries b = rhs.canonicalized();
 
-    if (same_dim_required && !same_dimension(a.unit(), b.unit()))
+    if (same_dim_required && !a.unit().same_dimension(b.unit()))
         throw std::invalid_argument(
             std::string(op_name) + ": unit dimension mismatch [" +
-            unit_string(a.unit()) + "] vs [" + unit_string(b.unit()) + "]");
+            a.unit().to_string() + "] vs [" + b.unit().to_string() + "]");
 
     auto res_kind  = promoted_kind(a.data_kind(), b.data_kind());
     auto res_dtype = promoted_dtype(a.dtype(), b.dtype());
@@ -572,14 +577,14 @@ DataSeries operator-(const DataSeries& lhs, const DataSeries& rhs) {
 DataSeries operator*(const DataSeries& lhs, const DataSeries& rhs) {
     return ds_ds_apply(lhs, rhs, "operator*",
         [](const Measurement& a, const Measurement& b) { return a * b; },
-        multiply_dim,
+        [](const Unit& a, const Unit& b) { return a.multiply_dim(b); },
         /*same_dim*/ false, /*int_div_real*/ false);
 }
 
 DataSeries operator/(const DataSeries& lhs, const DataSeries& rhs) {
     return ds_ds_apply(lhs, rhs, "operator/",
         [](const Measurement& a, const Measurement& b) { return a / b; },
-        divide_dim,
+        [](const Unit& a, const Unit& b) { return a.divide_dim(b); },
         /*same_dim*/ false, /*int_div_real*/ true);
 }
 
@@ -620,10 +625,10 @@ DataSeries ds_meas_apply(const DataSeries& lhs, const Measurement& rhs,
     DataSeries  a     = lhs.canonicalized();
     Measurement rhs_c = rhs.canonicalized();
 
-    if (same_dim_required && !same_dimension(a.unit(), rhs_c.unit()))
+    if (same_dim_required && !a.unit().same_dimension(rhs_c.unit()))
         throw std::invalid_argument(
             std::string(op_name) + ": unit dimension mismatch [" +
-            unit_string(a.unit()) + "] vs [" + unit_string(rhs_c.unit()) + "]");
+            a.unit().to_string() + "] vs [" + rhs_c.unit().to_string() + "]");
 
     auto res_kind  = promoted_kind(a.data_kind(), rhs_c.kind());
     auto res_dtype = promoted_dtype(a.dtype(), rhs_c.dtype());
@@ -659,14 +664,14 @@ DataSeries operator-(const DataSeries& lhs, const Measurement& rhs) {
 DataSeries operator*(const DataSeries& lhs, const Measurement& rhs) {
     return ds_meas_apply(lhs, rhs, "operator*",
         [](const Measurement& a, const Measurement& b) { return a * b; },
-        multiply_dim,
+        [](const Unit& a, const Unit& b) { return a.multiply_dim(b); },
         /*same_dim*/ false, /*int_div_real*/ false);
 }
 
 DataSeries operator/(const DataSeries& lhs, const Measurement& rhs) {
     return ds_meas_apply(lhs, rhs, "operator/",
         [](const Measurement& a, const Measurement& b) { return a / b; },
-        divide_dim,
+        [](const Unit& a, const Unit& b) { return a.divide_dim(b); },
         /*same_dim*/ false, /*int_div_real*/ true);
 }
 
@@ -681,7 +686,7 @@ DataSeries pow(const DataSeries& base, const Measurement& exp) {
     // --- validation ---------------------------------------------------------
     if (exp.dtype() == DTypeTag::kString)
         throw std::invalid_argument("pow: exponent cannot be string");
-    if (!is_dimensionless(exp.unit()))
+    if (!exp.unit().has_dimension())
         throw std::invalid_argument(
             "pow: exponent must be dimensionless (it carries a physical unit)");
     if (exp.kind() != DataKind::kScalar)
@@ -702,7 +707,7 @@ DataSeries pow(const DataSeries& base, const Measurement& exp) {
     // Integer exponent upgrades to pow_dim for proper unit derivation.
     result.set_unit(a.unit());
     if (exp.dtype() == DTypeTag::kInteger)
-        result.set_unit(pow_dim(a.unit(), exp_c.as_scalar<int>()));
+        result.set_unit(a.unit().pow_dim(exp_c.as_scalar<int>()));
 
     // --- per-row computation ------------------------------------------------
     for (std::size_t i = 0; i < a.size(); ++i)

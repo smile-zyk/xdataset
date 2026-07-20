@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "xdataset_predefine.h"
-#include "units_util.h"
+#include "unit.h"
 
 namespace xdataset
 {
@@ -228,8 +228,6 @@ namespace xdataset
         std::string operator()(const Eigen::Tensor<std::string, 2>& v) const;
 
     private:
-        static std::string format_complex(const std::complex<double>& v);
-        static std::string format_scalar_string(const std::string& v);
         std::string with_unit(const std::string& s) const;
 
         Unit unit_;

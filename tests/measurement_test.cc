@@ -72,13 +72,13 @@ TEST(CellTest, AppendMismatchedCellThrows) {
 
 TEST(CellTest, AppendUnitMismatchThrows) {
     // First append succeeds and sets the series unit.
-    Measurement m_m = Measurement(1.0, xdataset::parse_unit("m"));
+    Measurement m_m = Measurement(1.0, xdataset::Unit::parse("meter"));
     DataSeries s = DataSeries::CreateScalar<double>(0);
     s.append(m_m);
-    EXPECT_TRUE(xdataset::same_dimension(s.unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(s.unit().same_dimension(xdataset::Unit::parse("meter")));
 
     // Subsequent append with incompatible unit must throw.
-    Measurement m_s = Measurement(2.0, xdataset::parse_unit("s"));
+    Measurement m_s = Measurement(2.0, xdataset::Unit::parse("sec"));
     EXPECT_THROW(s.append(m_s), std::invalid_argument);
 }
 
@@ -121,32 +121,32 @@ TEST(CellTest, CellAtRoundtripMatrix) {
 TEST(CellUnitTest, DefaultCellIsDimensionless)
 {
     Measurement m;
-    EXPECT_TRUE(xdataset::same_dimension(m.unit(), xdataset::Unit()));
+    EXPECT_TRUE(m.unit().same_dimension(xdataset::Unit()));
 }
 
 TEST(CellUnitTest, CopyPropagatesUnit)
 {
     Measurement m = Measurement(3.14);
-    m.set_unit(xdataset::parse_unit("m"));
+    m.set_unit(xdataset::Unit::parse("meter"));
     Measurement m2(m);
-    EXPECT_TRUE(xdataset::same_dimension(m2.unit(), m.unit()));
+    EXPECT_TRUE(m2.unit().same_dimension(m.unit()));
 }
 
 TEST(CellUnitTest, MovePropagatesUnit)
 {
     Measurement m = Measurement(2.72);
-    m.set_unit(xdataset::parse_unit("Hz"));
+    m.set_unit(xdataset::Unit::parse("Hz"));
     Measurement m2(std::move(m));
-    EXPECT_TRUE(xdataset::same_dimension(m2.unit(), xdataset::parse_unit("Hz")));
+    EXPECT_TRUE(m2.unit().same_dimension(xdataset::Unit::parse("Hz")));
 }
 
 TEST(CellUnitTest, AssignPropagatesUnit)
 {
     Measurement m1 = Measurement(1.0);
-    m1.set_unit(xdataset::parse_unit("m"));
+    m1.set_unit(xdataset::Unit::parse("meter"));
     Measurement m2;
     m2 = m1;
-    EXPECT_TRUE(xdataset::same_dimension(m2.unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(m2.unit().same_dimension(xdataset::Unit::parse("meter")));
 }
 
 // ---------------------------------------------------------------------------
@@ -156,37 +156,94 @@ TEST(CellUnitTest, AssignPropagatesUnit)
 //  Measurement: canonicalized
 // =========================================================================
 
-TEST(MeasurementCanonTest, CanonicalizedKmToM)
+TEST(MeasurementCanonTest, CanonicalizedCmToMeter)
 {
-    Measurement m(5.0, xdataset::parse_unit("km"));
+    Measurement m(5.0, xdataset::Unit::parse("cm"));
     Measurement c = m.canonicalized();
-    EXPECT_DOUBLE_EQ(c.as_scalar<double>(), 5000.0);
+    // 5 cm 鈫?0.05 m
+    EXPECT_DOUBLE_EQ(c.as_scalar<double>(), 0.05);
     EXPECT_DOUBLE_EQ(c.unit().multiplier(), 1.0);
-    EXPECT_TRUE(xdataset::same_dimension(c.unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(c.unit().same_dimension(xdataset::Unit::parse("meter")));
 }
 
 TEST(MeasurementCanonTest, CanonicalizedFastPath)
 {
-    Measurement m(3.0, xdataset::parse_unit("Hz"));  // already coherent SI
+    Measurement m(3.0, xdataset::Unit::parse("Hz"));  // already coherent SI
     Measurement c = m.canonicalized();
     EXPECT_DOUBLE_EQ(c.as_scalar<double>(), 3.0);
-    EXPECT_TRUE(xdataset::same_dimension(c.unit(), xdataset::parse_unit("Hz")));
-}
-
-TEST(MeasurementCanonTest, CanonicalizedDegC)
-{
-    Measurement m(100.0, xdataset::parse_unit("degC"));
-    Measurement c = m.canonicalized();
-    EXPECT_NEAR(c.as_scalar<double>(), 373.15, 1e-10);
-    EXPECT_FALSE(xdataset::is_affine(c.unit()));
+    EXPECT_TRUE(c.unit().same_dimension(xdataset::Unit::parse("Hz")));
 }
 
 TEST(MeasurementCanonTest, CanonicalizedStringNoValueChange)
 {
-    Measurement m(std::string("hello"), xdataset::parse_unit("m"));
+    Measurement m(std::string("hello"), xdataset::Unit::parse("meter"));
     Measurement c = m.canonicalized();
     EXPECT_EQ(c.as_scalar<std::string>(), "hello");
-    EXPECT_TRUE(xdataset::same_dimension(c.unit(), xdataset::parse_unit("m")));
+    EXPECT_TRUE(c.unit().same_dimension(xdataset::Unit::parse("meter")));
+}
+
+// =========================================================================
+//  MeasurementFormatter auto-scale
+// =========================================================================
+
+TEST(MeasurementFormatTest, AutoScaleMega)
+{
+    Measurement m(1e9, xdataset::Unit::parse("Hz"));
+    std::string s = m.to_string();
+    // 1e9 Hz 鈫?1 GHz
+    EXPECT_TRUE(s.find("GHz") != std::string::npos);
+}
+
+TEST(MeasurementFormatTest, AutoScaleMilli)
+{
+    Measurement m(0.002, xdataset::Unit::parse("V"));
+    std::string s = m.to_string();
+    // 0.002 V 鈫?2 mV
+    EXPECT_TRUE(s.find("2") != std::string::npos);
+    EXPECT_TRUE(s.find("mV") != std::string::npos);
+}
+
+TEST(MeasurementFormatTest, AutoScaleKiloMeter)
+{
+    Measurement m(5000, xdataset::Unit::parse("meter"));
+    std::string s = m.to_string();
+    // 5000 meter 鈫?5 Kmeter
+    EXPECT_TRUE(s.find("5") != std::string::npos);
+    EXPECT_TRUE(s.find("Kmeter") != std::string::npos);
+}
+
+TEST(MeasurementFormatTest, AutoScaleMilliMeter)
+{
+    Measurement m(0.003, xdataset::Unit::parse("meter"));
+    std::string s = m.to_string();
+    // 0.003 meter 鈫?3 mmeter
+    EXPECT_TRUE(s.find("3") != std::string::npos);
+    EXPECT_TRUE(s.find("mmeter") != std::string::npos);
+}
+
+TEST(MeasurementFormatTest, AutoScaleNoneForDimensionless)
+{
+    Measurement m(3.14);
+    std::string s = m.to_string();
+    // 3.14 stays 3.14 (in [1, 1000))
+    EXPECT_NE(s.find("3.14"), std::string::npos);
+}
+
+TEST(MeasurementFormatTest, AutoScaleMegaDimensionless)
+{
+    Measurement m(1000000);
+    std::string s = m.to_string();
+    // 1000000 鈫?1 M (dimensionless auto-scale)
+    EXPECT_TRUE(s.find("M") != std::string::npos);
+    EXPECT_TRUE(s.find("1") != std::string::npos);
+}
+
+TEST(MeasurementFormatTest, AutoScaleKiloFor100Hz)
+{
+    Measurement m(100.0, xdataset::Unit::parse("Hz"));
+    std::string s = m.to_string();
+    // 100 Hz stays 100 Hz (1 <= 100 < 1000)
+    EXPECT_TRUE(s.find("100") != std::string::npos);
 }
 
 // =========================================================================

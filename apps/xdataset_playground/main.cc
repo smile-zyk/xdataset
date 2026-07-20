@@ -1,5 +1,5 @@
 #include "block.h"
-#include "units_util.h"
+#include "unit.h"
 
 #include <iostream>
 #include <memory>
@@ -76,9 +76,9 @@ int main()
         // =====================================================================
         section("1. Simple 2x3 regular block");
         {
-            auto m = parse_unit("m");
-            auto s = parse_unit("s");
-            auto V = parse_unit("V");
+            auto m = Unit::parse("m");
+            auto s = Unit::parse("s");
+            auto V = Unit::parse("V");
 
             BlockCreateInfo info;
             info.name = "simple";
@@ -128,7 +128,7 @@ int main()
             info.name = "vectors";
             info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
-            info.dependent_specs.push_back({"vec", vectors(4, 3, parse_unit("m/s"))});
+            info.dependent_specs.push_back({"vec", vectors(4, 3, Unit::parse("m/s"))});
             Block block(info);
 
             const DataFrame& t = block.GetOrCreateDataFrame();
@@ -146,7 +146,7 @@ int main()
             info.name = "matrices";
             info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
-            info.dependent_specs.push_back({"mat", matrices(4, 2, 2, parse_unit("N*m"))});
+            info.dependent_specs.push_back({"mat", matrices(4, 2, 2, Unit::parse("N*m"))});
             Block block(info);
 
             const DataFrame& t = block.GetOrCreateDataFrame();
@@ -191,7 +191,7 @@ int main()
             info.independent_specs.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Ragged({1, 2})});
             info.independent_specs.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Regular(2)});
             info.dependent_specs.push_back({"w", doubles({1000.0, 1001.0, 1002.0, 1003.0, 1004.0, 1005.0})});
-            info.dependent_specs.push_back({"v", vectors(6, 2, parse_unit("Hz"))});
+            info.dependent_specs.push_back({"v", vectors(6, 2, Unit::parse("Hz"))});
             Block block(info);
 
             const DataFrame& t = block.GetOrCreateDataFrame();
@@ -290,9 +290,9 @@ int main()
         // =====================================================================
         section("10. Measurement type inspection");
         {
-            Measurement d(3.14, parse_unit("m/s"));
-            Measurement i(42, parse_unit("kg"));
-            Measurement c(std::complex<double>(1.0, -2.0), parse_unit("V"));
+            Measurement d(3.14, Unit::parse("m/s"));
+            Measurement i(42, Unit::parse("kg"));
+            Measurement c(std::complex<double>(1.0, -2.0), Unit::parse("V"));
             Measurement s(std::string("hello"));
 
             std::cout << "Measurement(3.14 m/s):     "

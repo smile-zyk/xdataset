@@ -58,19 +58,19 @@ DataSeries& DataSeries::operator=(DataSeries&& other) noexcept {
 // =========================================================================
 
 void DataSeries::set_unit(const std::string& s) {
-    unit_ = parse_unit(s);
+    unit_ = Unit::parse(s);
 }
 
 void DataSeries::canonicalize() {
     // Strings are not numeric — only update the unit tag, no value conversion.
     if (dtype_ == DTypeTag::kString) {
-        unit_ = xdataset::canonicalize(unit_);
+        unit_ = unit_.canonicalized();
         return;
     }
 
-    const double mult = multiplier_of(unit_);
-    const Unit target = xdataset::canonicalize(unit_);
-    const bool affine = is_affine(unit_);
+    const double mult = unit_.multiplier();
+    const Unit target = unit_.canonicalized();
+    const bool affine = unit_.is_affine();
 
     if (!affine && mult == 1.0) {
         unit_ = target;
@@ -81,17 +81,17 @@ void DataSeries::canonicalize() {
         Index idx = static_cast<Index>(i);
         if (kind_ == DataKind::kScalar) {
             double& v = scalar_at<double>(idx);
-            v = affine ? units::convert(v, unit_, target) : v * mult;
+            v = affine ? units::convert(v, unit_.raw(), target.raw()) : v * mult;
         } else if (kind_ == DataKind::kVector) {
             typename NumericVectorTypes<double>::MapType v = vector_at<double>(idx);
             for (Index j = 0; j < v.size(); ++j) {
-                v(j) = affine ? units::convert(v(j), unit_, target) : v(j) * mult;
+                v(j) = affine ? units::convert(v(j), unit_.raw(), target.raw()) : v(j) * mult;
             }
         } else {
             typename NumericMatrixTypes<double>::MapType m = matrix_at<double>(idx);
             for (Index r = 0; r < m.rows(); ++r) {
                 for (Index c = 0; c < m.cols(); ++c) {
-                    m(r, c) = affine ? units::convert(m(r, c), unit_, target) : m(r, c) * mult;
+                    m(r, c) = affine ? units::convert(m(r, c), unit_.raw(), target.raw()) : m(r, c) * mult;
                 }
             }
         }
@@ -106,7 +106,7 @@ DataSeries DataSeries::canonicalized() const {
 }
 
 bool DataSeries::is_canonicalized() const {
-    return is_canonical(unit_);
+    return unit_.is_canonical();
 }
 
 // =========================================================================
@@ -157,14 +157,14 @@ void DataSeries::assign_from(const DataSeries& src, Index src_row, Index dst_row
         dst_row < 0 || static_cast<std::size_t>(dst_row) >= size()) throw std::out_of_range("row index out of range");
 
     // First non-dimensionless source sets the series' unit.
-    if (is_dimensionless(unit_) && !is_dimensionless(src.unit_)) {
+    if (!unit_.has_dimension() && !src.unit_.has_dimension()) {
         if (dtype_ == DTypeTag::kString)
             throw std::invalid_argument("string series cannot have a named unit");
         unit_ = src.unit_;
-    } else if (!same_dimension(src.unit_, unit_)) {
+    } else if (!src.unit_.same_dimension(unit_)) {
         throw std::invalid_argument(
-            "unit mismatch: series has dimension [" + unit_string(unit_) +
-            "], source has [" + unit_string(src.unit_) + "]");
+            "unit mismatch: series has dimension [" + unit_.to_string() +
+            "], source has [" + src.unit_.to_string() + "]");
     }
 
     if (kind_ == DataKind::kScalar) {
@@ -202,14 +202,14 @@ void DataSeries::append(const Measurement& m) {
     if (m.kind() != kind_ || m.dtype() != dtype_ || m.shape() != shape_) throw std::bad_cast();
 
     // First non-dimensionless measurement sets the series' unit.
-    if (is_dimensionless(unit_) && !is_dimensionless(m.unit())) {
+    if (!unit_.has_dimension() && !m.unit().has_dimension()) {
         if (dtype_ == DTypeTag::kString)
             throw std::invalid_argument("string series cannot have a named unit");
         unit_ = m.unit();
-    } else if (!same_dimension(m.unit(), unit_)) {
+    } else if (!m.unit().same_dimension(unit_)) {
         throw std::invalid_argument(
-            "unit mismatch: series has dimension [" + unit_string(unit_) +
-            "], measurement has [" + unit_string(m.unit()) + "]");
+            "unit mismatch: series has dimension [" + unit_.to_string() +
+            "], measurement has [" + m.unit().to_string() + "]");
     }
 
     if (kind_ == DataKind::kScalar) {

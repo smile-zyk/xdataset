@@ -14,7 +14,7 @@
 
 #include "detail/storage.h"
 #include "measurement.h"
-#include "units_util.h"
+#include "unit.h"
 #include "xdataset_predefine.h"
 
 namespace xdataset {
@@ -332,7 +332,7 @@ public:
     // Assign a unit to this series.  No value conversion is performed ��
     // the existing numbers are simply tagged with the given unit.
     void set_unit(const Unit& u) {
-        if (dtype_ == DTypeTag::kString && !is_dimensionless(u))
+        if (dtype_ == DTypeTag::kString && u.has_dimension())
             throw std::invalid_argument("string series cannot have a named unit");
         unit_ = u;
     }

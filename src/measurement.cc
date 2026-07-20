@@ -1,4 +1,5 @@
 #include "measurement.h"
+#include "unit.h"
 
 #include <sstream>
 #include <stdexcept>
@@ -270,47 +271,49 @@ namespace xdataset
 
     std::string MeasurementFormatter::with_unit(const std::string& s) const
     {
-        if (is_dimensionless(unit_))
+        if (!unit_.has_dimension())
             return s;
-        return s + " " + unit_string(unit_);
+        return s + " " + unit_.to_string();
     }
 
-    std::string MeasurementFormatter::format_complex(const std::complex<double>& v)
-    {
-        std::ostringstream oss;
-        oss << v.real();
-        if (v.imag() >= 0.0) oss << "+";
-        oss << v.imag() << "i";
-        return oss.str();
-    }
-
-    std::string MeasurementFormatter::format_scalar_string(const std::string& v)
-    {
-        return v;
-    }
+    // --- scalar with auto-scale ------------------------------------------
 
     std::string MeasurementFormatter::operator()(double v) const
     {
+        auto bd = unit_.best_display(v);
         std::ostringstream oss;
-        oss << v;
-        return with_unit(oss.str());
+        oss << (v * bd.scale);
+        if (bd.name.empty())
+            return oss.str();
+        return oss.str() + " " + bd.name;
     }
 
     std::string MeasurementFormatter::operator()(int v) const
     {
+        auto bd = unit_.best_display(static_cast<double>(v));
         std::ostringstream oss;
-        oss << v;
-        return with_unit(oss.str());
+        oss << (v * bd.scale);
+        if (bd.name.empty())
+            return oss.str();
+        return oss.str() + " " + bd.name;
     }
 
     std::string MeasurementFormatter::operator()(const std::complex<double>& v) const
     {
-        return with_unit(format_complex(v));
+        auto bd = unit_.best_display(v.real());
+        std::ostringstream oss;
+        oss << (v.real() * bd.scale);
+        double imag = v.imag() * bd.scale;
+        if (imag >= 0.0) oss << "+";
+        oss << imag << "i";
+        if (bd.name.empty())
+            return oss.str();
+        return oss.str() + " " + bd.name;
     }
 
     std::string MeasurementFormatter::operator()(const std::string& v) const
     {
-        return with_unit(format_scalar_string(v));
+        return v;
     }
 
     // ── vector ─────────────────────────────────────────────────────────────
@@ -343,15 +346,22 @@ namespace xdataset
 
     std::string MeasurementFormatter::operator()(const Eigen::VectorXcd& v) const
     {
+        auto bd = unit_.best_display(v.size() > 0 ? v(0).real() : 0.0);
         std::ostringstream oss;
         oss << "[";
         for (Index i = 0; i < v.size(); ++i)
         {
             if (i > 0) oss << ",";
-            oss << format_complex(v(i));
+            double r = v(i).real() * bd.scale;
+            double im = v(i).imag() * bd.scale;
+            oss << r;
+            if (im >= 0.0) oss << "+";
+            oss << im << "i";
         }
         oss << "]";
-        return with_unit(oss.str());
+        if (bd.name.empty())
+            return oss.str();
+        return oss.str() + " " + bd.name;
     }
 
     std::string MeasurementFormatter::operator()(const Eigen::Tensor<std::string, 1>& v) const
@@ -361,10 +371,10 @@ namespace xdataset
         for (Index i = 0; i < v.dimension(0); ++i)
         {
             if (i > 0) oss << ",";
-            oss << format_scalar_string(v(i));
+            oss << v(i);
         }
         oss << "]";
-        return with_unit(oss.str());
+        return oss.str();
     }
 
     // ── matrix ─────────────────────────────────────────────────────────────
@@ -409,6 +419,7 @@ namespace xdataset
 
     std::string MeasurementFormatter::operator()(const Eigen::MatrixXcd& v) const
     {
+        auto bd = unit_.best_display(v.size() > 0 ? v(0, 0).real() : 0.0);
         std::ostringstream oss;
         oss << "[";
         for (Index r = 0; r < v.rows(); ++r)
@@ -418,12 +429,18 @@ namespace xdataset
             for (Index c = 0; c < v.cols(); ++c)
             {
                 if (c > 0) oss << ",";
-                oss << format_complex(v(r, c));
+                double rv = v(r, c).real() * bd.scale;
+                double im = v(r, c).imag() * bd.scale;
+                oss << rv;
+                if (im >= 0.0) oss << "+";
+                oss << im << "i";
             }
             oss << "]";
         }
         oss << "]";
-        return with_unit(oss.str());
+        if (bd.name.empty())
+            return oss.str();
+        return oss.str() + " " + bd.name;
     }
 
     std::string MeasurementFormatter::operator()(const Eigen::Tensor<std::string, 2>& v) const
@@ -437,12 +454,12 @@ namespace xdataset
             for (Index c = 0; c < v.dimension(1); ++c)
             {
                 if (c > 0) oss << ",";
-                oss << format_scalar_string(v(r, c));
+                oss << v(r, c);
             }
             oss << "]";
         }
         oss << "]";
-        return with_unit(oss.str());
+        return oss.str();
     }
 
 // =========================================================================
@@ -452,13 +469,13 @@ namespace xdataset
 Measurement Measurement::canonicalized() const {
     if (dtype_ == DTypeTag::kString) {
         Measurement result(*this);
-        result.unit_ = canonicalize(unit_);
+        result.unit_ = unit_.canonicalized();
         return result;
     }
 
-    double mult = multiplier_of(unit_);
-    Unit target = canonicalize(unit_);
-    bool affine = is_affine(unit_);
+    double mult = unit_.multiplier();
+    Unit target = unit_.canonicalized();
+    bool affine = unit_.is_affine();
 
     // Fast path: already canonical
     if (!affine && mult == 1.0) {
@@ -484,7 +501,7 @@ Measurement Measurement::canonicalized() const {
         double v = (dtype_ == DTypeTag::kInteger)
                    ? static_cast<double>(boost::get<int>(storage_))
                    : boost::get<double>(storage_);
-        v = affine ? units::convert(v, unit_, target) : v * mult;
+        v = affine ? units::convert(v, unit_.raw(), target.raw()) : v * mult;
         if (res_dtype == DTypeTag::kComplex) {
             std::complex<double> cv = boost::get<std::complex<double> >(storage_);
             if (!affine) cv *= mult;
@@ -506,7 +523,7 @@ Measurement Measurement::canonicalized() const {
                 double v = (dtype_ == DTypeTag::kInteger)
                            ? static_cast<double>(boost::get<Eigen::VectorXi>(storage_)(i))
                            : boost::get<Eigen::VectorXd>(storage_)(i);
-                vec(i) = affine ? units::convert(v, unit_, target) : v * mult;
+                vec(i) = affine ? units::convert(v, unit_.raw(), target.raw()) : v * mult;
             }
             result.storage_ = vec;
         }
@@ -526,7 +543,7 @@ Measurement Measurement::canonicalized() const {
                 double v = (dtype_ == DTypeTag::kInteger)
                            ? static_cast<double>(boost::get<Eigen::MatrixXi>(storage_)(r, c))
                            : boost::get<Eigen::MatrixXd>(storage_)(r, c);
-                mat(r, c) = affine ? units::convert(v, unit_, target) : v * mult;
+                mat(r, c) = affine ? units::convert(v, unit_.raw(), target.raw()) : v * mult;
             }
         }
         result.storage_ = mat;
@@ -535,7 +552,7 @@ Measurement Measurement::canonicalized() const {
 }
 
 bool Measurement::is_canonicalized() const {
-    return is_canonical(unit_);
+    return unit_.is_canonical();
 }
 
 } // namespace xdataset

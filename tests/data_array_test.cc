@@ -170,41 +170,41 @@ namespace xdataset
         EXPECT_EQ(table.GetRow(0).fields[0].to_string(), "10");
         EXPECT_EQ(table.GetRow(0).fields[1].to_string(), "1");
         EXPECT_EQ(table.GetRow(0).fields[2].to_string(), "100");
-        EXPECT_EQ(table.GetRow(0).fields[3].to_string(), "1000");
+        EXPECT_EQ(table.GetRow(0).fields[3].to_string(), "1 K");
 
         EXPECT_EQ(table.GetRow(1).multi_index, std::vector<Index>({0, 0, 1}));
         EXPECT_EQ(table.GetRow(1).fields[0].to_string(), "10");
         EXPECT_EQ(table.GetRow(1).fields[1].to_string(), "1");
         EXPECT_EQ(table.GetRow(1).fields[2].to_string(), "200");
-        EXPECT_EQ(table.GetRow(1).fields[3].to_string(), "1001");
+        EXPECT_EQ(table.GetRow(1).fields[3].to_string(), "1.001 K");
 
         EXPECT_EQ(table.GetRow(2).multi_index, std::vector<Index>({1, 0, 0}));
         EXPECT_EQ(table.GetRow(2).fields[0].to_string(), "20");
         EXPECT_EQ(table.GetRow(2).fields[1].to_string(), "2");
         EXPECT_EQ(table.GetRow(2).fields[2].to_string(), "100");
-        EXPECT_EQ(table.GetRow(2).fields[3].to_string(), "1002");
+        EXPECT_EQ(table.GetRow(2).fields[3].to_string(), "1.002 K");
 
         EXPECT_EQ(table.GetRow(3).multi_index, std::vector<Index>({1, 0, 1}));
         EXPECT_EQ(table.GetRow(3).fields[0].to_string(), "20");
         EXPECT_EQ(table.GetRow(3).fields[1].to_string(), "2");
         EXPECT_EQ(table.GetRow(3).fields[2].to_string(), "200");
-        EXPECT_EQ(table.GetRow(3).fields[3].to_string(), "1003");
+        EXPECT_EQ(table.GetRow(3).fields[3].to_string(), "1.003 K");
 
         EXPECT_EQ(table.GetRow(4).multi_index, std::vector<Index>({1, 1, 0}));
         EXPECT_EQ(table.GetRow(4).fields[0].to_string(), "20");
         EXPECT_EQ(table.GetRow(4).fields[1].to_string(), "3");
         EXPECT_EQ(table.GetRow(4).fields[2].to_string(), "100");
-        EXPECT_EQ(table.GetRow(4).fields[3].to_string(), "1004");
+        EXPECT_EQ(table.GetRow(4).fields[3].to_string(), "1.004 K");
 
         EXPECT_EQ(table.GetRow(5).multi_index, std::vector<Index>({1, 1, 1}));
         EXPECT_EQ(table.GetRow(5).fields[0].to_string(), "20");
         EXPECT_EQ(table.GetRow(5).fields[1].to_string(), "3");
         EXPECT_EQ(table.GetRow(5).fields[2].to_string(), "200");
-        EXPECT_EQ(table.GetRow(5).fields[3].to_string(), "1005");
+        EXPECT_EQ(table.GetRow(5).fields[3].to_string(), "1.005 K");
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y,z,data"), std::string::npos);
-        EXPECT_NE(csv.find("\"[1,1,1]\",20,3,200,1005"), std::string::npos);
+        EXPECT_NE(csv.find("\"[1,1,1]\",20,3,200,1.005 K"), std::string::npos);
     }
 
     TEST(DataArrayIndepTest, DependentIndepFromInsideOutByIndexAndName)
@@ -269,10 +269,10 @@ namespace xdataset
         ASSERT_EQ(table.row_count(), 4u);
         EXPECT_EQ(table.GetRow(0).fields[0].to_string(), "2");
         EXPECT_EQ(table.GetRow(0).fields[1].to_string(), "100");
-        EXPECT_EQ(table.GetRow(0).fields[2].to_string(), "1002");
+        EXPECT_EQ(table.GetRow(0).fields[2].to_string(), "1.002 K");
         EXPECT_EQ(table.GetRow(3).fields[0].to_string(), "3");
         EXPECT_EQ(table.GetRow(3).fields[1].to_string(), "200");
-        EXPECT_EQ(table.GetRow(3).fields[2].to_string(), "1005");
+        EXPECT_EQ(table.GetRow(3).fields[2].to_string(), "1.005 K");
     }
 
     TEST(DataArraySelectTest, DependentSelectRejectsOutOfRangeIndices)
@@ -362,13 +362,13 @@ namespace xdataset
         ASSERT_EQ(table.row_count(), 3u);
         EXPECT_EQ(table.GetRow(0).fields[0].to_string(), "10");
         EXPECT_EQ(table.GetRow(0).fields[1].to_string(), "1");
-        EXPECT_EQ(table.GetRow(0).fields[2].to_string(), "1000");
+        EXPECT_EQ(table.GetRow(0).fields[2].to_string(), "1 K");
         EXPECT_EQ(table.GetRow(1).fields[0].to_string(), "20");
         EXPECT_EQ(table.GetRow(1).fields[1].to_string(), "2");
-        EXPECT_EQ(table.GetRow(1).fields[2].to_string(), "1002");
+        EXPECT_EQ(table.GetRow(1).fields[2].to_string(), "1.002 K");
         EXPECT_EQ(table.GetRow(2).fields[0].to_string(), "20");
         EXPECT_EQ(table.GetRow(2).fields[1].to_string(), "3");
-        EXPECT_EQ(table.GetRow(2).fields[2].to_string(), "1004");
+        EXPECT_EQ(table.GetRow(2).fields[2].to_string(), "1.004 K");
     }
 
     TEST(DataArraySelectTest, IndependentSelectRejectsOutOfRangeEqualOnSelfDimension)
