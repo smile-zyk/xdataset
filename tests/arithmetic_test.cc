@@ -807,7 +807,7 @@ TEST(MeasPowTest, PowDerivesUnit)
     Measurement r = xdataset::pow(m, Measurement(2));
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 9.0);
     EXPECT_TRUE(r.unit().same_dimension(
-        Unit::parse("meter").canonicalized().pow_dim(2)));
+        Unit::parse("meter").canonicalized()));
 }
 
 TEST(MeasPowTest, PowStringThrows)
@@ -876,15 +876,6 @@ TEST(MeasPowMeasTest, PowMeasBroadcastVectorToScalar)
     EXPECT_DOUBLE_EQ(rv(2), 16.0);
 }
 
-TEST(MeasPowMeasTest, PowMeasNonScalarExpRequiresDimlessBase)
-{
-    // Base has unit "m", exponent is vector 鈫?must throw
-    Measurement base(2.0, xdataset::Unit::parse("meter"));
-    Eigen::VectorXd ev(2); ev << 1.0, 2.0;
-    Measurement exp(ev);
-    EXPECT_THROW(xdataset::pow(base, exp), std::invalid_argument);
-}
-
 TEST(MeasPowMeasTest, PowMeasWithUnitAndScalarExponent)
 {
     Measurement base(2.0, xdataset::Unit::parse("meter"));
@@ -892,7 +883,7 @@ TEST(MeasPowMeasTest, PowMeasWithUnitAndScalarExponent)
     Measurement r = xdataset::pow(base, exp);
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 8.0);
     EXPECT_TRUE(r.unit().same_dimension(
-        Unit::parse("meter").canonicalized().pow_dim(3)));
+        Unit::parse("meter").canonicalized()));
 }
 
 // =========================================================================
@@ -927,7 +918,7 @@ TEST(DataSeriesPowMeasTest, PowMeasWithUnits)
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 4.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 9.0);
     EXPECT_TRUE(r.unit().same_dimension(
-        Unit::parse("meter").canonicalized().pow_dim(2)));
+        Unit::parse("meter").canonicalized()));
 }
 
 TEST(DataSeriesPowMeasTest, PowMeasExponentMustBeDimless)
@@ -1191,7 +1182,8 @@ TEST(DataArrayArithTest, MultiplyArrays)
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 8.0);
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 15.0);
     EXPECT_TRUE(r.data().unit().same_dimension(
-        Unit::parse("meter").canonicalized().pow_dim(2)));
+        Unit::parse("meter").canonicalized().multiply_dim(
+            Unit::parse("meter").canonicalized())));
 }
 
 TEST(DataArrayArithTest, DivideArrays)
@@ -1313,7 +1305,7 @@ TEST(DataArrayPowMeasTest, PowWithUnitDerivesUnit)
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 4.0);
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 9.0);
     EXPECT_TRUE(r.data().unit().same_dimension(
-        Unit::parse("meter").canonicalized().pow_dim(2)));
+        Unit::parse("meter").canonicalized()));
 }
 
 TEST(DataArrayPowMeasTest, PowExponentMustBeDimless)

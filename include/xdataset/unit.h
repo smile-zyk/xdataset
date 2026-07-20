@@ -14,12 +14,12 @@ namespace xdataset
 //  Wraps llnl-units internally but restricts input parsing to the REL unit
 //  vocabulary.  Construction by users goes through `Unit::parse()` which
 //  validates against the REL lookup tables; construction from canonical base
-//  units (used internally by multiply_dim / divide_dim / pow_dim /
+//  units (used internally by multiply_dim / divide_dim /
 //  canonicalize) bypasses validation — those are always valid SI.
 // =========================================================================
 
 /// Result of best_display: how to convert a raw value for display.
-struct UnitDisplayInfo {
+struct UnitScale {
     double scale;       ///< Multiply raw value by this to get display value.
     std::string name;   ///< Display-unit string (empty if dimensionless).
 };
@@ -66,7 +66,7 @@ public:
     /// Given a raw value in this unit, pick the best display scale.
     /// Returns {scale, display_unit_string}.  Display value = raw * scale.
     /// For example, 1e9 Hz → {1e-9, "GHz"}, 0.002 V → {1000, "mV"}.
-    UnitDisplayInfo best_display(double value) const;
+    UnitScale best_display(double value) const;
 
     // ---- static factory ------------------------------------------------
 
@@ -81,7 +81,6 @@ public:
 
     Unit multiply_dim(const Unit& other) const;
     Unit divide_dim(const Unit& other) const;
-    Unit pow_dim(int n) const;
 
     // ---- comparison ----------------------------------------------------
 

@@ -235,7 +235,7 @@ namespace xdataset
         return units::to_string(unit_);
     }
 
-    UnitDisplayInfo Unit::best_display(double value) const
+    UnitScale Unit::best_display(double value) const
     {
         double mult = multiplier();
         Unit base = canonicalized();
@@ -283,11 +283,6 @@ namespace xdataset
     Unit Unit::divide_dim(const Unit& other) const
     {
         return Unit(units::precise_unit(unit_.base_units() / other.unit_.base_units()));
-    }
-
-    Unit Unit::pow_dim(int n) const
-    {
-        return Unit(units::precise_unit(unit_.base_units().pow(n)));
     }
 
     bool Unit::operator==(const Unit& other) const

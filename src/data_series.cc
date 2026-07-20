@@ -157,11 +157,12 @@ void DataSeries::assign_from(const DataSeries& src, Index src_row, Index dst_row
         dst_row < 0 || static_cast<std::size_t>(dst_row) >= size()) throw std::out_of_range("row index out of range");
 
     // First non-dimensionless source sets the series' unit.
-    if (!unit_.has_dimension() && !src.unit_.has_dimension()) {
+    if (!unit_.has_dimension() && src.unit_.has_dimension()) {
         if (dtype_ == DTypeTag::kString)
             throw std::invalid_argument("string series cannot have a named unit");
         unit_ = src.unit_;
-    } else if (!src.unit_.same_dimension(unit_)) {
+    } else if (unit_.has_dimension() && src.unit_.has_dimension() &&
+               !src.unit_.same_dimension(unit_)) {
         throw std::invalid_argument(
             "unit mismatch: series has dimension [" + unit_.to_string() +
             "], source has [" + src.unit_.to_string() + "]");
@@ -202,11 +203,12 @@ void DataSeries::append(const Measurement& m) {
     if (m.kind() != kind_ || m.dtype() != dtype_ || m.shape() != shape_) throw std::bad_cast();
 
     // First non-dimensionless measurement sets the series' unit.
-    if (!unit_.has_dimension() && !m.unit().has_dimension()) {
+    if (!unit_.has_dimension() && m.unit().has_dimension()) {
         if (dtype_ == DTypeTag::kString)
             throw std::invalid_argument("string series cannot have a named unit");
         unit_ = m.unit();
-    } else if (!m.unit().same_dimension(unit_)) {
+    } else if (unit_.has_dimension() && m.unit().has_dimension() &&
+               !m.unit().same_dimension(unit_)) {
         throw std::invalid_argument(
             "unit mismatch: series has dimension [" + unit_.to_string() +
             "], measurement has [" + m.unit().to_string() + "]");

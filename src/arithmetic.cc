@@ -393,7 +393,7 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
     if (exponent.dtype() == DTypeTag::kString)
         throw std::invalid_argument(
             "pow: exponent cannot be string");
-    if (!exponent.unit().has_dimension())
+    if (exponent.unit().has_dimension())
         throw std::invalid_argument(
             "pow: exponent must be dimensionless (it carries a physical unit)");
     if (base.dtype() == DTypeTag::kString)
@@ -402,13 +402,6 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
 
     // --- canonicalise -----------------------------------------------------
     Measurement a = base.canonicalized();
-
-    // --- non-scalar exponent -> base must be dimensionless ----------------
-    //     If exponent = [2, 3], we'd need both u^2 and u^3 -- a single Unit
-    //     cannot represent the mixed result, so we forbid it outright.
-    if (exponent.kind() != DataKind::kScalar && !a.unit().has_dimension())
-        throw std::invalid_argument(
-            "pow: non-scalar exponent requires a dimensionless base");
 
     // --- result metadata --------------------------------------------------
     DataKind  res_kind  = promoted_kind(a.kind(), exponent.kind());
@@ -420,11 +413,7 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
     bool  a_broad = (a_cnt == 1);
     bool  e_broad = (e_cnt == 1);
 
-    Unit result_unit;
-    if (exponent.kind() == DataKind::kScalar && exponent.dtype() == DTypeTag::kInteger)
-        result_unit = a.unit().pow_dim(meas_as_int(exponent, 0));
-    else
-        result_unit = a.unit();  // preserve base unit
+    Unit result_unit = a.unit();
 
     // --- complex path -----------------------------------------------------
     if (res_dtype == DTypeTag::kComplex) {
@@ -686,7 +675,7 @@ DataSeries pow(const DataSeries& base, const Measurement& exp) {
     // --- validation ---------------------------------------------------------
     if (exp.dtype() == DTypeTag::kString)
         throw std::invalid_argument("pow: exponent cannot be string");
-    if (!exp.unit().has_dimension())
+    if (exp.unit().has_dimension())
         throw std::invalid_argument(
             "pow: exponent must be dimensionless (it carries a physical unit)");
     if (exp.kind() != DataKind::kScalar)
@@ -704,10 +693,7 @@ DataSeries pow(const DataSeries& base, const Measurement& exp) {
     DataSeries result(base.data_kind(), res_dtype, base.data_shape());
 
     // Dimensionless exponent preserves the base unit.
-    // Integer exponent upgrades to pow_dim for proper unit derivation.
     result.set_unit(a.unit());
-    if (exp.dtype() == DTypeTag::kInteger)
-        result.set_unit(a.unit().pow_dim(exp_c.as_scalar<int>()));
 
     // --- per-row computation ------------------------------------------------
     for (std::size_t i = 0; i < a.size(); ++i)

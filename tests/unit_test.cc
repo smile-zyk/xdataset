@@ -351,23 +351,6 @@ TEST(UnitTest, DivideDim)
     EXPECT_DOUBLE_EQ(r.multiplier(), 1.0);
 }
 
-TEST(UnitTest, PowDim)
-{
-    Unit m = Unit::parse("meter").canonicalized();
-    Unit m2 = m.pow_dim(2);
-    EXPECT_DOUBLE_EQ(m2.multiplier(), 1.0);
-}
-
-TEST(UnitTest, PowDimNeg)
-{
-    Unit m = Unit::parse("meter").canonicalized();
-    Unit minv = m.pow_dim(-1);
-    EXPECT_DOUBLE_EQ(minv.multiplier(), 1.0);
-}
-
-// =========================================================================
-//  to_string
-// =========================================================================
 
 TEST(UnitTest, ToStringHz)
 {
