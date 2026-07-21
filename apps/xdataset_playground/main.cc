@@ -76,8 +76,8 @@ int main()
         // =====================================================================
         section("1. Simple 2x3 regular block");
         {
-            auto m = Unit::parse("m");
-            auto s = Unit::parse("s");
+            auto m = Unit::parse("meter");
+            auto s = Unit::parse("sec");
             auto V = Unit::parse("V");
 
             BlockCreateInfo info;
@@ -128,7 +128,7 @@ int main()
             info.name = "vectors";
             info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
-            info.dependent_specs.push_back({"vec", vectors(4, 3, Unit::parse("m/s"))});
+            info.dependent_specs.push_back({"vec", vectors(4, 3, Unit::parse("W"))});
             Block block(info);
 
             const DataFrame& t = block.GetOrCreateDataFrame();
@@ -146,7 +146,7 @@ int main()
             info.name = "matrices";
             info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
-            info.dependent_specs.push_back({"mat", matrices(4, 2, 2, Unit::parse("N*m"))});
+            info.dependent_specs.push_back({"mat", matrices(4, 2, 2, Unit::parse("meter"))});
             Block block(info);
 
             const DataFrame& t = block.GetOrCreateDataFrame();
@@ -290,8 +290,8 @@ int main()
         // =====================================================================
         section("10. Measurement type inspection");
         {
-            Measurement d(3.14, Unit::parse("m/s"));
-            Measurement i(42, Unit::parse("kg"));
+            Measurement d(3.14, Unit::parse("Ohm"));
+            Measurement i(42, Unit::parse("F"));
             Measurement c(std::complex<double>(1.0, -2.0), Unit::parse("V"));
             Measurement s(std::string("hello"));
 

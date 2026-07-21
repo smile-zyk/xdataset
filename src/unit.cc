@@ -58,7 +58,9 @@ namespace xdataset
             double mult;
             std::string llnl;
         };
-        const std::map<std::string, PredefUnit> kPredefUnits = {
+
+        const std::map<std::string, PredefUnit> kPredefUnits = 
+        {
             {"mil", {2.54e-5, "m"}},
             {"mils", {2.54e-5, "m"}},
             {"in", {2.54e-2, "m"}},
