@@ -68,7 +68,6 @@ namespace xdataset
         inline BlockCreateInfo MakeBaseCreateInfo()
         {
             BlockCreateInfo info;
-            info.name = "demo";
             info.independent_specs.push_back(
                 IndependentSpec{"x", MakeScalarSeries(2), DimensionSpec::Regular(2)});
             info.independent_specs.push_back(
@@ -81,7 +80,6 @@ namespace xdataset
         inline BlockCreateInfo MakeValueRichCreateInfo()
         {
             BlockCreateInfo info;
-            info.name = "demo-values";
             info.independent_specs.push_back(
                 IndependentSpec{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back(
@@ -95,7 +93,6 @@ namespace xdataset
         inline BlockCreateInfo MakeThreeDimMultiDepCreateInfo()
         {
             BlockCreateInfo info;
-            info.name = "demo-3d-multidep";
             info.independent_specs.push_back(
                 IndependentSpec{"a", MakeScalarSeriesFrom({1.0, 2.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back(
@@ -113,7 +110,6 @@ namespace xdataset
         inline BlockCreateInfo MakeSingleIndependentCreateInfo()
         {
             BlockCreateInfo info;
-            info.name = "demo-single";
             info.independent_specs.push_back(
                 IndependentSpec{"x", MakeScalarSeriesFrom({10.0, 20.0, 30.0}), DimensionSpec::Regular(3)});
             info.dependent_specs.push_back(
@@ -128,8 +124,6 @@ namespace xdataset
         inline BlockCreateInfo MakeStringTypedCreateInfo()
         {
             BlockCreateInfo info;
-            info.name = "demo-strings";
-
             DataSeries xs = DataSeries::CreateScalar<std::string>(2);
             xs.scalar_at<std::string>(0) = "alpha";
             xs.scalar_at<std::string>(1) = "beta";
@@ -155,7 +149,6 @@ namespace xdataset
         inline BlockCreateInfo MakeVectorCellCreateInfo()
         {
             BlockCreateInfo info;
-            info.name = "demo-vectors";
             info.independent_specs.push_back(
                 IndependentSpec{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back(
@@ -168,7 +161,6 @@ namespace xdataset
         inline BlockCreateInfo MakeMatrixCellCreateInfo()
         {
             BlockCreateInfo info;
-            info.name = "demo-matrices";
             info.independent_specs.push_back(
                 IndependentSpec{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back(
@@ -185,7 +177,6 @@ namespace xdataset
         inline BlockCreateInfo MakeRaggedCreateInfo()
         {
             BlockCreateInfo info;
-            info.name = "demo-ragged";
             info.independent_specs.push_back(
                 IndependentSpec{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back(
@@ -198,7 +189,6 @@ namespace xdataset
         inline BlockCreateInfo MakeInterleavedCreateInfo()
         {
             BlockCreateInfo info;
-            info.name = "demo-interleaved";
             info.independent_specs.push_back(
                 IndependentSpec{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back(
@@ -214,7 +204,6 @@ namespace xdataset
         inline BlockCreateInfo MakeRaggedVectorCreateInfo()
         {
             BlockCreateInfo info;
-            info.name = "demo-ragged-vectors";
             info.independent_specs.push_back(
                 IndependentSpec{"x", MakeScalarSeriesFrom({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back(

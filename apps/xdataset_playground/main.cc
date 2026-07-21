@@ -81,7 +81,6 @@ int main()
             auto V = Unit::parse("V");
 
             BlockCreateInfo info;
-            info.name = "simple";
             info.independent_specs.push_back({"a", doubles({1.0, 2.0}, m), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"b", doubles({10.0, 20.0, 30.0}, s), DimensionSpec::Regular(3)});
             info.dependent_specs.push_back({"c", doubles({100.0, 101.0, 102.0, 103.0, 104.0, 105.0}, V)});
@@ -104,7 +103,6 @@ int main()
         section("2. String-typed block");
         {
             BlockCreateInfo info;
-            info.name = "strings";
             info.independent_specs.push_back({"city", strings({"Paris", "London"}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"unit", strings({"kg", "L"}), DimensionSpec::Regular(2)});
             info.dependent_specs.push_back({"val", strings({"A", "B", "C", "D"})});
@@ -125,7 +123,6 @@ int main()
         section("3. Vector cell block (2x2 -> 4 rows, vec width=3)");
         {
             BlockCreateInfo info;
-            info.name = "vectors";
             info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
             info.dependent_specs.push_back({"vec", vectors(4, 3, Unit::parse("W"))});
@@ -143,7 +140,6 @@ int main()
         section("4. Matrix cell block (2x2 -> 4 rows, mat 2x2)");
         {
             BlockCreateInfo info;
-            info.name = "matrices";
             info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"y", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
             info.dependent_specs.push_back({"mat", matrices(4, 2, 2, Unit::parse("meter"))});
@@ -164,7 +160,6 @@ int main()
         section("5. 3D block (2x3x4) with two dependents");
         {
             BlockCreateInfo info;
-            info.name = "3d";
             info.independent_specs.push_back({"a", doubles({1.0, 2.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"b", doubles({10.0, 20.0, 30.0}), DimensionSpec::Regular(3)});
             info.independent_specs.push_back({"c", doubles({100.0, 200.0, 300.0, 400.0}), DimensionSpec::Regular(4)});
@@ -186,7 +181,6 @@ int main()
         section("6. Ragged-interleaved block (x x y(Ragged) x z)");
         {
             BlockCreateInfo info;
-            info.name = "interleaved";
             info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Ragged({1, 2})});
             info.independent_specs.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Regular(2)});
@@ -209,7 +203,6 @@ int main()
         section("7. Lazy loading -- only first 2 rows accessed from 2x3 grid");
         {
             BlockCreateInfo info;
-            info.name = "lazy";
             info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Regular(3)});
             info.dependent_specs.push_back({"z", doubles({100.0, 101.0, 102.0, 103.0, 104.0, 105.0})});
@@ -229,7 +222,6 @@ int main()
         section("8. DataArray.indep() chain");
         {
             BlockCreateInfo info;
-            info.name = "indep";
             info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Ragged({1, 2})});
             info.independent_specs.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Regular(2)});
@@ -264,7 +256,6 @@ int main()
         section("9. DataArray.select()");
         {
             BlockCreateInfo info;
-            info.name = "select";
             info.independent_specs.push_back({"x", doubles({10.0, 20.0}), DimensionSpec::Regular(2)});
             info.independent_specs.push_back({"y", doubles({1.0, 2.0, 3.0}), DimensionSpec::Ragged({1, 2})});
             info.independent_specs.push_back({"z", doubles({100.0, 200.0}), DimensionSpec::Regular(2)});

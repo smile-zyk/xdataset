@@ -336,9 +336,9 @@ TEST(UnitTest, MultiplyDim)
 {
     Unit m = Unit::parse("meter").canonicalized();
     Unit pers = Unit::parse("Hz").canonicalized();
-    Unit r = m.multiply_dim(pers);
+    Unit r = m*(pers);
     EXPECT_DOUBLE_EQ(r.multiplier(), 1.0);
-    Unit ms = Unit::parse("meter").canonicalized().divide_dim(
+    Unit ms = Unit::parse("meter").canonicalized()/(
         Unit::parse("sec").canonicalized());
     EXPECT_TRUE(r.same_dimension(ms));
 }
@@ -347,7 +347,7 @@ TEST(UnitTest, DivideDim)
 {
     Unit m = Unit::parse("meter").canonicalized();
     Unit s = Unit::parse("sec").canonicalized();
-    Unit r = m.divide_dim(s);
+    Unit r = m/(s);
     EXPECT_DOUBLE_EQ(r.multiplier(), 1.0);
 }
 
@@ -398,7 +398,7 @@ TEST(UnitTest, ToStringCompound)
 {
     Unit m = Unit::parse("meter").canonicalized();
     Unit s = Unit::parse("sec").canonicalized();
-    Unit ms = m.divide_dim(s);
+    Unit ms = m/(s);
     EXPECT_FALSE(ms.to_string().empty());
 }
 

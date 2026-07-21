@@ -12,10 +12,16 @@ namespace xdataset
     public:
         TestDataFrame() = default;
 
-        void Configure(std::vector<std::string> h, std::size_t n,
-                       RowGenerator g, std::size_t cs = 256)
+        void ConfigureDynamic(std::vector<std::string> h, std::size_t n,
+                              RowGenerator g, std::size_t cs = 256)
         {
-            DataFrame::Configure(std::move(h), n, std::move(g), cs);
+            DataFrame::ConfigureDynamic(std::move(h), n, std::move(g), cs);
+        }
+
+        void ConfigureStatic(std::vector<std::string> h,
+                             std::vector<DataFrameRow> r)
+        {
+            DataFrame::ConfigureStatic(std::move(h), std::move(r));
         }
     };
 
@@ -64,7 +70,7 @@ namespace xdataset
     {
         DataFrameRow row;
         row.multi_index = {0, 1, 2};
-        EXPECT_EQ(row.FormatMultiIndex(), "[0,1,2]");
+        EXPECT_EQ(row.FormatMultiIndex(), "0,1,2");
     }
 
     // =========================================================================
@@ -75,7 +81,7 @@ namespace xdataset
     {
         int call_count = 0;
         TestDataFrame model;
-        model.Configure({"v"}, 100,
+        model.ConfigureDynamic({"v"}, 100,
             [&](Index start, Index end) -> std::vector<DataFrameRow>
             {
                 ++call_count;
@@ -103,7 +109,7 @@ namespace xdataset
     {
         int call_count = 0;
         TestDataFrame model;
-        model.Configure({"v"}, 10,
+        model.ConfigureDynamic({"v"}, 10,
             [&](Index start, Index end) -> std::vector<DataFrameRow>
             {
                 ++call_count;
@@ -126,12 +132,60 @@ namespace xdataset
     TEST(DataFrameLazyTest, MetadataAvailableBeforeLoad)
     {
         TestDataFrame model;
-        model.Configure({"x", "y"}, 5,
+        model.ConfigureDynamic({"x", "y"}, 5,
             [](Index, Index) -> std::vector<DataFrameRow> { return {}; });
         EXPECT_EQ(model.row_count(), 5u);
         ASSERT_EQ(model.headers().size(), 2u);
         EXPECT_EQ(model.headers()[0], "x");
         EXPECT_EQ(model.headers()[1], "y");
+    }
+
+    // =========================================================================
+    // DataFrame static configuration
+    // =========================================================================
+
+    TEST(DataFrameStaticTest, ImmediateAccessAfterConstruction)
+    {
+        DataFrameRow r1;
+        r1.multi_index = {0};
+        r1.fields.push_back(Measurement(10));
+
+        DataFrameRow r2;
+        r2.multi_index = {1};
+        r2.fields.push_back(Measurement(20));
+
+        std::vector<DataFrameRow> rows;
+        rows.push_back(r1);
+        rows.push_back(r2);
+
+        TestDataFrame model;
+        model.ConfigureStatic({"val"}, std::move(rows));
+
+        EXPECT_EQ(model.row_count(), 2u);
+        ASSERT_EQ(model.headers().size(), 1u);
+        EXPECT_EQ(model.headers()[0], "val");
+
+        // Rows immediately accessible without any generator.
+        EXPECT_EQ(model.GetRow(0).fields[0].to_string(), "10");
+        EXPECT_EQ(model.GetRow(1).fields[0].to_string(), "20");
+    }
+
+    TEST(DataFrameStaticTest, ToCsvFromStatic)
+    {
+        DataFrameRow r;
+        r.multi_index = {42};
+        r.fields.push_back(Measurement(3.14));
+        r.fields.push_back(Measurement(7));
+
+        std::vector<DataFrameRow> rows;
+        rows.push_back(r);
+
+        TestDataFrame model;
+        model.ConfigureStatic({"x", "y"}, std::move(rows));
+
+        const std::string csv = model.ToCsv();
+        EXPECT_NE(csv.find(",x,y"), std::string::npos);
+        EXPECT_NE(csv.find("42,3.14,7"), std::string::npos);
     }
 
     // =========================================================================
@@ -145,8 +199,8 @@ namespace xdataset
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y,z"), std::string::npos);
-        EXPECT_NE(csv.find("\"[0,0]\",10,1,100"), std::string::npos);
-        EXPECT_NE(csv.find("\"[1,2]\",20,3,105"), std::string::npos);
+        EXPECT_NE(csv.find("\"0,0\",10,1,100"), std::string::npos);
+        EXPECT_NE(csv.find("\"1,2\",20,3,105"), std::string::npos);
     }
 
     TEST(DataFrameCsvTest, ToCsvFromDataArray)
@@ -157,13 +211,13 @@ namespace xdataset
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y"), std::string::npos);
-        EXPECT_NE(csv.find("\"[1,1]\",20,3"), std::string::npos);
+        EXPECT_NE(csv.find("\"1,1\",20,3"), std::string::npos);
     }
 
     TEST(DataFrameCsvTest, WriteToCsvRejectsEmptyPath)
     {
         TestDataFrame model;
-        model.Configure({"a"}, 1,
+        model.ConfigureDynamic({"a"}, 1,
             [](Index, Index) -> std::vector<DataFrameRow> { return {}; });
         EXPECT_THROW(model.WriteToCsv(""), std::invalid_argument);
     }

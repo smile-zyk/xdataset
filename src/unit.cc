@@ -277,12 +277,12 @@ namespace xdataset
         return {mult / best_mult, display_unit};
     }
 
-    Unit Unit::multiply_dim(const Unit& other) const
+    Unit Unit::operator*(const Unit& other) const
     {
         return Unit(units::precise_unit(unit_.base_units() * other.unit_.base_units()));
     }
 
-    Unit Unit::divide_dim(const Unit& other) const
+    Unit Unit::operator/(const Unit& other) const
     {
         return Unit(units::precise_unit(unit_.base_units() / other.unit_.base_units()));
     }

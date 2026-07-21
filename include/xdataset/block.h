@@ -28,7 +28,6 @@ namespace xdataset
 
     struct BlockCreateInfo
     {
-        std::string                                name;
         std::vector<IndependentSpec> independent_specs;
         std::vector<DependentSpec>   dependent_specs;
     };
@@ -40,6 +39,7 @@ namespace xdataset
         explicit Block(BlockCreateInfo&& info);
 
         const std::string& name() const;
+        void               set_name(std::string name);
 
         std::vector<std::string> dependents() const;
 
@@ -49,7 +49,7 @@ namespace xdataset
 
         const DependentSpec& dependent_spec(const std::string& name) const;
 
-        const DataArray& GetOrCreateDataArray(const std::string& name);
+        const DataArray& GetOrCreateDataArray(const std::string& name) const;
         const DataFrame& GetOrCreateDataFrame() const;
 
     private:
@@ -57,10 +57,10 @@ namespace xdataset
 
         void ensure_unique_name(const std::string& name) const;
 
-        std::string                                           name_;
+        std::string                                        name_;
         tsl::ordered_map<std::string, IndependentSpec> independent_spec_map_;
         tsl::ordered_map<std::string, DependentSpec>   dependent_spec_map_;
-        tsl::ordered_map<std::string, std::unique_ptr<DataArray>> data_array_cache_;
+        mutable tsl::ordered_map<std::string, std::unique_ptr<DataArray>> data_array_cache_;
         mutable std::unique_ptr<DataFrame>                    data_frame_cache_;
     };
 }

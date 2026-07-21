@@ -248,8 +248,20 @@ TEST(DataSeriesArithTest, MultiplyDerivesResultUnit)
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 8.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 15.0);
     EXPECT_TRUE(r.unit().same_dimension(
-        Unit::parse("meter").canonicalized().multiply_dim(
+        Unit::parse("meter").canonicalized()*(
                                Unit::parse("sec").canonicalized())));
+}
+
+TEST(DataSeriesArithTest, MultiplyAmpereVoltYieldsWatt)
+{
+    auto a = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    a.set_unit("A");
+    auto b = DataSeries::CreateScalarFromVector<double>({4.0, 5.0});
+    b.set_unit("V");
+    DataSeries r = a * b;
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 8.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 15.0);
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("W")));
 }
 
 // =========================================================================
@@ -285,7 +297,19 @@ TEST(DataSeriesArithTest, DivideDerivesResultUnit)
     DataSeries r = a / b;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 5.0);
     EXPECT_TRUE(r.unit().same_dimension(
-        Unit::parse("meter").canonicalized().divide_dim(Unit::parse("sec").canonicalized())));
+        Unit::parse("meter").canonicalized()/(Unit::parse("sec").canonicalized())));
+}
+
+TEST(DataSeriesArithTest, DivideVoltAmpereYieldsOhm)
+{
+    auto a = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+    a.set_unit("V");
+    auto b = DataSeries::CreateScalarFromVector<double>({2.0, 4.0});
+    b.set_unit("A");
+    DataSeries r = a / b;
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 5.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 5.0);
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("Ohm")));
 }
 
 // =========================================================================
@@ -379,7 +403,7 @@ TEST(DataSeriesMeasArithTest, AddScalarDSToVectorMeasurement)
     Eigen::VectorXd v(3); v << 10.0, 20.0, 30.0;
     Measurement m(v);
     DataSeries r = s + m;
-    // Scalar DS + Vector Meas 鈫?Vector DataSeries
+    // Scalar DS + Vector Meas -> Vector DataSeries
     EXPECT_EQ(r.data_kind(), DataKind::kVector);
     EXPECT_EQ(r.size(), 2u);
     auto row0 = r.vector_at<double>(0);
@@ -433,7 +457,18 @@ TEST(DataSeriesMeasArithTest, MultiplyMeasurementDerivesResultUnit)
     DataSeries r = s * m;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 6.0);
     EXPECT_TRUE(r.unit().same_dimension(
-        Unit::parse("meter").canonicalized().multiply_dim(Unit::parse("sec").canonicalized())));
+        Unit::parse("meter").canonicalized()*(Unit::parse("sec").canonicalized())));
+}
+
+TEST(DataSeriesMeasArithTest, MultiplyAmpereVoltMeasurementYieldsWatt)
+{
+    auto s = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    s.set_unit("A");
+    Measurement m(4.0, xdataset::Unit::parse("V"));
+    DataSeries r = s * m;
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 8.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 12.0);
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("W")));
 }
 
 TEST(DataSeriesMeasArithTest, MultiplyMeasurementInteger)
@@ -478,7 +513,18 @@ TEST(DataSeriesMeasArithTest, DivideMeasurementDerivesResultUnit)
     DataSeries r = s / m;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 5.0);
     EXPECT_TRUE(r.unit().same_dimension(
-        Unit::parse("meter").canonicalized().divide_dim(Unit::parse("sec").canonicalized())));
+        Unit::parse("meter").canonicalized()/(Unit::parse("sec").canonicalized())));
+}
+
+TEST(DataSeriesMeasArithTest, DivideVoltAmpereMeasurementYieldsOhm)
+{
+    auto s = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+    s.set_unit("V");
+    Measurement m(2.0, xdataset::Unit::parse("A"));
+    DataSeries r = s / m;
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 5.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 10.0);
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("Ohm")));
 }
 
 // =========================================================================
@@ -489,7 +535,7 @@ TEST(DimensionlessArithTest, AddDimensionlessSeries)
 {
     auto a = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
     auto b = DataSeries::CreateScalarFromVector<double>({3.0, 4.0});
-    // Both dimensionless 鈥?same_dimension passes.
+    // Both dimensionless -> same_dimension passes.
     DataSeries r = a + b;
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 4.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 6.0);
@@ -561,7 +607,7 @@ TEST(MeasArithTest, AddScalarInt)
 
 TEST(MeasArithTest, AddMixedIntRealPromotes)
 {
-    Measurement a(3.5), b(2);  // real + int 鈫?real
+    Measurement a(3.5), b(2);  // real + int -> real
     Measurement r = a + b;
     EXPECT_EQ(r.dtype(), DTypeTag::kReal);
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 5.5);
@@ -705,7 +751,25 @@ TEST(MeasArithTest, MultiplyDerivesUnit)
     Measurement r = a * b;
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 6.0);
     EXPECT_TRUE(r.unit().same_dimension(
-        Unit::parse("meter").canonicalized().multiply_dim(Unit::parse("sec").canonicalized())));
+        Unit::parse("meter").canonicalized()*(Unit::parse("sec").canonicalized())));
+}
+
+TEST(MeasArithTest, MultiplyAmpereVoltYieldsWatt)
+{
+    Measurement a(2.0, xdataset::Unit::parse("A"));
+    Measurement b(3.0, xdataset::Unit::parse("V"));
+    Measurement r = a * b;
+    EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 6.0);
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("W")));
+}
+
+TEST(MeasArithTest, MultiplyVoltAmpereYieldsWatt)
+{
+    Measurement a(3.0, xdataset::Unit::parse("V"));
+    Measurement b(2.0, xdataset::Unit::parse("A"));
+    Measurement r = a * b;
+    EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 6.0);
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("W")));
 }
 
 TEST(MeasArithTest, MultiplyScalarToVector)
@@ -752,11 +816,38 @@ TEST(MeasArithTest, DivideDerivesUnit)
     Measurement r = a / b;
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 5.0);
     EXPECT_TRUE(r.unit().same_dimension(
-        Unit::parse("meter").canonicalized().divide_dim(Unit::parse("sec").canonicalized())));
+        Unit::parse("meter").canonicalized()/(Unit::parse("sec").canonicalized())));
+}
+
+TEST(MeasArithTest, DivideVoltAmpereYieldsOhm)
+{
+    Measurement a(10.0, xdataset::Unit::parse("V"));
+    Measurement b(2.0, xdataset::Unit::parse("A"));
+    Measurement r = a / b;
+    EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 5.0);
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("Ohm")));
+}
+
+TEST(MeasArithTest, DivideWattAmpereYieldsVolt)
+{
+    Measurement a(6.0, xdataset::Unit::parse("W"));
+    Measurement b(2.0, xdataset::Unit::parse("A"));
+    Measurement r = a / b;
+    EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 3.0);
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("V")));
+}
+
+TEST(MeasArithTest, DivideWattVoltYieldsAmpere)
+{
+    Measurement a(6.0, xdataset::Unit::parse("W"));
+    Measurement b(3.0, xdataset::Unit::parse("V"));
+    Measurement r = a / b;
+    EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 2.0);
+    EXPECT_TRUE(r.unit().same_dimension(xdataset::Unit::parse("A")));
 }
 
 // =========================================================================
-//  pow(Measurement, Measurement) 鈥?scalar exponent (int values)
+//  pow(Measurement, Measurement) -> scalar exponent (int values)
 // =========================================================================
 
 TEST(MeasPowTest, PowRealPositive)
@@ -817,7 +908,7 @@ TEST(MeasPowTest, PowStringThrows)
 }
 
 // =========================================================================
-//  pow(Measurement, Measurement) 鈥?broadcast
+//  pow(Measurement, Measurement) -> broadcast
 // =========================================================================
 
 TEST(MeasPowMeasTest, PowMeasScalarExponent)
@@ -879,7 +970,7 @@ TEST(MeasPowMeasTest, PowMeasBroadcastVectorToScalar)
 TEST(MeasPowMeasTest, PowMeasWithUnitAndScalarExponent)
 {
     Measurement base(2.0, xdataset::Unit::parse("meter"));
-    Measurement exp(3);  // scalar int exponent 鈫?unit derivation works
+    Measurement exp(3);  // scalar int exponent -> unit derivation works
     Measurement r = xdataset::pow(base, exp);
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 8.0);
     EXPECT_TRUE(r.unit().same_dimension(
@@ -1182,7 +1273,7 @@ TEST(DataArrayArithTest, MultiplyArrays)
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 8.0);
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 15.0);
     EXPECT_TRUE(r.data().unit().same_dimension(
-        Unit::parse("meter").canonicalized().multiply_dim(
+        Unit::parse("meter").canonicalized()*(
             Unit::parse("meter").canonicalized())));
 }
 
@@ -1200,7 +1291,7 @@ TEST(DataArrayArithTest, DivideArrays)
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 5.0);
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 5.0);
     EXPECT_TRUE(r.data().unit().same_dimension(
-        Unit::parse("meter").canonicalized().divide_dim(Unit::parse("sec").canonicalized())));
+        Unit::parse("meter").canonicalized()/(Unit::parse("sec").canonicalized())));
 }
 
 // =========================================================================

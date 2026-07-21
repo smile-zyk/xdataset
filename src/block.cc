@@ -15,7 +15,6 @@ namespace xdataset
     }
 
     Block::Block(const BlockCreateInfo& info)
-        : name_(info.name)
     {
         MultiDimensionSpec dependent_multi_dim;   // builds up from all independents in order
 
@@ -61,12 +60,16 @@ namespace xdataset
     Block::Block(BlockCreateInfo&& info)
         : Block(static_cast<const BlockCreateInfo&>(info))
     {
-        name_ = std::move(info.name);
     }
 
     const std::string& Block::name() const
     {
         return name_;
+    }
+
+    void Block::set_name(std::string name)
+    {
+        name_ = std::move(name);
     }
 
     std::vector<std::string> Block::dependents() const
@@ -152,7 +155,7 @@ namespace xdataset
         return DataArray(std::move(vinfo));
     }
 
-    const DataArray& Block::GetOrCreateDataArray(const std::string& name)
+    const DataArray& Block::GetOrCreateDataArray(const std::string& name) const
     {
         auto cached_it = data_array_cache_.find(name);
         if (cached_it != data_array_cache_.end())

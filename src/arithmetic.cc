@@ -355,11 +355,11 @@ const MeasOpTraits kMeasSub = {
     "operator-", false, false, resolve_add_sub_unit, op_sub_d, op_sub_c, op_sub_i};
 const MeasOpTraits kMeasMul = {
     "operator*", false, false,
-    [](const Unit& a, const Unit& b) { return a.multiply_dim(b); },
+    [](const Unit& a, const Unit& b) { return a * b; },
     op_mul_d, op_mul_c, op_mul_i};
 const MeasOpTraits kMeasDiv = {
     "operator/", false, true,
-    [](const Unit& a, const Unit& b) { return a.divide_dim(b); },
+    [](const Unit& a, const Unit& b) { return a / b; },
     op_div_d, op_div_c, op_div_i};
 
 }  // anonymous namespace
@@ -566,14 +566,14 @@ DataSeries operator-(const DataSeries& lhs, const DataSeries& rhs) {
 DataSeries operator*(const DataSeries& lhs, const DataSeries& rhs) {
     return ds_ds_apply(lhs, rhs, "operator*",
         [](const Measurement& a, const Measurement& b) { return a * b; },
-        [](const Unit& a, const Unit& b) { return a.multiply_dim(b); },
+        [](const Unit& a, const Unit& b) { return a * b; },
         /*same_dim*/ false, /*int_div_real*/ false);
 }
 
 DataSeries operator/(const DataSeries& lhs, const DataSeries& rhs) {
     return ds_ds_apply(lhs, rhs, "operator/",
         [](const Measurement& a, const Measurement& b) { return a / b; },
-        [](const Unit& a, const Unit& b) { return a.divide_dim(b); },
+        [](const Unit& a, const Unit& b) { return a / b; },
         /*same_dim*/ false, /*int_div_real*/ true);
 }
 
@@ -653,14 +653,14 @@ DataSeries operator-(const DataSeries& lhs, const Measurement& rhs) {
 DataSeries operator*(const DataSeries& lhs, const Measurement& rhs) {
     return ds_meas_apply(lhs, rhs, "operator*",
         [](const Measurement& a, const Measurement& b) { return a * b; },
-        [](const Unit& a, const Unit& b) { return a.multiply_dim(b); },
+        [](const Unit& a, const Unit& b) { return a * b; },
         /*same_dim*/ false, /*int_div_real*/ false);
 }
 
 DataSeries operator/(const DataSeries& lhs, const Measurement& rhs) {
     return ds_meas_apply(lhs, rhs, "operator/",
         [](const Measurement& a, const Measurement& b) { return a / b; },
-        [](const Unit& a, const Unit& b) { return a.divide_dim(b); },
+        [](const Unit& a, const Unit& b) { return a / b; },
         /*same_dim*/ false, /*int_div_real*/ true);
 }
 

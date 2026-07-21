@@ -48,7 +48,7 @@ namespace xdataset
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y,data"), std::string::npos);
-        EXPECT_NE(csv.find("\"[1,2]\",20,3,105"), std::string::npos);
+        EXPECT_NE(csv.find("\"1,2\",20,3,105"), std::string::npos);
     }
 
     TEST(DataArrayDataFrameTest, RaggedIndependentTableExpandsPrefixDimensions)
@@ -74,7 +74,7 @@ namespace xdataset
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y"), std::string::npos);
-        EXPECT_NE(csv.find("\"[1,1]\",20,3"), std::string::npos);
+        EXPECT_NE(csv.find("\"1,1\",20,3"), std::string::npos);
     }
 
     TEST(DataArrayDataFrameTest, RaggedDependentTableContainsDataColumnAndCsv)
@@ -105,7 +105,7 @@ namespace xdataset
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y,data"), std::string::npos);
-        EXPECT_NE(csv.find("\"[1,1]\",20,3,102"), std::string::npos);
+        EXPECT_NE(csv.find("\"1,1\",20,3,102"), std::string::npos);
     }
 
     TEST(DataArrayDataFrameTest, InterleavedRaggedIndependentTableExpandsPrefixDimensions)
@@ -151,7 +151,7 @@ namespace xdataset
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y,z"), std::string::npos);
-        EXPECT_NE(csv.find("\"[1,1,1]\",20,3,200"), std::string::npos);
+        EXPECT_NE(csv.find("\"1,1,1\",20,3,200"), std::string::npos);
     }
 
     TEST(DataArrayDataFrameTest, InterleavedRaggedDependentTableContainsDataColumnAndCsv)
@@ -204,7 +204,7 @@ namespace xdataset
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y,z,data"), std::string::npos);
-        EXPECT_NE(csv.find("\"[1,1,1]\",20,3,200,1.005 K"), std::string::npos);
+        EXPECT_NE(csv.find("\"1,1,1\",20,3,200,1.005 K"), std::string::npos);
     }
 
     TEST(DataArrayIndepTest, DependentIndepFromInsideOutByIndexAndName)
@@ -301,7 +301,6 @@ namespace xdataset
     TEST(DataArraySelectTest, DependentSelectKeepsSparseIndependentRows)
     {
         BlockCreateInfo info;
-        info.name = "sparse-select";
         info.independent_specs.push_back(
             IndependentSpec{
                 "x",
@@ -400,7 +399,6 @@ namespace xdataset
     TEST(DataArrayAtTest, VectorAtEqualReturnsScalarAndKeepsRowsAndDims)
     {
         DataArrayCreateInfo info;
-        info.name = "v";
         info.kind = DataArrayKind::kDependent;
         info.data = DataSeries(DataKind::kVector, DTypeTag::kReal, {3});
         info.data.resize(2);
@@ -429,7 +427,6 @@ namespace xdataset
     TEST(DataArrayAtTest, MatrixAtEqualAndInReturnsVectorAndKeepsRowsAndDims)
     {
         DataArrayCreateInfo info;
-        info.name = "m";
         info.kind = DataArrayKind::kDependent;
         info.data = DataSeries(DataKind::kMatrix, DTypeTag::kInteger, {2, 3});
         info.data.resize(2);
@@ -457,7 +454,6 @@ namespace xdataset
     TEST(DataArrayAtTest, ScalarAtIsInvalid)
     {
         DataArrayCreateInfo info;
-        info.name = "s";
         info.kind = DataArrayKind::kDependent;
         info.data = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
         info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});

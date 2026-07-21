@@ -22,7 +22,9 @@ add_executable(xdataset_test
 	tests/multi_dimension_test.cc
 	tests/block_test.cc
 	tests/data_array_test.cc
-	tests/data_frame_test.cc	tests/unit_test.cc
+	tests/data_frame_test.cc
+	tests/unit_test.cc
+	tests/dataset_test.cc
 	src/dimension_spec.cc
 	src/multi_dimension_spec.cc
 	src/multi_index_selector.cc
@@ -33,6 +35,7 @@ add_executable(xdataset_test
 	src/arithmetic.cc
 	src/measurement.cc
 	src/unit.cc
+	src/dataset.cc
 )
 
 add_executable(xdataset_playground
@@ -47,6 +50,7 @@ add_executable(xdataset_playground
 	src/arithmetic.cc
 	src/measurement.cc
 	src/unit.cc
+	src/dataset.cc
 )
 
 target_include_directories(xdataset_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})

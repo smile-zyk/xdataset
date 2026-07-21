@@ -17,6 +17,8 @@
 namespace xdataset
 {
 
+    class MeasurementDataFrame;
+
     // =========================================================================
     // Measurement -- a single named value with units (scalar | vector | matrix)
     // =========================================================================
@@ -183,6 +185,12 @@ namespace xdataset
 
         /// Return a human-readable string representation.
         std::string to_string() const;
+
+        // ======== DataFrame conversion ======================================
+
+        /// Create a MeasurementDataFrame with this measurement as the single
+        /// row, using \p name as the column header prefix.
+        MeasurementDataFrame to_dataframe(const std::string& name) const;
 
         // ======== canonicalisation ======================================
 

@@ -52,13 +52,11 @@ namespace xdataset
     std::string DataFrameRow::FormatMultiIndex() const
     {
         std::ostringstream oss;
-        oss << "[";
         for (std::size_t i = 0; i < multi_index.size(); ++i)
         {
             if (i > 0) oss << ",";
             oss << multi_index[i];
         }
-        oss << "]";
         return oss.str();
     }
 
@@ -185,7 +183,7 @@ namespace xdataset
     // DataFrame: lazy loading
     // =========================================================================
 
-    void DataFrame::Configure(std::vector<std::string> headers,
+    void DataFrame::ConfigureDynamic(std::vector<std::string> headers,
                               std::size_t total_rows,
                               RowGenerator generator,
                               std::size_t chunk_size)
@@ -198,6 +196,20 @@ namespace xdataset
         // Pre-allocate cache slots so operator[] is safe for any valid row.
         rows_.resize(total_rows_);
         loaded_chunks_.assign((total_rows_ + chunk_size_ - 1) / chunk_size_, false);
+    }
+
+    void DataFrame::ConfigureStatic(std::vector<std::string> headers,
+                                    std::vector<DataFrameRow> rows)
+    {
+        headers_    = std::move(headers);
+        total_rows_ = rows.size();
+        rows_       = std::move(rows);
+        // No generator, no chunk loading — rows are fully materialised.
+        // Mark all rows as already loaded so base GetRow / EnsureChunkLoaded
+        // works without a generator.
+        loaded_chunks_.assign(
+            total_rows_ > 0 ? 1 : 0, true);
+        chunk_size_ = static_cast<std::size_t>(total_rows_);
     }
 
     const DataFrameRow& DataFrame::GetRow(Index row) const
@@ -313,7 +325,7 @@ namespace xdataset
         const std::size_t total_headers = all_headers.size();
         const Block*      b = &block;
 
-        Configure(std::move(all_headers), total_rows,
+        ConfigureDynamic(std::move(all_headers), total_rows,
             [b, traversal_spec, total_headers, indep_names, dep_names](
                 Index start, Index end) -> std::vector<DataFrameRow>
             {
@@ -380,7 +392,7 @@ namespace xdataset
         const std::size_t total_rows   = spec.compute_cell_count();
         const std::size_t total_headers = all_headers.size();
 
-        Configure(std::move(all_headers), total_rows,
+        ConfigureDynamic(std::move(all_headers), total_rows,
             [spec, indep_columns, total_headers, dep_series](
                 Index start, Index end) -> std::vector<DataFrameRow>
             {
@@ -415,4 +427,90 @@ namespace xdataset
                 return result;
             });
     }
+    // =========================================================================
+    // MeasurementDataFrame
+    // =========================================================================
+
+    MeasurementDataFrame::MeasurementDataFrame(const Measurement& measurement,
+                                               std::string name)
+    {
+        const DataKind kind  = measurement.kind();
+        const std::vector<Index>& shape = measurement.shape();
+
+        // Build headers according to kind / shape, using the caller-supplied name.
+        std::vector<std::string> all_headers;
+        if (kind == DataKind::kScalar)
+        {
+            all_headers.push_back(name);
+        }
+        else if (kind == DataKind::kVector)
+        {
+            const Index width = shape[0];
+            all_headers.reserve(static_cast<std::size_t>(width));
+            for (Index i = 0; i < width; ++i)
+            {
+                all_headers.push_back(
+                    name + "(" + std::to_string(static_cast<std::size_t>(i) + 1) + ")");
+            }
+        }
+        else if (kind == DataKind::kMatrix)
+        {
+            const Index rows = shape[0];
+            const Index cols = shape[1];
+            all_headers.reserve(static_cast<std::size_t>(rows * cols));
+            for (Index r = 0; r < rows; ++r)
+            {
+                for (Index c = 0; c < cols; ++c)
+                {
+                    all_headers.push_back(
+                        name +
+                        "(" + std::to_string(static_cast<std::size_t>(r) + 1) +
+                        "," + std::to_string(static_cast<std::size_t>(c) + 1) +
+                        ")");
+                }
+            }
+        }
+        else
+        {
+            throw std::logic_error("unsupported data kind in MeasurementDataFrame");
+        }
+
+        // Expand the measurement into flat columns.
+        std::vector<Measurement> flat_fields;
+        if (kind == DataKind::kScalar)
+        {
+            flat_fields.push_back(measurement);
+        }
+        else if (kind == DataKind::kVector)
+        {
+            const Index width = shape[0];
+            flat_fields.reserve(static_cast<std::size_t>(width));
+            for (Index i = 0; i < width; ++i)
+                flat_fields.push_back(measurement.element_at(i));
+        }
+        else // Matrix
+        {
+            const Index rows = shape[0];
+            const Index cols = shape[1];
+            flat_fields.reserve(static_cast<std::size_t>(rows * cols));
+            for (Index r = 0; r < rows; ++r)
+                for (Index c = 0; c < cols; ++c)
+                    flat_fields.push_back(measurement.element_at(r, c));
+        }
+
+        // Build the single row and store it directly (no lazy loading).
+        row_.multi_index = {0};
+        row_.fields = std::move(flat_fields);
+
+        std::vector<DataFrameRow> rows;
+        rows.push_back(row_);
+
+        ConfigureStatic(std::move(all_headers), std::move(rows));
+    }
+
+    const DataFrameRow& MeasurementDataFrame::GetRow(Index /*row*/) const
+    {
+        return row_;
+    }
+
 } // namespace xdataset

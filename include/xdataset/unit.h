@@ -14,7 +14,7 @@ namespace xdataset
 //  Wraps llnl-units internally but restricts input parsing to the REL unit
 //  vocabulary.  Construction by users goes through `Unit::parse()` which
 //  validates against the REL lookup tables; construction from canonical base
-//  units (used internally by multiply_dim / divide_dim /
+//  units (used internally by operator*/operator/ /
 //  canonicalize) bypasses validation — those are always valid SI.
 // =========================================================================
 
@@ -79,8 +79,8 @@ public:
 
     // ---- arithmetic on dimensions (inputs must be canonical) ------------
 
-    Unit multiply_dim(const Unit& other) const;
-    Unit divide_dim(const Unit& other) const;
+    Unit operator*(const Unit& other) const;
+    Unit operator/(const Unit& other) const;
 
     // ---- comparison ----------------------------------------------------
 

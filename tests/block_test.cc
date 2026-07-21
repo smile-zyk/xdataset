@@ -9,7 +9,6 @@ namespace xdataset
     TEST(BlockConstructorTest, BuildsSpecsFromIndependentAndDependentRules)
     {
         BlockCreateInfo info;
-        info.name = "demo";
 
         IndependentSpec x{"x", MakeScalarSeries(2), DimensionSpec::Regular(2)};
         IndependentSpec y{"y", MakeScalarSeries(3), DimensionSpec::Regular(3)};
@@ -20,6 +19,7 @@ namespace xdataset
         info.dependent_specs.push_back(z);
 
         Block block(info);
+        block.set_name("demo");
 
         ASSERT_EQ(block.name(), "demo");
         ASSERT_EQ(block.independents().size(), 2u);
@@ -41,7 +41,6 @@ namespace xdataset
     TEST(BlockConstructorTest, RejectsDependentWithoutIndependent)
     {
         BlockCreateInfo info;
-        info.name = "demo";
 
         DependentSpec z{"z", MakeScalarSeries(1)};
         info.dependent_specs.push_back(z);
@@ -52,8 +51,6 @@ namespace xdataset
     TEST(BlockConstructorTest, RejectsDuplicateVariableNames)
     {
         BlockCreateInfo info;
-        info.name = "demo";
-
         IndependentSpec x{"same", MakeScalarSeries(2), DimensionSpec::Regular(2)};
         DependentSpec z{"same", MakeScalarSeries(2)};
 
@@ -66,8 +63,6 @@ namespace xdataset
     TEST(BlockConstructorTest, RejectsEmptyVariableName)
     {
         BlockCreateInfo info;
-        info.name = "demo";
-
         IndependentSpec x{"", MakeScalarSeries(2), DimensionSpec::Regular(2)};
 
         info.independent_specs.push_back(x);
@@ -78,8 +73,6 @@ namespace xdataset
     TEST(BlockConstructorTest, RejectsDependentDataSizeMismatchWithDerivedDims)
     {
         BlockCreateInfo info;
-        info.name = "demo";
-
         IndependentSpec x{"x", MakeScalarSeries(2), DimensionSpec::Regular(2)};
         IndependentSpec y{"y", MakeScalarSeries(3), DimensionSpec::Regular(3)};
         DependentSpec z{"z", MakeScalarSeries(5)};
@@ -94,8 +87,6 @@ namespace xdataset
     TEST(BlockConstructorTest, RejectsIndependentDataSizeMismatchWithItsDim)
     {
         BlockCreateInfo info;
-        info.name = "demo";
-
         IndependentSpec x{"x", MakeScalarSeries(3), DimensionSpec::Regular(2)};
 
         info.independent_specs.push_back(x);
@@ -199,7 +190,7 @@ namespace xdataset
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y,z"), std::string::npos);
-        EXPECT_NE(csv.find("\"[1,2]\",20,3,105"), std::string::npos);
+        EXPECT_NE(csv.find("\"1,2\",20,3,105"), std::string::npos);
     }
 
     TEST(BlockDataFrameTest, AggregatesJaggedVariablesIntoOneTable)
@@ -231,7 +222,7 @@ namespace xdataset
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y,z"), std::string::npos);
-        EXPECT_NE(csv.find("\"[1,1]\",20,3,102"), std::string::npos);
+        EXPECT_NE(csv.find("\"1,1\",20,3,102"), std::string::npos);
     }
 
     TEST(BlockDataFrameTest, AggregatesInterleavedJaggedVariablesIntoOneTable)
@@ -285,7 +276,7 @@ namespace xdataset
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y,z,w"), std::string::npos);
-        EXPECT_NE(csv.find("\"[1,1,1]\",20,3,200,1.005 K"), std::string::npos);
+        EXPECT_NE(csv.find("\"1,1,1\",20,3,200,1.005 K"), std::string::npos);
     }
 
     // =========================================================================
@@ -316,7 +307,7 @@ namespace xdataset
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find("sx,sy,sz"), std::string::npos);
-        EXPECT_NE(csv.find("\"[1,1]\",beta,two,D"), std::string::npos);
+        EXPECT_NE(csv.find("\"1,1\",beta,two,D"), std::string::npos);
     }
 
     TEST(BlockDataFrameTest, ThreeDimsWithMultipleDependents)

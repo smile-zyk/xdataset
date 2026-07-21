@@ -38,7 +38,7 @@ namespace xdataset
         const std::vector<std::string>& headers()   const { return headers_;   }
         std::size_t                     row_count() const { return total_rows_; }
 
-        const DataFrameRow& GetRow(Index row) const;
+        virtual const DataFrameRow& GetRow(Index row) const;
 
         std::string ToCsv() const;
         void        WriteToCsv(const std::string& file_path) const;
@@ -50,10 +50,15 @@ namespace xdataset
 
         DataFrame() = default;
 
-        void Configure(std::vector<std::string> headers,
-                       std::size_t total_rows,
-                       RowGenerator generator,
-                       std::size_t chunk_size = 256);
+        void ConfigureDynamic(std::vector<std::string> headers,
+                              std::size_t total_rows,
+                              RowGenerator generator,
+                              std::size_t chunk_size = 256);
+
+        /// Configure with pre-built rows -- no lazy loading, no generator.
+        /// Suitable for small DataFrames where caching is unnecessary.
+        void ConfigureStatic(std::vector<std::string> headers,
+                             std::vector<DataFrameRow> rows);
 
     private:
         void EnsureChunkLoaded(Index chunk_idx) const;
@@ -85,6 +90,30 @@ namespace xdataset
     {
     public:
         explicit DataArrayDataFrame(const DataArray& variable);
+    };
+
+    // =========================================================================
+    // MeasurementDataFrame — DataFrame that displays a single Measurement
+    // =========================================================================
+    //
+    // Always has exactly 1 row.  The number of columns depends on the
+    // Measurement's kind and shape:
+    //   - Scalar → 1 column (the value itself)
+    //   - Vector → width columns (one per element)
+    //   - Matrix → rows × cols columns (flattened row-major)
+    //
+    // Unlike BlockDataFrame / DataArrayDataFrame, there is no lazy loading
+    // or chunk cache — the single row is stored eagerly.
+    // =========================================================================
+    class MeasurementDataFrame : public DataFrame
+    {
+    public:
+        MeasurementDataFrame(const Measurement& measurement, std::string name);
+
+        const DataFrameRow& GetRow(Index row) const override;
+
+    private:
+        DataFrameRow row_;
     };
 
 } // namespace xdataset

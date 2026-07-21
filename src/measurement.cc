@@ -1,4 +1,5 @@
 #include "measurement.h"
+#include "data_frame.h"
 #include "unit.h"
 
 #include <sstream>
@@ -553,6 +554,15 @@ Measurement Measurement::canonicalized() const {
 
 bool Measurement::is_canonicalized() const {
     return unit_.is_canonical();
+}
+
+// =========================================================================
+// Measurement::to_dataframe
+// =========================================================================
+
+MeasurementDataFrame Measurement::to_dataframe(const std::string& name) const
+{
+    return MeasurementDataFrame(*this, name);
 }
 
 } // namespace xdataset
