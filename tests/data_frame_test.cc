@@ -39,26 +39,26 @@ namespace xdataset
 
     TEST(MeasurementTest, KindAndDtype)
     {
-        EXPECT_EQ(Measurement(3.14).dtype(),    DTypeTag::kReal);
-        EXPECT_EQ(Measurement(42).dtype(),      DTypeTag::kInteger);
-        EXPECT_EQ(Measurement(std::complex<double>(1,2)).dtype(), DTypeTag::kComplex);
-        EXPECT_EQ(Measurement(std::string("s")).dtype(), DTypeTag::kString);
+        EXPECT_EQ(Measurement(3.14).data_type(),    DataType::kReal);
+        EXPECT_EQ(Measurement(42).data_type(),      DataType::kInteger);
+        EXPECT_EQ(Measurement(std::complex<double>(1,2)).data_type(), DataType::kComplex);
+        EXPECT_EQ(Measurement(std::string("s")).data_type(), DataType::kString);
 
-        EXPECT_EQ(Measurement(1.0).dtype(), DTypeTag::kReal);
-        EXPECT_NE(Measurement(1.0).dtype(), DTypeTag::kInteger);
-        EXPECT_EQ(Measurement(0).dtype(), DTypeTag::kInteger);
-        EXPECT_EQ(Measurement(std::complex<double>(0, 0)).dtype(), DTypeTag::kComplex);
-        EXPECT_EQ(Measurement(std::string("ok")).dtype(), DTypeTag::kString);
+        EXPECT_EQ(Measurement(1.0).data_type(), DataType::kReal);
+        EXPECT_NE(Measurement(1.0).data_type(), DataType::kInteger);
+        EXPECT_EQ(Measurement(0).data_type(), DataType::kInteger);
+        EXPECT_EQ(Measurement(std::complex<double>(0, 0)).data_type(), DataType::kComplex);
+        EXPECT_EQ(Measurement(std::string("ok")).data_type(), DataType::kString);
     }
 
     TEST(MeasurementTest, AsScalar)
     {
         Measurement m(42);
-        EXPECT_EQ(m.kind(), DataKind::kScalar);
+        EXPECT_EQ(m.data_kind(), DataKind::kScalar);
         EXPECT_EQ(m.as_scalar<int>(), 42);
 
         Measurement m2(std::string("abc"));
-        EXPECT_EQ(m2.kind(), DataKind::kScalar);
+        EXPECT_EQ(m2.data_kind(), DataKind::kScalar);
         EXPECT_EQ(m2.as_scalar<std::string>(), "abc");
     }
 

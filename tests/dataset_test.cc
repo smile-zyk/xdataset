@@ -224,7 +224,7 @@ namespace xdataset
 
         const DataArray& da = ds.GetDataArray("SP1", "SP", "iv0");
         EXPECT_EQ(da.name(), "iv0");
-        EXPECT_EQ(da.kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(da.data_kind(), DataArrayKind::kIndependent);
     }
 
     TEST(DatasetTest, GetDataArrayFullPathThrowsOnMissingAnalysis)

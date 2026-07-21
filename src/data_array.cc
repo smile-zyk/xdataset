@@ -19,7 +19,7 @@ namespace xdataset
           data_(info.data),
           indep_datas_(info.indep_datas),
           multi_dimension_spec_(info.multi_dimension_spec),
-          kind_(info.kind)
+          data_kind_(info.kind)
     {
         data_.canonicalize();
         for (auto it = indep_datas_.begin(); it != indep_datas_.end(); ++it)
@@ -42,7 +42,7 @@ namespace xdataset
           data_(std::move(info.data)),
           indep_datas_(std::move(info.indep_datas)),
           multi_dimension_spec_(std::move(info.multi_dimension_spec)),
-          kind_(info.kind)
+          data_kind_(info.kind)
     {
         data_.canonicalize();
         for (auto it = indep_datas_.begin(); it != indep_datas_.end(); ++it)
@@ -65,7 +65,7 @@ namespace xdataset
           data_(other.data_),
           indep_datas_(other.indep_datas_),
           multi_dimension_spec_(other.multi_dimension_spec_),
-          kind_(other.kind_)
+          data_kind_(other.data_kind_)
     {
         // data_frame_cache_ intentionally left as nullptr.
     }
@@ -78,7 +78,7 @@ namespace xdataset
             data_ = other.data_;
             indep_datas_ = other.indep_datas_;
             multi_dimension_spec_ = other.multi_dimension_spec_;
-            kind_ = other.kind_;
+            data_kind_ = other.data_kind_;
             data_frame_cache_.reset();
         }
         return *this;
@@ -86,7 +86,7 @@ namespace xdataset
 
     void DataArray::set_name(const std::string& name)
     {
-        if (kind_ == DataArrayKind::kIndependent && !indep_datas_.empty() && name != name_)
+        if (data_kind_ == DataArrayKind::kIndependent && !indep_datas_.empty() && name != name_)
         {
             auto last = --indep_datas_.end();
             DataSeries col = std::move(last->second);
@@ -123,7 +123,7 @@ namespace xdataset
         if (static_cast<std::size_t>(index) > count)
             throw std::out_of_range("indep_data index out of range");
 
-        // index=1 �� last column, index=count �� first column
+        // index=1 -> last column, index=count -> first column
         const std::size_t target = count - static_cast<std::size_t>(index);
         auto it = indep_datas_.begin();
         std::advance(it, static_cast<std::ptrdiff_t>(target));
@@ -150,9 +150,9 @@ namespace xdataset
         if (static_cast<std::size_t>(index) > count)
             throw std::out_of_range("indep index out of range");
 
-        // index=1 �� last column, index=count �� first column
+        // index=1 -> last column, index=count -> first column
         const std::size_t target = count - static_cast<std::size_t>(index);
-        const bool        is_self = (kind_ == DataArrayKind::kIndependent) && (target == count - 1);
+        const bool        is_self = (data_kind_ == DataArrayKind::kIndependent) && (target == count - 1);
 
         // Build prefix dimensions first (needed for compute_cell_count).
         std::vector<DimensionSpec> prefix_dims;
@@ -197,7 +197,7 @@ namespace xdataset
         {
             // Expand raw data to the full cartesian product of result_spec.
             const DataSeries& raw = it->second;
-            DataSeries expanded = DataSeries(raw.data_kind(), raw.dtype(), raw.data_shape());
+            DataSeries expanded = DataSeries(raw.data_kind(), raw.data_type(), raw.data_shape());
             result_spec.for_each_leaf_row(
                 [&](const MultiDimensionSpec::LeafRow& lr)
                 {
@@ -218,7 +218,7 @@ namespace xdataset
             throw std::invalid_argument("indep name must not be empty");
         }
 
-        if (kind_ == DataArrayKind::kIndependent && name == name_)
+        if (data_kind_ == DataArrayKind::kIndependent && name == name_)
         {
             return indep(1);
         }
@@ -247,7 +247,7 @@ namespace xdataset
 
         DataArrayCreateInfo info;
         info.name = DataArray::kUnnamed;
-        info.kind = kind_;
+        info.kind = data_kind_;
         info.indep_datas = indep_datas_;
         info.multi_dimension_spec = multi_dimension_spec_;
 
@@ -426,9 +426,9 @@ namespace xdataset
 
         DataArrayCreateInfo info;
         info.name = DataArray::kUnnamed;
-        info.kind = kind_;
+        info.kind = data_kind_;
         info.multi_dimension_spec = selected_multi_dim;
-        DataSeries selected_data = DataSeries(data().data_kind(), data().dtype(), data().data_shape());
+        DataSeries selected_data = DataSeries(data().data_kind(), data().data_type(), data().data_shape());
         for (const Index& source_row : selected_row_indices)
         {
             selected_data.append_from(data(), source_row);
@@ -452,7 +452,7 @@ namespace xdataset
             }
         }
 
-        if (kind_ == DataArrayKind::kIndependent)
+        if (data_kind_ == DataArrayKind::kIndependent)
         {
             info.indep_datas[info.name] = info.data;
         }
@@ -497,7 +497,7 @@ namespace xdataset
                 throw std::invalid_argument(
                     "CreateDependent: null indep_variable in list");
             }
-            if (var->kind() != DataArrayKind::kIndependent)
+            if (var->data_kind() != DataArrayKind::kIndependent)
             {
                 throw std::invalid_argument(
                     "CreateDependent: DataArray '" + var->name() +

@@ -13,7 +13,7 @@ namespace xdataset
     class DataSeries;
 
     // =========================================================================
-    // DataFrameRow — a single row in a DataFrame table
+    // DataFrameRow -- a single row in a DataFrame table
     // =========================================================================
     struct DataFrameRow
     {
@@ -24,7 +24,7 @@ namespace xdataset
     };
 
     // =========================================================================
-    // DataFrame — lazy-loading tabular container
+    // DataFrame -- lazy-loading tabular container
     // =========================================================================
     //
     // Rows are loaded on demand in fixed-size chunks.  Derived classes
@@ -73,7 +73,7 @@ namespace xdataset
     };
 
     // =========================================================================
-    // BlockDataFrame — DataFrame backed by a Block's independent/dependent data
+    // BlockDataFrame -- DataFrame backed by a Block's independent/dependent data
     // =========================================================================
     class Block;
     class BlockDataFrame : public DataFrame
@@ -83,7 +83,7 @@ namespace xdataset
     };
 
     // =========================================================================
-    // DataArrayDataFrame — DataFrame backed by a DataArray's data
+    // DataArrayDataFrame -- DataFrame backed by a DataArray's data
     // =========================================================================
     class DataArray;
     class DataArrayDataFrame : public DataFrame
@@ -93,14 +93,14 @@ namespace xdataset
     };
 
     // =========================================================================
-    // MeasurementDataFrame — DataFrame that displays a single Measurement
+    // MeasurementDataFrame -- DataFrame that displays a single Measurement
     // =========================================================================
     //
     // Always has exactly 1 row.  The number of columns depends on the
     // Measurement's kind and shape:
-    //   - Scalar → 1 column (the value itself)
-    //   - Vector → width columns (one per element)
-    //   - Matrix → rows × cols columns (flattened row-major)
+    //   - Scalar -> 1 column (the value itself)
+    //   - Vector -> width columns (one per element)
+    //   - Matrix -> rows x cols columns (flattened row-major)
     //
     // Unlike BlockDataFrame / DataArrayDataFrame, there is no lazy loading
     // or chunk cache — the single row is stored eagerly.

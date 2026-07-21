@@ -23,7 +23,7 @@ namespace
 
     DataSeries vectors(std::size_t rows, Index width, const Unit& u = Unit())
     {
-        DataSeries s(DataKind::kVector, DTypeTag::kReal, {width});
+        DataSeries s(DataKind::kVector, DataType::kReal, {width});
         s.set_unit(u);
         s.resize(rows);
         for (std::size_t i = 0; i < rows; ++i)
@@ -34,7 +34,7 @@ namespace
 
     DataSeries matrices(std::size_t rows, Index r, Index c, const Unit& u = Unit())
     {
-        DataSeries s(DataKind::kMatrix, DTypeTag::kReal, {r, c});
+        DataSeries s(DataKind::kMatrix, DataType::kReal, {r, c});
         s.set_unit(u);
         s.resize(rows);
         for (std::size_t i = 0; i < rows; ++i)
@@ -229,7 +229,7 @@ int main()
             Block block(info);
 
             auto w = block.GetOrCreateDataArray("w");           // dependent
-            std::cout << "w.kind() = " << (w.kind() == DataArrayKind::kDependent ? "dependent" : "independent") << std::endl;
+            std::cout << "w.data_kind() = " << (w.data_kind() == DataArrayKind::kDependent ? "dependent" : "independent") << std::endl;
 
             auto z_var = w.indep(1);                         // dependent w -> indep(1) = z
             std::cout << "w.indep(1).name() = " << z_var.name() << ", rank = " << z_var.multi_dimension_spec().rank() << std::endl;
@@ -287,20 +287,26 @@ int main()
             Measurement s(std::string("hello"));
 
             std::cout << "Measurement(3.14 m/s):     "
-                      << "dtype=" << d.dtype_name()
                       << "  ToString=\"" << d.to_string() << "\"" << std::endl;
             std::cout << "Measurement(42 kg):        "
-                      << "dtype=" << i.dtype_name()
                       << "  ToString=\"" << i.to_string() << "\"" << std::endl;
             std::cout << "Measurement(1-2i V):       "
-                      << "dtype=" << c.dtype_name()
                       << "  ToString=\"" << c.to_string() << "\"" << std::endl;
             std::cout << "Measurement(\"hello\"):   "
-                      << "dtype=" << s.dtype_name()
                       << "  ToString=\"" << s.to_string() << "\"" << std::endl;
 
             std::cout << "Measurement(3.14).as_scalar<double>() = " << d.as_scalar<double>() << std::endl;
         }
+
+        // 11 . UNIT
+        // dist(3.0, meter) / time(2.0, sec)
+
+        Measurement dist(3.0, Unit::parse("meter"));
+        Measurement time(2.0, Unit::parse("sec"));
+        Measurement speed = dist / time;
+        std::cout << "\nSpeed = " << speed.to_string() << std::endl;
+        std::cout << "Speed value = " << speed.as_scalar<double>() << std::endl;
+        std::cout << "Speed unit = " << speed.unit().to_string() << std::endl;
 
         std::cout << "\nDone." << std::endl;
         return 0;

@@ -37,13 +37,13 @@ namespace xdataset {
 
 // --- dtype promotion: Integer  <  Real  <  Complex -------------------------------
 
-DTypeTag promoted_dtype(DTypeTag a, DTypeTag b) {
-    if (a == DTypeTag::kString || b == DTypeTag::kString)
+DataType promoted_dtype(DataType a, DataType b) {
+    if (a == DataType::kString || b == DataType::kString)
         throw std::invalid_argument(
             "promoted_dtype: string cannot participate in arithmetic");
-    if (a == DTypeTag::kComplex || b == DTypeTag::kComplex) return DTypeTag::kComplex;
-    if (a == DTypeTag::kReal    || b == DTypeTag::kReal)    return DTypeTag::kReal;
-    return DTypeTag::kInteger;
+    if (a == DataType::kComplex || b == DataType::kComplex) return DataType::kComplex;
+    if (a == DataType::kReal    || b == DataType::kReal)    return DataType::kReal;
+    return DataType::kInteger;
 }
 
 // --- DataKind promotion (broadcast) -------------------------------------------
@@ -92,7 +92,7 @@ namespace {
 
 /// Flat element count: Scalar=1, Vector=width, Matrix=rowsxcols.
 Index meas_element_count(const Measurement& m) {
-    switch (m.kind()) {
+    switch (m.data_kind()) {
         case DataKind::kScalar: return 1;
         case DataKind::kVector: return m.shape()[0];
         case DataKind::kMatrix: return m.shape()[0] * m.shape()[1];
@@ -102,19 +102,19 @@ Index meas_element_count(const Measurement& m) {
 
 /// Read element at flat index, promoting Integer -> double.
 double meas_as_double(const Measurement& m, Index i) {
-    switch (m.kind()) {
+    switch (m.data_kind()) {
         case DataKind::kScalar:
-            return (m.dtype() == DTypeTag::kInteger)
+            return (m.data_type() == DataType::kInteger)
                        ? static_cast<double>(m.as_scalar<int>())
                        : m.as_scalar<double>();
         case DataKind::kVector:
-            return (m.dtype() == DTypeTag::kInteger)
+            return (m.data_type() == DataType::kInteger)
                        ? static_cast<double>(m.as_vector<int>()(i))
                        : m.as_vector<double>()(i);
         case DataKind::kMatrix: {
             Index cols = m.shape()[1];
             Index r = i / cols, c = i % cols;
-            return (m.dtype() == DTypeTag::kInteger)
+            return (m.data_type() == DataType::kInteger)
                        ? static_cast<double>(m.as_matrix<int>()(r, c))
                        : m.as_matrix<double>()(r, c);
         }
@@ -124,19 +124,19 @@ double meas_as_double(const Measurement& m, Index i) {
 
 /// Read element at flat index, promoting Integer/Real -> complex.
 std::complex<double> meas_as_complex(const Measurement& m, Index i) {
-    switch (m.kind()) {
+    switch (m.data_kind()) {
         case DataKind::kScalar:
-            return (m.dtype() == DTypeTag::kComplex)
+            return (m.data_type() == DataType::kComplex)
                        ? m.as_scalar<std::complex<double> >()
                        : std::complex<double>(meas_as_double(m, i), 0.0);
         case DataKind::kVector:
-            return (m.dtype() == DTypeTag::kComplex)
+            return (m.data_type() == DataType::kComplex)
                        ? m.as_vector<std::complex<double> >()(i)
                        : std::complex<double>(meas_as_double(m, i), 0.0);
         case DataKind::kMatrix: {
             Index cols = m.shape()[1];
             Index r = i / cols, c = i % cols;
-            return (m.dtype() == DTypeTag::kComplex)
+            return (m.data_type() == DataType::kComplex)
                        ? m.as_matrix<std::complex<double> >()(r, c)
                        : std::complex<double>(meas_as_double(m, i), 0.0);
         }
@@ -146,7 +146,7 @@ std::complex<double> meas_as_complex(const Measurement& m, Index i) {
 
 /// Read integer element at flat index.
 int meas_as_int(const Measurement& m, Index i) {
-    switch (m.kind()) {
+    switch (m.data_kind()) {
         case DataKind::kScalar:  return m.as_scalar<int>();
         case DataKind::kVector:  return m.as_vector<int>()(i);
         case DataKind::kMatrix: {
@@ -174,7 +174,7 @@ Measurement make_matrix_cplx (const Eigen::MatrixXcd& v, const Unit& u) { return
 /// Extract the effective shape from the non-Scalar operand.
 inline void get_shape(const Measurement& a, const Measurement& b,
                       Index& rows, Index& cols) {
-    if (a.kind() != DataKind::kScalar) {
+    if (a.data_kind() != DataKind::kScalar) {
         rows = a.shape()[0];
         cols = a.shape()[1];
     } else {
@@ -207,10 +207,10 @@ struct MeasOpTraits {
 Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
                        const MeasOpTraits& tr) {
     // --- Step 1: validation ------------------------------------------------
-    if (lhs.dtype() == DTypeTag::kString || rhs.dtype() == DTypeTag::kString)
+    if (lhs.data_type() == DataType::kString || rhs.data_type() == DataType::kString)
         throw std::invalid_argument(
             std::string(tr.op_name) + ": string cannot participate in arithmetic");
-    promoted_kind(lhs.kind(), rhs.kind());  // throws on VectorxMatrix
+    promoted_kind(lhs.data_kind(), rhs.data_kind());  // throws on VectorxMatrix
 
     // --- Step 2: canonicalise ----------------------------------------------
     Measurement a = lhs.canonicalized();
@@ -223,11 +223,11 @@ Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
             a.unit().to_string() + "] vs [" + b.unit().to_string() + "]");
 
     // --- Step 4: result metadata -------------------------------------------
-    DataKind  res_kind  = promoted_kind(a.kind(), b.kind());
-    DTypeTag  res_dtype = promoted_dtype(a.dtype(), b.dtype());
+    DataKind  res_kind  = promoted_kind(a.data_kind(), b.data_kind());
+    DataType  res_dtype = promoted_dtype(a.data_type(), b.data_type());
     if (tr.int_div_to_real &&
-        a.dtype() == DTypeTag::kInteger && b.dtype() == DTypeTag::kInteger)
-        res_dtype = DTypeTag::kReal;
+        a.data_type() == DataType::kInteger && b.data_type() == DataType::kInteger)
+        res_dtype = DataType::kReal;
 
     Index a_cnt = meas_element_count(a);
     Index b_cnt = meas_element_count(b);
@@ -240,7 +240,7 @@ Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
     // --- Step 5: element-wise computation ----------------------------------
 
     // Complex path
-    if (res_dtype == DTypeTag::kComplex) {
+    if (res_dtype == DataType::kComplex) {
         if (res_kind == DataKind::kScalar) {
             return make_scalar_cplx(tr.cplx_op(
                 meas_as_complex(a, 0), meas_as_complex(b, 0)), result_unit);
@@ -267,7 +267,7 @@ Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
     }
 
     // Integer path (only when both are Integer and op is + - *)
-    if (res_dtype == DTypeTag::kInteger) {
+    if (res_dtype == DataType::kInteger) {
         if (res_kind == DataKind::kScalar) {
             return make_scalar_int(tr.int_op(
                 meas_as_int(a, 0), meas_as_int(b, 0)), result_unit);
@@ -390,13 +390,13 @@ Measurement operator/(const Measurement& lhs, const Measurement& rhs) {
 
 Measurement pow(const Measurement& base, const Measurement& exponent) {
     // --- validation --------------------------------------------------------
-    if (exponent.dtype() == DTypeTag::kString)
+    if (exponent.data_type() == DataType::kString)
         throw std::invalid_argument(
             "pow: exponent cannot be string");
     if (exponent.unit().has_dimension())
         throw std::invalid_argument(
             "pow: exponent must be dimensionless (it carries a physical unit)");
-    if (base.dtype() == DTypeTag::kString)
+    if (base.data_type() == DataType::kString)
         throw std::invalid_argument(
             "pow: base cannot be string");
 
@@ -404,8 +404,8 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
     Measurement a = base.canonicalized();
 
     // --- result metadata --------------------------------------------------
-    DataKind  res_kind  = promoted_kind(a.kind(), exponent.kind());
-    DTypeTag  res_dtype = promoted_dtype(a.dtype(), exponent.dtype());
+    DataKind  res_kind  = promoted_kind(a.data_kind(), exponent.data_kind());
+    DataType  res_dtype = promoted_dtype(a.data_type(), exponent.data_type());
 
     Index a_cnt = meas_element_count(a);
     Index e_cnt = meas_element_count(exponent);
@@ -416,7 +416,7 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
     Unit result_unit = a.unit();
 
     // --- complex path -----------------------------------------------------
-    if (res_dtype == DTypeTag::kComplex) {
+    if (res_dtype == DataType::kComplex) {
         if (res_kind == DataKind::kScalar)
             return make_scalar_cplx(
                 std::pow(meas_as_complex(a, 0), meas_as_complex(exponent, 0)),
@@ -485,7 +485,7 @@ void validate_ds_ds(const DataSeries& a, const DataSeries& b,
         throw std::invalid_argument(
             std::string(op_name) + ": row-count mismatch (" +
             std::to_string(a.size()) + " vs " + std::to_string(b.size()) + ")");
-    if (a.dtype() == DTypeTag::kString || b.dtype() == DTypeTag::kString)
+    if (a.data_type() == DataType::kString || b.data_type() == DataType::kString)
         throw std::invalid_argument(
             std::string(op_name) + ": string series cannot participate in arithmetic");
     promoted_kind(a.data_kind(), b.data_kind());  // throws on VectorxMatrix
@@ -532,10 +532,10 @@ DataSeries ds_ds_apply(const DataSeries& lhs, const DataSeries& rhs,
             a.unit().to_string() + "] vs [" + b.unit().to_string() + "]");
 
     auto res_kind  = promoted_kind(a.data_kind(), b.data_kind());
-    auto res_dtype = promoted_dtype(a.dtype(), b.dtype());
+    auto res_dtype = promoted_dtype(a.data_type(), b.data_type());
     if (int_div_to_real &&
-        a.dtype() == DTypeTag::kInteger && b.dtype() == DTypeTag::kInteger)
-        res_dtype = DTypeTag::kReal;
+        a.data_type() == DataType::kInteger && b.data_type() == DataType::kInteger)
+        res_dtype = DataType::kReal;
 
     DataSeries result(res_kind, res_dtype, ds_ds_result_shape(a, b));
     result.set_unit(unit_op(a.unit(), b.unit()));
@@ -589,10 +589,10 @@ namespace {
 // --- row-level validation ----------------------------------------------------
 void validate_ds_meas(const DataSeries& a, const Measurement& m,
                       const char* op_name) {
-    if (a.dtype() == DTypeTag::kString || m.dtype() == DTypeTag::kString)
+    if (a.data_type() == DataType::kString || m.data_type() == DataType::kString)
         throw std::invalid_argument(
             std::string(op_name) + ": string cannot participate in arithmetic");
-    promoted_kind(a.data_kind(), m.kind());
+    promoted_kind(a.data_kind(), m.data_kind());
 }
 
 // --- result shape for DataSeries vs Measurement ---------------------------------
@@ -619,11 +619,11 @@ DataSeries ds_meas_apply(const DataSeries& lhs, const Measurement& rhs,
             std::string(op_name) + ": unit dimension mismatch [" +
             a.unit().to_string() + "] vs [" + rhs_c.unit().to_string() + "]");
 
-    auto res_kind  = promoted_kind(a.data_kind(), rhs_c.kind());
-    auto res_dtype = promoted_dtype(a.dtype(), rhs_c.dtype());
+    auto res_kind  = promoted_kind(a.data_kind(), rhs_c.data_kind());
+    auto res_dtype = promoted_dtype(a.data_type(), rhs_c.data_type());
     if (int_div_to_real &&
-        a.dtype() == DTypeTag::kInteger && rhs_c.dtype() == DTypeTag::kInteger)
-        res_dtype = DTypeTag::kReal;
+        a.data_type() == DataType::kInteger && rhs_c.data_type() == DataType::kInteger)
+        res_dtype = DataType::kReal;
 
     DataSeries result(res_kind, res_dtype, ds_meas_result_shape(a, rhs_c));
     result.set_unit(unit_op(a.unit(), rhs_c.unit()));
@@ -665,23 +665,89 @@ DataSeries operator/(const DataSeries& lhs, const Measurement& rhs) {
 }
 
 // =============================================================================
+//  Sec.4b  Measurement  op  DataSeries  (reverse broadcast)
+// =============================================================================
+//
+//  Swaps argument order: iterate over DataSeries rows, applying
+//  meas_op(lhs_meas, rhs_ds.measurement_at(i)).
+
+namespace {
+
+template <typename MeasOp, typename UnitOp>
+DataSeries meas_ds_apply(const Measurement& lhs, const DataSeries& rhs,
+                          const char* op_name, MeasOp meas_op, UnitOp unit_op,
+                          bool same_dim_required, bool int_div_to_real) {
+    if (lhs.data_type() == DataType::kString || rhs.data_type() == DataType::kString)
+        throw std::invalid_argument(
+            std::string(op_name) + ": string cannot participate in arithmetic");
+    promoted_kind(lhs.data_kind(), rhs.data_kind());
+
+    Measurement lhs_c = lhs.canonicalized();
+    DataSeries  rhs_c = rhs.canonicalized();
+
+    if (same_dim_required && !lhs_c.unit().same_dimension(rhs_c.unit()))
+        throw std::invalid_argument(
+            std::string(op_name) + ": unit dimension mismatch");
+
+    auto res_kind  = promoted_kind(lhs_c.data_kind(), rhs_c.data_kind());
+    auto res_dtype = promoted_dtype(lhs_c.data_type(), rhs_c.data_type());
+    if (int_div_to_real &&
+        lhs_c.data_type() == DataType::kInteger && rhs_c.data_type() == DataType::kInteger)
+        res_dtype = DataType::kReal;
+
+    DataSeries result(res_kind, res_dtype, ds_meas_result_shape(rhs_c, lhs_c));
+    result.set_unit(unit_op(lhs_c.unit(), rhs_c.unit()));
+
+    for (std::size_t i = 0; i < rhs_c.size(); ++i)
+        result.append(meas_op(lhs_c, rhs_c.measurement_at(static_cast<Index>(i))));
+    return result;
+}
+
+}  // anonymous namespace
+
+DataSeries operator+(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator+",
+        [](const Measurement& a, const Measurement& b) { return a + b; },
+        resolve_add_sub_unit,
+        /*same_dim*/ false, /*int_div_real*/ false);
+}
+
+DataSeries operator-(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator-",
+        [](const Measurement& a, const Measurement& b) { return a - b; },
+        resolve_add_sub_unit,
+        /*same_dim*/ false, /*int_div_real*/ false);
+}
+
+DataSeries operator*(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator*",
+        [](const Measurement& a, const Measurement& b) { return a * b; },
+        [](const Unit& a, const Unit& b) { return a * b; },
+        /*same_dim*/ false, /*int_div_real*/ false);
+}
+
+DataSeries operator/(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator/",
+        [](const Measurement& a, const Measurement& b) { return a / b; },
+        [](const Unit& a, const Unit& b) { return a / b; },
+        /*same_dim*/ false, /*int_div_real*/ true);
+}
+
+// =============================================================================
 //  Sec.5  pow(DataSeries, Measurement)
 // =============================================================================
 //
-//  Exponent must be dimensionless, non-String, and (for now) Scalar.
+//  Exponent must be dimensionless and non-String.  Broadcasts to every row.
 //  For each row we delegate to pow(Measurement, Measurement) from Sec.2.
 
 DataSeries pow(const DataSeries& base, const Measurement& exp) {
     // --- validation ---------------------------------------------------------
-    if (exp.dtype() == DTypeTag::kString)
+    if (exp.data_type() == DataType::kString)
         throw std::invalid_argument("pow: exponent cannot be string");
     if (exp.unit().has_dimension())
         throw std::invalid_argument(
             "pow: exponent must be dimensionless (it carries a physical unit)");
-    if (exp.kind() != DataKind::kScalar)
-        throw std::invalid_argument(
-            "pow: exponent in DataSeries::pow must be a scalar Measurement");
-    if (base.dtype() == DTypeTag::kString)
+    if (base.data_type() == DataType::kString)
         throw std::invalid_argument(
             "pow: string series cannot participate in arithmetic");
 
@@ -689,16 +755,90 @@ DataSeries pow(const DataSeries& base, const Measurement& exp) {
     DataSeries  a     = base.canonicalized();
     Measurement exp_c = exp.canonicalized();
 
-    auto res_dtype = promoted_dtype(base.dtype(), exp.dtype());
-    DataSeries result(base.data_kind(), res_dtype, base.data_shape());
+    auto res_kind  = promoted_kind(a.data_kind(), exp.data_kind());
+    auto res_dtype = promoted_dtype(a.data_type(), exp.data_type());
+    DataSeries result(res_kind, res_dtype, ds_meas_result_shape(a, exp_c));
 
-    // Dimensionless exponent preserves the base unit.
+    // Unit: dimensionless exponent preserves the base unit (same as Measurement::pow).
     result.set_unit(a.unit());
 
     // --- per-row computation ------------------------------------------------
     for (std::size_t i = 0; i < a.size(); ++i)
         result.append(xdataset::pow(
             a.measurement_at(static_cast<Index>(i)), exp_c));
+    return result;
+}
+
+// =============================================================================
+//  Sec.5c  pow(Measurement, DataSeries)
+// =============================================================================
+//
+//  Broadcast a single Measurement base across every row of a DataSeries exponent.
+//  For each row we delegate to pow(Measurement, Measurement) from Sec.2.
+
+DataSeries pow(const Measurement& base, const DataSeries& exponent) {
+    // --- validation ---------------------------------------------------------
+    if (base.data_type() == DataType::kString || exponent.data_type() == DataType::kString)
+        throw std::invalid_argument("pow: string cannot participate in arithmetic");
+    if (exponent.unit().has_dimension())
+        throw std::invalid_argument(
+            "pow: exponent must be dimensionless (it carries a physical unit)");
+
+    // --- canonicalise -------------------------------------------------------
+    Measurement base_c = base.canonicalized();
+    DataSeries  exp_c  = exponent.canonicalized();
+
+    auto res_kind  = promoted_kind(base_c.data_kind(), exp_c.data_kind());
+    auto res_dtype = promoted_dtype(base_c.data_type(), exp_c.data_type());
+    DataSeries result(res_kind, res_dtype, ds_meas_result_shape(exp_c, base_c));
+
+    // Unit: dimensionless exponent preserves the base unit (same as Measurement::pow).
+    result.set_unit(base_c.unit());
+
+    // --- per-row computation ------------------------------------------------
+    for (std::size_t i = 0; i < exp_c.size(); ++i)
+        result.append(xdataset::pow(
+            base_c, exp_c.measurement_at(static_cast<Index>(i))));
+    return result;
+}
+
+// =============================================================================
+//  Sec.5d  pow(DataSeries, DataSeries)
+// =============================================================================
+//
+//  Row-by-row pow.  Exponent series must be dimensionless.
+
+DataSeries pow(const DataSeries& base, const DataSeries& exponent) {
+    // --- validation ---------------------------------------------------------
+    if (base.size() != exponent.size())
+        throw std::invalid_argument(
+            "pow: row-count mismatch (" + std::to_string(base.size()) +
+            " vs " + std::to_string(exponent.size()) + ")");
+    if (base.data_type() == DataType::kString || exponent.data_type() == DataType::kString)
+        throw std::invalid_argument(
+            "pow: string series cannot participate in arithmetic");
+    promoted_kind(base.data_kind(), exponent.data_kind());
+
+    // --- canonicalise -------------------------------------------------------
+    DataSeries a = base.canonicalized();
+    DataSeries e = exponent.canonicalized();
+
+    if (e.unit().has_dimension())
+        throw std::invalid_argument(
+            "pow: exponent must be dimensionless (it carries a physical unit)");
+
+    auto res_kind  = promoted_kind(a.data_kind(), e.data_kind());
+    auto res_dtype = promoted_dtype(a.data_type(), e.data_type());
+    DataSeries result(res_kind, res_dtype, ds_ds_result_shape(a, e));
+
+    // Unit: dimensionless exponent preserves the base unit (same as Measurement::pow).
+    result.set_unit(a.unit());
+
+    // --- per-row computation ------------------------------------------------
+    for (std::size_t i = 0; i < a.size(); ++i)
+        result.append(xdataset::pow(
+            a.measurement_at(static_cast<Index>(i)),
+            e.measurement_at(static_cast<Index>(i))));
     return result;
 }
 
@@ -765,7 +905,7 @@ void validate_indeps_compatible(const DataArray& a, const DataArray& b,
             std::to_string(na.size()) + " vs " + std::to_string(nb.size()) + ")");
 
     std::size_t n = na.size();
-    if (a.kind() == DataArrayKind::kIndependent && b.kind() == DataArrayKind::kIndependent)
+    if (a.data_kind() == DataArrayKind::kIndependent && b.data_kind() == DataArrayKind::kIndependent)
         --n;  // skip the last name (the array's own name)
 
     for (std::size_t i = 0; i < n; ++i) {
@@ -804,7 +944,7 @@ DataArray array_array_op(const DataArray& lhs, const DataArray& rhs,
     info.data                = std::move(result_ds);
     info.indep_datas         = lhs.indep_datas();         // inherit from lhs
     info.multi_dimension_spec = lhs.multi_dimension_spec(); // inherit from lhs
-    info.kind                = lhs.kind();                // inherit from lhs
+    info.kind                = lhs.data_kind();                // inherit from lhs
     return DataArray(std::move(info));
 }
 
@@ -852,7 +992,7 @@ DataArray array_meas_op(const DataArray& lhs, const Measurement& rhs,
     info.data                 = std::move(result_ds);
     info.indep_datas          = lhs.indep_datas();
     info.multi_dimension_spec = lhs.multi_dimension_spec();
-    info.kind                 = lhs.kind();
+    info.kind                 = lhs.data_kind();
     return DataArray(std::move(info));
 }
 
@@ -879,6 +1019,48 @@ DataArray operator/(const DataArray& lhs, const Measurement& rhs) {
 }
 
 // =============================================================================
+//  Sec.6b  Measurement  op  DataArray  (reverse broadcast)
+// =============================================================================
+
+namespace {
+
+template <typename DataSeriesMeasOp>
+DataArray meas_array_op(const Measurement& lhs, const DataArray& rhs,
+                         DataSeriesMeasOp ds_meas_op) {
+    DataSeries result_ds = ds_meas_op(lhs, rhs.data());
+
+    DataArrayCreateInfo info;
+    info.name                 = DataArray::kUnnamed;
+    info.data                 = std::move(result_ds);
+    info.indep_datas          = rhs.indep_datas();
+    info.multi_dimension_spec = rhs.multi_dimension_spec();
+    info.kind                 = rhs.data_kind();
+    return DataArray(std::move(info));
+}
+
+}  // anonymous namespace
+
+DataArray operator+(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a + b; });
+}
+
+DataArray operator-(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a - b; });
+}
+
+DataArray operator*(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a * b; });
+}
+
+DataArray operator/(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a / b; });
+}
+
+// =============================================================================
 //  Sec.7  pow(DataArray, Measurement)
 // =============================================================================
 
@@ -890,7 +1072,34 @@ DataArray pow(const DataArray& base, const Measurement& exp) {
     info.data                 = std::move(result_ds);
     info.indep_datas          = base.indep_datas();
     info.multi_dimension_spec = base.multi_dimension_spec();
-    info.kind                 = base.kind();
+    info.kind                 = base.data_kind();
+    return DataArray(std::move(info));
+}
+
+// =============================================================================
+//  Sec.7b  pow(DataArray, DataArray)
+// =============================================================================
+
+DataArray pow(const DataArray& base, const DataArray& exponent) {
+    return array_array_op(base, exponent, "pow(DataArray, DataArray)", "**",
+        [](const DataSeries& a, const DataSeries& b) { return xdataset::pow(a, b); });
+}
+
+// =============================================================================
+//  Sec.7c  pow(Measurement, DataArray)
+// =============================================================================
+//
+//  Broadcast a single Measurement base across a DataArray's DataSeries.
+
+DataArray pow(const Measurement& base, const DataArray& exponent) {
+    DataSeries result_ds = xdataset::pow(base, exponent.data());
+
+    DataArrayCreateInfo info;
+    info.name                 = DataArray::kUnnamed;
+    info.data                 = std::move(result_ds);
+    info.indep_datas          = exponent.indep_datas();
+    info.multi_dimension_spec = exponent.multi_dimension_spec();
+    info.kind                 = exponent.data_kind();
     return DataArray(std::move(info));
 }
 

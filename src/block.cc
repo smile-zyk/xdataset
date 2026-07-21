@@ -24,7 +24,7 @@ namespace xdataset
 
             independent_spec_map_.emplace(iv.name, iv);
 
-            // Add in order �� add_dimension validates ragged against prior dims.
+            // Add in order -- add_dimension validates ragged against prior dims.
             dependent_multi_dim.add_dimension(iv.dimension);
 
             // Validate: independent data size must match dimension element count.
@@ -133,7 +133,7 @@ namespace xdataset
             throw std::invalid_argument("independent DataArray not found in block ordering: " + info.name);
 
         // Expand own data to the full cartesian product.
-        DataSeries expanded = DataSeries(info.data.data_kind(), info.data.dtype(), info.data.data_shape());
+        DataSeries expanded = DataSeries(info.data.data_kind(), info.data.data_type(), info.data.data_shape());
         composed_multi_dim.for_each_leaf_row(
             [&](const MultiDimensionSpec::LeafRow& lr)
             {

@@ -24,10 +24,10 @@ namespace xdataset
     //
     // Example:  noise.SP1.SP.freq
     //
-    //    noise  ── Dataset name
-    //    SP1    ── Analysis name (e.g. a particular design variant)
-    //    SP     ── Simulation result type (e.g. S-parameter sweep)
-    //    freq   ── DataArray within the block  (independent / dependent var)
+    //    noise  -- Dataset name
+    //    SP1    -- Analysis name (e.g. a particular design variant)
+    //    SP     -- Simulation result type (e.g. S-parameter sweep)
+    //    freq   -- DataArray within the block  (independent / dependent var)
     //
     // The (analysis, result_type) pair uniquely identifies one Block.
     // The Block's own name is the full prefix:  "noise.SP1.SP".
@@ -35,7 +35,7 @@ namespace xdataset
     // Shortcut: if `freq` is a unique DataArray name across the entire
     // Dataset, you can omit analysis and result type:
     //
-    //    noise..freq   ── behaves like noise.*.*.freq
+    //    noise..freq   -- behaves like noise.*.*.freq
     //
     // ========================================================================
 
@@ -69,7 +69,7 @@ namespace xdataset
         /// Returns a reference to the inserted Block.
         ///
         /// Example:  AddBlock("SP1", "SP", info)
-        ///   → creates Block "noise.SP1.SP" inside analysis "SP1".
+        ///   -> creates Block "noise.SP1.SP" inside analysis "SP1".
         Block& AddBlock(const std::string& analysis_name,
                         const std::string& result_type,
                         const BlockCreateInfo& block_info);
@@ -107,7 +107,7 @@ namespace xdataset
 
         /// Full hierarchical access:  dataset.analysis.result_type.data_array
         ///
-        /// Example:  GetDataArray("SP1", "SP", "freq")  →  noise.SP1.SP.freq
+        /// Example:  GetDataArray("SP1", "SP", "freq")  ->  noise.SP1.SP.freq
         ///
         /// Non-const because a Block may lazily create its DataArray cache.
         const DataArray& GetDataArray(const std::string& analysis_name,

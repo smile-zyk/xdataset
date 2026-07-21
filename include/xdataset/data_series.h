@@ -98,7 +98,7 @@ public:
 
     DataSeries();
 
-    DataSeries(DataKind kind, DTypeTag dtype, const std::vector<Index>& shape);
+    DataSeries(DataKind kind, DataType dtype, const std::vector<Index>& shape);
 
     DataSeries(const DataSeries& other);
 
@@ -109,7 +109,7 @@ public:
     DataSeries& operator=(DataSeries&& other) noexcept;
 
     // -----------------------------------------------------------------------
-    //  Factory: Create* — pre-allocate rows (n = 0 → no allocation)
+    //  Factory: Create* -> pre-allocate rows (n = 0 -> no allocation)
     // -----------------------------------------------------------------------
 
     template <typename T>
@@ -150,7 +150,7 @@ public:
     }
 
     // -----------------------------------------------------------------------
-    //  Factory: Create*FromMemory — raw-pointer bulk copy (not for string)
+    //  Factory: Create*FromMemory -> raw-pointer bulk copy (not for string)
     // -----------------------------------------------------------------------
 
     template <typename T>
@@ -219,7 +219,7 @@ public:
     }
 
     // -----------------------------------------------------------------------
-    //  Factory: Create*FromVector — flat vector-based
+    //  Factory: Create*FromVector -> flat vector-based
     // -----------------------------------------------------------------------
 
     template <typename T>
@@ -259,7 +259,7 @@ public:
                                              const Unit& u = Unit());
 
     // -----------------------------------------------------------------------
-    //  Factory: Create*FromNestedVector — nested vector-of-vectors
+    //  Factory: Create*FromNestedVector -> nested vector-of-vectors
     // -----------------------------------------------------------------------
 
     template <typename T>
@@ -322,17 +322,17 @@ public:
     std::size_t size() const { return storage_->size(); }
     bool empty() const { return size() == 0; }
 
-    DataKind data_kind() const { return kind_; }
-    DTypeTag dtype() const { return dtype_; }
+    DataKind data_kind() const { return data_kind_; }
+    DataType data_type() const { return data_type_; }
     std::vector<Index> data_shape() const { return shape_; }
     const Unit& unit() const { return unit_; }
 
     //---- unit assignment & canonicalisation ----------------------------
 
-    // Assign a unit to this series.  No value conversion is performed ��
+    // Assign a unit to this series.  No value conversion is performed --
     // the existing numbers are simply tagged with the given unit.
     void set_unit(const Unit& u) {
-        if (dtype_ == DTypeTag::kString && u.has_dimension())
+        if (data_type_ == DataType::kString && u.has_dimension())
             throw std::invalid_argument("string series cannot have a named unit");
         unit_ = u;
     }
@@ -353,19 +353,9 @@ public:
     //---------------------------------------------------------------------
 
     Index element_count() const {
-        if (kind_ == DataKind::kScalar) return 1;
-        if (kind_ == DataKind::kVector) return shape_[0];
+        if (data_kind_ == DataKind::kScalar) return 1;
+        if (data_kind_ == DataKind::kVector) return shape_[0];
         return shape_[0] * shape_[1];
-    }
-
-    std::string dtype_name() const {
-        switch (dtype_) {
-            case DTypeTag::kReal: return "Real";
-            case DTypeTag::kInteger: return "Integer";
-            case DTypeTag::kComplex: return "Complex";
-            case DTypeTag::kString: return "String";
-        }
-        return "Unknown";
     }
 
     void resize(std::size_t n) { storage_->resize(n); }
@@ -490,11 +480,11 @@ public:
 
     template <typename T>
     void fill(const T& val) {
-        if (dtype_ != DTypeOf<T>::tag) throw std::bad_cast();
+        if (data_type_ != DTypeOf<T>::tag) throw std::bad_cast();
         for (std::size_t i = 0; i < size(); ++i) {
-            if (kind_ == DataKind::kScalar) {
+            if (data_kind_ == DataKind::kScalar) {
                 scalar_at<T>(static_cast<Index>(i)) = val;
-            } else if (kind_ == DataKind::kVector) {
+            } else if (data_kind_ == DataKind::kVector) {
                 fill_vector_row(static_cast<Index>(i), val, std::is_same<T, std::string>());
             } else {
                 fill_matrix_row(static_cast<Index>(i), val, std::is_same<T, std::string>());
@@ -504,17 +494,17 @@ public:
 
     template <typename T>
     typename std::enable_if<!std::is_same<T, std::string>::value, T*>::type mutable_contiguous_data() {
-        if (dtype_ != DTypeOf<T>::tag) throw std::bad_cast();
-        if (kind_ == DataKind::kScalar) return scalar_storage<T>()->data();
-        if (kind_ == DataKind::kVector) return vector_storage_numeric<T>()->data();
+        if (data_type_ != DTypeOf<T>::tag) throw std::bad_cast();
+        if (data_kind_ == DataKind::kScalar) return scalar_storage<T>()->data();
+        if (data_kind_ == DataKind::kVector) return vector_storage_numeric<T>()->data();
         return matrix_storage_numeric<T>()->data();
     }
 
     template <typename T>
     typename std::enable_if<!std::is_same<T, std::string>::value, const T*>::type contiguous_data() const {
-        if (dtype_ != DTypeOf<T>::tag) throw std::bad_cast();
-        if (kind_ == DataKind::kScalar) return scalar_storage<T>()->data();
-        if (kind_ == DataKind::kVector) return vector_storage_numeric<T>()->data();
+        if (data_type_ != DTypeOf<T>::tag) throw std::bad_cast();
+        if (data_kind_ == DataKind::kScalar) return scalar_storage<T>()->data();
+        if (data_kind_ == DataKind::kVector) return vector_storage_numeric<T>()->data();
         return matrix_storage_numeric<T>()->data();
     }
 
@@ -523,7 +513,7 @@ public:
     }
 
     bool is_trivially_copyable() const {
-        return dtype_ != DTypeTag::kString;
+        return data_type_ != DataType::kString;
     }
 
     std::size_t contiguous_bytes() const;
@@ -584,29 +574,29 @@ private:
 
     static void validate_schema(DataKind kind, const std::vector<Index>& shape);
 
-    static std::unique_ptr<SeriesStorage> make_storage(DataKind kind, DTypeTag dtype, const std::vector<Index>& shape);
+    static std::unique_ptr<SeriesStorage> make_storage(DataKind kind, DataType dtype, const std::vector<Index>& shape);
 
     template <typename T>
     ScalarSeriesStorage<T>* scalar_storage() {
-        if (kind_ != DataKind::kScalar || dtype_ != DTypeOf<T>::tag) throw std::bad_cast();
+        if (data_kind_ != DataKind::kScalar || data_type_ != DTypeOf<T>::tag) throw std::bad_cast();
         return static_cast<ScalarSeriesStorage<T>*>(storage_.get());
     }
 
     template <typename T>
     const ScalarSeriesStorage<T>* scalar_storage() const {
-        if (kind_ != DataKind::kScalar || dtype_ != DTypeOf<T>::tag) throw std::bad_cast();
+        if (data_kind_ != DataKind::kScalar || data_type_ != DTypeOf<T>::tag) throw std::bad_cast();
         return static_cast<const ScalarSeriesStorage<T>*>(storage_.get());
     }
 
     template <typename T>
     VectorNumericSeriesStorage<T>* vector_storage_numeric() {
-        if (kind_ != DataKind::kVector || dtype_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
+        if (data_kind_ != DataKind::kVector || data_type_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
         return static_cast<VectorNumericSeriesStorage<T>*>(storage_.get());
     }
 
     template <typename T>
     const VectorNumericSeriesStorage<T>* vector_storage_numeric() const {
-        if (kind_ != DataKind::kVector || dtype_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
+        if (data_kind_ != DataKind::kVector || data_type_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
         return static_cast<const VectorNumericSeriesStorage<T>*>(storage_.get());
     }
 
@@ -616,13 +606,13 @@ private:
 
     template <typename T>
     MatrixNumericSeriesStorage<T>* matrix_storage_numeric() {
-        if (kind_ != DataKind::kMatrix || dtype_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
+        if (data_kind_ != DataKind::kMatrix || data_type_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
         return static_cast<MatrixNumericSeriesStorage<T>*>(storage_.get());
     }
 
     template <typename T>
     const MatrixNumericSeriesStorage<T>* matrix_storage_numeric() const {
-        if (kind_ != DataKind::kMatrix || dtype_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
+        if (data_kind_ != DataKind::kMatrix || data_type_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
         return static_cast<const MatrixNumericSeriesStorage<T>*>(storage_.get());
     }
 
@@ -644,8 +634,8 @@ private:
 
     void fill_matrix_row(Index row, const std::string& val, std::true_type);
 
-    DataKind kind_;
-    DTypeTag dtype_;
+    DataKind data_kind_;
+    DataType data_type_;
     std::vector<Index> shape_;
     std::unique_ptr<SeriesStorage> storage_;
     Unit unit_;
@@ -655,9 +645,8 @@ class DataSeries::RowView {
 public:
     RowView(DataSeries* owner, Index idx) : owner_(owner), idx_(idx) {}
 
-    DataKind kind() const { return checked_owner()->data_kind(); }
-    DTypeTag dtype() const { return checked_owner()->dtype(); }
-    std::string dtype_name() const { return checked_owner()->dtype_name(); }
+    DataKind data_kind() const { return checked_owner()->data_kind(); }
+    DataType data_type() const { return checked_owner()->data_type(); }
     std::vector<Index> data_shape() const { return checked_owner()->data_shape(); }
     Index index() const { return idx_; }
 
@@ -739,9 +728,8 @@ class DataSeries::ConstRowView {
 public:
     ConstRowView(const DataSeries* owner, Index idx) : owner_(owner), idx_(idx) {}
 
-    DataKind kind() const { return checked_owner()->data_kind(); }
-    DTypeTag dtype() const { return checked_owner()->dtype(); }
-    std::string dtype_name() const { return checked_owner()->dtype_name(); }
+    DataKind data_kind() const { return checked_owner()->data_kind(); }
+    DataType data_type() const { return checked_owner()->data_type(); }
     std::vector<Index> data_shape() const { return checked_owner()->data_shape(); }
     Index index() const { return idx_; }
 
@@ -810,20 +798,32 @@ inline DataSeries::const_iterator::reference DataSeries::const_iterator::operato
 //  Arithmetic operators for DataSeries
 // =========================================================================
 
-// DataSeries – DataSeries
+// DataSeries x DataSeries
 DataSeries operator+(const DataSeries& lhs, const DataSeries& rhs);
 DataSeries operator-(const DataSeries& lhs, const DataSeries& rhs);
 DataSeries operator*(const DataSeries& lhs, const DataSeries& rhs);
 DataSeries operator/(const DataSeries& lhs, const DataSeries& rhs);
 
-// DataSeries – Measurement (broadcast)
+// DataSeries x Measurement (broadcast)
 DataSeries operator+(const DataSeries& lhs, const Measurement& rhs);
 DataSeries operator-(const DataSeries& lhs, const Measurement& rhs);
 DataSeries operator*(const DataSeries& lhs, const Measurement& rhs);
 DataSeries operator/(const DataSeries& lhs, const Measurement& rhs);
 
-/// pow(base, exponent): exponent must be a dimensionless, non-String scalar Measurement.
+// Measurement x DataSeries (broadcast)
+DataSeries operator+(const Measurement& lhs, const DataSeries& rhs);
+DataSeries operator-(const Measurement& lhs, const DataSeries& rhs);
+DataSeries operator*(const Measurement& lhs, const DataSeries& rhs);
+DataSeries operator/(const Measurement& lhs, const DataSeries& rhs);
+
+/// pow(base, exponent): exponent must be a dimensionless, non-String Measurement.
 DataSeries pow(const DataSeries& base, const Measurement& exp);
+
+/// pow(base, exponent): broadcast a single Measurement base across every row of exponent.
+DataSeries pow(const Measurement& base, const DataSeries& exponent);
+
+/// pow(base, exponent): row-by-row pow, exponent series must be dimensionless.
+DataSeries pow(const DataSeries& base, const DataSeries& exponent);
 
 }  // namespace xdataset
 

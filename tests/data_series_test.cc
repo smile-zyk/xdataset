@@ -11,7 +11,7 @@
 using xdataset::DataKind;
 using xdataset::DataSeries;
 using xdataset::Measurement;
-using xdataset::DTypeTag;
+using xdataset::DataType;
 using xdataset::Index;
 using xdataset::Unit;
 
@@ -65,8 +65,7 @@ TEST(ScalarTest, FillOverwritesAllRows) {
 
 TEST(ScalarTest, IntegerDtype) {
     DataSeries s = DataSeries::CreateScalar<int>(3, Unit(), 7);
-    EXPECT_EQ(s.dtype(), DTypeTag::kInteger);
-    EXPECT_EQ(s.dtype_name(), "Integer");
+    EXPECT_EQ(s.data_type(), DataType::kInteger);
     EXPECT_EQ(s.data_kind(), DataKind::kScalar);
     EXPECT_EQ(s.element_count(), 1);
     EXPECT_TRUE(s.data_shape().empty());
@@ -75,16 +74,14 @@ TEST(ScalarTest, IntegerDtype) {
 TEST(ScalarTest, ComplexDtype) {
     using cd = std::complex<double>;
     DataSeries s = DataSeries::CreateScalar<cd>(2, Unit(), cd(1.0, -1.0));
-    EXPECT_EQ(s.dtype(), DTypeTag::kComplex);
-    EXPECT_EQ(s.dtype_name(), "Complex");
+    EXPECT_EQ(s.data_type(), DataType::kComplex);
     EXPECT_DOUBLE_EQ(s.scalar_at<cd>(0).real(), 1.0);
     EXPECT_DOUBLE_EQ(s.scalar_at<cd>(0).imag(), -1.0);
 }
 
 TEST(ScalarTest, StringDtype) {
     DataSeries labels = DataSeries::CreateScalar<std::string>(3, Unit(), std::string("unknown"));
-    EXPECT_EQ(labels.dtype(), DTypeTag::kString);
-    EXPECT_EQ(labels.dtype_name(), "String");
+    EXPECT_EQ(labels.data_type(), DataType::kString);
     labels.scalar_at<std::string>(0) = "cat";
     labels.scalar_at<std::string>(1) = "dog";
     labels.append(Measurement(std::string("bird")));
@@ -227,7 +224,7 @@ TEST(CopyMoveTest, MoveAssignmentTransfersOwnership) {
 // ---------------------------------------------------------------------------
 
 TEST(VectorTest, CreateAndWrite) {
-    DataSeries vecs(DataKind::kVector, DTypeTag::kReal, {4});
+    DataSeries vecs(DataKind::kVector, DataType::kReal, {4});
     vecs.resize(3);
     vecs.vector_at<double>(0) = Eigen::Vector4d(1, 0, 0, 0);
     vecs.vector_at<double>(1) = Eigen::Vector4d(0, 1, 0, 0);
@@ -241,7 +238,7 @@ TEST(VectorTest, CreateAndWrite) {
 }
 
 TEST(VectorTest, DotProductBetweenRows) {
-    DataSeries vecs(DataKind::kVector, DTypeTag::kReal, {4});
+    DataSeries vecs(DataKind::kVector, DataType::kReal, {4});
     vecs.resize(2);
     vecs.vector_at<double>(0) = Eigen::Vector4d(1, 0, 0, 0);
     vecs.vector_at<double>(1) = Eigen::Vector4d(0, 1, 0, 0);
@@ -249,7 +246,7 @@ TEST(VectorTest, DotProductBetweenRows) {
 }
 
 TEST(VectorTest, AppendGrowsSize) {
-    DataSeries vecs(DataKind::kVector, DTypeTag::kReal, {4});
+    DataSeries vecs(DataKind::kVector, DataType::kReal, {4});
     vecs.resize(2);
     Eigen::Matrix<double, Eigen::Dynamic, 1> v(4);
     v << 0.5, 0.5, 0.5, 0.5;
@@ -259,7 +256,7 @@ TEST(VectorTest, AppendGrowsSize) {
 }
 
 TEST(VectorTest, ElementAccessor) {
-    DataSeries vecs(DataKind::kVector, DTypeTag::kInteger, {3});
+    DataSeries vecs(DataKind::kVector, DataType::kInteger, {3});
     vecs.resize(1);
     vecs.vector_at<int>(0) << 10, 20, 30;
     EXPECT_EQ(vecs.vector_at<int>(0)(0), 10);
@@ -268,7 +265,7 @@ TEST(VectorTest, ElementAccessor) {
 }
 
 TEST(VectorTest, FillAllElements) {
-    DataSeries vecs(DataKind::kVector, DTypeTag::kReal, {3});
+    DataSeries vecs(DataKind::kVector, DataType::kReal, {3});
     vecs.resize(2);
     vecs.fill<double>(7.0);
     for (Index r = 0; r < 2; ++r)
@@ -277,7 +274,7 @@ TEST(VectorTest, FillAllElements) {
 }
 
 TEST(VectorTest, IlocPreservesContent) {
-    DataSeries vecs(DataKind::kVector, DTypeTag::kReal, {2});
+    DataSeries vecs(DataKind::kVector, DataType::kReal, {2});
     vecs.resize(3);
     vecs.vector_at<double>(0) << 1.0, 2.0;
     vecs.vector_at<double>(1) << 3.0, 4.0;
@@ -289,7 +286,7 @@ TEST(VectorTest, IlocPreservesContent) {
 }
 
 TEST(VectorTest, StringVector) {
-    DataSeries tags(DataKind::kVector, DTypeTag::kString, {3});
+    DataSeries tags(DataKind::kVector, DataType::kString, {3});
     tags.resize(2);
     Eigen::Tensor<std::string, 1> t0(3);
     t0(0) = "red"; t0(1) = "big"; t0(2) = "fast";
@@ -301,7 +298,7 @@ TEST(VectorTest, StringVector) {
 }
 
 TEST(VectorTest, StringVectorFill) {
-    DataSeries tags(DataKind::kVector, DTypeTag::kString, {3});
+    DataSeries tags(DataKind::kVector, DataType::kString, {3});
     tags.resize(2);
     tags.fill<std::string>("n/a");
     EXPECT_EQ(tags.vector_at<std::string>(0)(1), "n/a");
@@ -358,7 +355,7 @@ TEST(VectorTest, DynamicAppendWithoutInitialRowCount) {
 }
 
 TEST(VectorTest, StringElementAccessor) {
-    DataSeries tags(DataKind::kVector, DTypeTag::kString, {2});
+    DataSeries tags(DataKind::kVector, DataType::kString, {2});
     tags.resize(1);
     tags.vector_at<std::string>(0)(0) = "hello";
     tags.vector_at<std::string>(0)(1) = "world";
@@ -368,7 +365,7 @@ TEST(VectorTest, StringElementAccessor) {
 
 TEST(VectorTest, ComplexVector) {
     using cd = std::complex<double>;
-    DataSeries vecs(DataKind::kVector, DTypeTag::kComplex, {2});
+    DataSeries vecs(DataKind::kVector, DataType::kComplex, {2});
     vecs.resize(1);
     Eigen::Matrix<cd, Eigen::Dynamic, 1> v(2);
     v(0) = cd(1.0, 2.0);
@@ -383,13 +380,13 @@ TEST(VectorTest, ComplexVector) {
 // ---------------------------------------------------------------------------
 
 TEST(VectorExceptionTest, VectorAtOutOfRange) {
-    DataSeries vecs(DataKind::kVector, DTypeTag::kReal, {3});
+    DataSeries vecs(DataKind::kVector, DataType::kReal, {3});
     vecs.resize(2);
     EXPECT_THROW(vecs.vector_at<double>(2), std::out_of_range);
 }
 
 TEST(VectorExceptionTest, AppendWrongWidthThrows) {
-    DataSeries vecs(DataKind::kVector, DTypeTag::kReal, {3});
+    DataSeries vecs(DataKind::kVector, DataType::kReal, {3});
     vecs.resize(1);
     Eigen::Matrix<double, Eigen::Dynamic, 1> bad(5);
     bad.setZero();
@@ -407,7 +404,7 @@ TEST(VectorExceptionTest, FromRowsMismatchedWidthThrows) {
 // ---------------------------------------------------------------------------
 
 TEST(MatrixTest, CreateAndMetadata) {
-    DataSeries mats(DataKind::kMatrix, DTypeTag::kReal, {3, 3});
+    DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
     mats.resize(3);
     EXPECT_EQ(mats.size(), 3u);
     EXPECT_EQ(mats.data_kind(), DataKind::kMatrix);
@@ -419,14 +416,14 @@ TEST(MatrixTest, CreateAndMetadata) {
 }
 
 TEST(MatrixTest, IdentityDeterminant) {
-    DataSeries mats(DataKind::kMatrix, DTypeTag::kReal, {3, 3});
+    DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
     mats.resize(1);
     mats.matrix_at<double>(0) = Eigen::Matrix3d::Identity();
     EXPECT_NEAR(mats.matrix_at<double>(0).determinant(), 1.0, 1e-12);
 }
 
 TEST(MatrixTest, TraceAndProduct) {
-    DataSeries mats(DataKind::kMatrix, DTypeTag::kReal, {3, 3});
+    DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
     mats.resize(2);
     mats.matrix_at<double>(0) = Eigen::Matrix3d::Identity();
     mats.matrix_at<double>(1) = Eigen::Matrix3d::Ones() * 2.0;
@@ -436,7 +433,7 @@ TEST(MatrixTest, TraceAndProduct) {
 }
 
 TEST(MatrixTest, AppendGrowsSize) {
-    DataSeries mats(DataKind::kMatrix, DTypeTag::kReal, {3, 3});
+    DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
     mats.resize(2);
     Eigen::MatrixXd m = Eigen::Matrix3d::Random();
     mats.append(Measurement(Eigen::MatrixXd(m)));
@@ -444,7 +441,7 @@ TEST(MatrixTest, AppendGrowsSize) {
 }
 
 TEST(MatrixTest, ElementAccessor) {
-    DataSeries mats(DataKind::kMatrix, DTypeTag::kReal, {2, 2});
+    DataSeries mats(DataKind::kMatrix, DataType::kReal, {2, 2});
     mats.resize(1);
     mats.matrix_at<double>(0) << 1.0, 2.0, 3.0, 4.0;
     EXPECT_DOUBLE_EQ(mats.matrix_at<double>(0)(0, 0), 1.0);
@@ -454,7 +451,7 @@ TEST(MatrixTest, ElementAccessor) {
 }
 
 TEST(MatrixTest, FillAllElements) {
-    DataSeries mats(DataKind::kMatrix, DTypeTag::kReal, {2, 2});
+    DataSeries mats(DataKind::kMatrix, DataType::kReal, {2, 2});
     mats.resize(2);
     mats.fill<double>(5.0);
     for (Index r = 0; r < 2; ++r)
@@ -462,7 +459,7 @@ TEST(MatrixTest, FillAllElements) {
 }
 
 TEST(MatrixTest, RotationMatrix) {
-    DataSeries mats(DataKind::kMatrix, DTypeTag::kReal, {3, 3});
+    DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
     mats.resize(1);
     Eigen::Matrix3d rot =
         Eigen::AngleAxisd(0.5, Eigen::Vector3d::UnitZ()).toRotationMatrix();
@@ -471,7 +468,7 @@ TEST(MatrixTest, RotationMatrix) {
 }
 
 TEST(MatrixTest, StringMatrix) {
-    DataSeries strmat(DataKind::kMatrix, DTypeTag::kString, {2, 3});
+    DataSeries strmat(DataKind::kMatrix, DataType::kString, {2, 3});
     strmat.resize(2);
     strmat.fill<std::string>(".");
     strmat.matrix_at<std::string>(0)(0, 1) = "hello";
@@ -483,7 +480,7 @@ TEST(MatrixTest, StringMatrix) {
 }
 
 TEST(MatrixTest, StringElementAccessor) {
-    DataSeries strmat(DataKind::kMatrix, DTypeTag::kString, {2, 2});
+    DataSeries strmat(DataKind::kMatrix, DataType::kString, {2, 2});
     strmat.resize(1);
     strmat.fill<std::string>("x");
     strmat.matrix_at<std::string>(0)(0, 1) = "A";
@@ -493,7 +490,7 @@ TEST(MatrixTest, StringElementAccessor) {
 
 TEST(MatrixTest, ComplexMatrix) {
     using cd = std::complex<double>;
-    DataSeries mats(DataKind::kMatrix, DTypeTag::kComplex, {2, 2});
+    DataSeries mats(DataKind::kMatrix, DataType::kComplex, {2, 2});
     mats.resize(1);
     Eigen::Matrix<cd, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> m(2, 2);
     m(0, 0) = cd(1, 0); m(0, 1) = cd(0, 1);
@@ -504,7 +501,7 @@ TEST(MatrixTest, ComplexMatrix) {
 }
 
 TEST(MatrixTest, IlocPreservesContent) {
-    DataSeries mats(DataKind::kMatrix, DTypeTag::kReal, {2, 2});
+    DataSeries mats(DataKind::kMatrix, DataType::kReal, {2, 2});
     mats.resize(3);
     mats.matrix_at<double>(0) << 1.0, 2.0, 3.0, 4.0;
     mats.matrix_at<double>(1) << 5.0, 6.0, 7.0, 8.0;
@@ -574,13 +571,13 @@ TEST(MatrixTest, DynamicAppendWithoutInitialRowCount) {
 // ---------------------------------------------------------------------------
 
 TEST(MatrixExceptionTest, MatrixAtOutOfRange) {
-    DataSeries mats(DataKind::kMatrix, DTypeTag::kReal, {3, 3});
+    DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
     mats.resize(2);
     EXPECT_THROW(mats.matrix_at<double>(2), std::out_of_range);
 }
 
 TEST(MatrixExceptionTest, AppendWrongShapeThrows) {
-    DataSeries mats(DataKind::kMatrix, DTypeTag::kReal, {2, 2});
+    DataSeries mats(DataKind::kMatrix, DataType::kReal, {2, 2});
     mats.resize(1);
     Eigen::MatrixXd bad(3, 3);
     bad.setZero();
@@ -676,12 +673,12 @@ TEST(ContiguousTest, ScalarStringNotTrivial) {
 }
 
 TEST(ContiguousTest, VectorMemcpy) {
-    DataSeries src(DataKind::kVector, DTypeTag::kInteger, {3});
+    DataSeries src(DataKind::kVector, DataType::kInteger, {3});
     src.resize(2);
     src.vector_at<int>(0) << 1, 2, 3;
     src.vector_at<int>(1) << 4, 5, 6;
 
-    DataSeries dst(DataKind::kVector, DTypeTag::kInteger, {3});
+    DataSeries dst(DataKind::kVector, DataType::kInteger, {3});
     dst.resize(2);
     std::memcpy(dst.mutable_contiguous_data<int>(),
                 src.contiguous_data<int>(),
@@ -694,12 +691,12 @@ TEST(ContiguousTest, VectorMemcpy) {
 }
 
 TEST(ContiguousTest, MatrixMemcpyAndRowMajorLayout) {
-    DataSeries src(DataKind::kMatrix, DTypeTag::kReal, {2, 2});
+    DataSeries src(DataKind::kMatrix, DataType::kReal, {2, 2});
     src.resize(2);
     src.matrix_at<double>(0) << 1.0, 2.0, 3.0, 4.0;
     src.matrix_at<double>(1) << 5.0, 6.0, 7.0, 8.0;
 
-    DataSeries dst(DataKind::kMatrix, DTypeTag::kReal, {2, 2});
+    DataSeries dst(DataKind::kMatrix, DataType::kReal, {2, 2});
     dst.resize(2);
     std::memcpy(dst.mutable_contiguous_data<double>(),
                 src.contiguous_data<double>(),

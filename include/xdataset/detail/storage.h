@@ -40,22 +40,22 @@ struct DTypeOf;
 
 template <>
 struct DTypeOf<double> {
-    static const DTypeTag tag = DTypeTag::kReal;
+    static const DataType tag = DataType::kReal;
 };
 
 template <>
 struct DTypeOf<int> {
-    static const DTypeTag tag = DTypeTag::kInteger;
+    static const DataType tag = DataType::kInteger;
 };
 
 template <>
 struct DTypeOf<std::complex<double> > {
-    static const DTypeTag tag = DTypeTag::kComplex;
+    static const DataType tag = DataType::kComplex;
 };
 
 template <>
 struct DTypeOf<std::string> {
-    static const DTypeTag tag = DTypeTag::kString;
+    static const DataType tag = DataType::kString;
 };
 
 template <typename T>

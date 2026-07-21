@@ -211,7 +211,7 @@ namespace xdataset
     {
         Block block(MakeInterleavedCreateInfo());
         DataArray w_data = block.GetOrCreateDataArray("w"); DataArray indep1 = w_data.indep(1); EXPECT_EQ(indep1.name(), "z");
-        EXPECT_EQ(indep1.kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(indep1.data_kind(), DataArrayKind::kIndependent);
         EXPECT_EQ(indep1.indep("x").name(), "x");
         EXPECT_EQ(indep1.indep("y").name(), "y");
         EXPECT_EQ(indep1.multi_dimension_spec().rank(), 3u);
@@ -230,7 +230,7 @@ namespace xdataset
     {
         Block block(MakeInterleavedCreateInfo());
         DataArray z_data = block.GetOrCreateDataArray("z"); DataArray self_indep = z_data.indep(1); EXPECT_EQ(self_indep.name(), "z");
-        EXPECT_EQ(self_indep.kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(self_indep.data_kind(), DataArrayKind::kIndependent);
         EXPECT_EQ(self_indep.data().size(), 6u);   // expanded product
 
         // Index series: last-dim cycle 0,1 repeating
@@ -254,7 +254,7 @@ namespace xdataset
         selectors.push_back(MultiIndexSelector::Any());
         selectors.push_back(MultiIndexSelector::In(std::vector<Index>{0, 1}));
 
-        DataArray selected = w_data.select(selectors); EXPECT_EQ(selected.kind(), DataArrayKind::kDependent);
+        DataArray selected = w_data.select(selectors); EXPECT_EQ(selected.data_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(selected.multi_dimension_spec().rank(), 2u);
 
         EXPECT_EQ(selected.multi_dimension_spec().dims()[0].as_regular()->size, 2u);
@@ -315,7 +315,7 @@ namespace xdataset
         DataArray z_data = block.GetOrCreateDataArray("z"); std::vector<MultiIndexSelector> selectors;
         selectors.push_back(MultiIndexSelector::In(std::vector<Index>{1, 3}));
 
-        DataArray selected = z_data.select(selectors); EXPECT_EQ(selected.kind(), DataArrayKind::kDependent);
+        DataArray selected = z_data.select(selectors); EXPECT_EQ(selected.data_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(selected.multi_dimension_spec().rank(), 1u);
         EXPECT_EQ(selected.multi_dimension_spec().dims()[0].as_regular()->size, 2u);
 
@@ -340,7 +340,7 @@ namespace xdataset
         selectors.push_back(MultiIndexSelector::Any());
         selectors.push_back(MultiIndexSelector::Equal(0));
 
-        DataArray selected = w_data.select(selectors); EXPECT_EQ(selected.kind(), DataArrayKind::kDependent);
+        DataArray selected = w_data.select(selectors); EXPECT_EQ(selected.data_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(selected.multi_dimension_spec().rank(), 2u);
 
         EXPECT_NE(selected.multi_dimension_spec().dims()[0].as_regular(), nullptr);
@@ -400,7 +400,7 @@ namespace xdataset
     {
         DataArrayCreateInfo info;
         info.kind = DataArrayKind::kDependent;
-        info.data = DataSeries(DataKind::kVector, DTypeTag::kReal, {3});
+        info.data = DataSeries(DataKind::kVector, DataType::kReal, {3});
         info.data.resize(2);
         info.data.vector_at<double>(0) << 1.0, 2.0, 3.0;
         info.data.vector_at<double>(1) << 4.0, 5.0, 6.0;
@@ -428,7 +428,7 @@ namespace xdataset
     {
         DataArrayCreateInfo info;
         info.kind = DataArrayKind::kDependent;
-        info.data = DataSeries(DataKind::kMatrix, DTypeTag::kInteger, {2, 3});
+        info.data = DataSeries(DataKind::kMatrix, DataType::kInteger, {2, 3});
         info.data.resize(2);
         info.data.matrix_at<int>(0) << 1, 2, 3,
                                       4, 5, 6;

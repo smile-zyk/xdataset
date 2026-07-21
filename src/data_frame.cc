@@ -204,7 +204,7 @@ namespace xdataset
         headers_    = std::move(headers);
         total_rows_ = rows.size();
         rows_       = std::move(rows);
-        // No generator, no chunk loading â€” rows are fully materialised.
+        // No generator, no chunk loading â€?rows are fully materialised.
         // Mark all rows as already loaded so base GetRow / EnsureChunkLoaded
         // works without a generator.
         loaded_chunks_.assign(
@@ -376,7 +376,7 @@ namespace xdataset
         }
 
         const DataSeries* dep_series = nullptr;
-        if (DataArray.kind() == DataArrayKind::kDependent)
+        if (DataArray.data_kind() == DataArrayKind::kDependent)
         {
             dep_series = &DataArray.data();
             const std::vector<std::string> hdrs = ExpandHeadersForSeries("data", DataArray.data());
@@ -434,7 +434,7 @@ namespace xdataset
     MeasurementDataFrame::MeasurementDataFrame(const Measurement& measurement,
                                                std::string name)
     {
-        const DataKind kind  = measurement.kind();
+        const DataKind kind  = measurement.data_kind();
         const std::vector<Index>& shape = measurement.shape();
 
         // Build headers according to kind / shape, using the caller-supplied name.

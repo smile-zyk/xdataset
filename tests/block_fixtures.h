@@ -34,7 +34,7 @@ namespace xdataset
 
         inline DataSeries MakeVectorSeries(std::size_t rows, Index width)
         {
-            DataSeries vecs(DataKind::kVector, DTypeTag::kReal, {width});
+            DataSeries vecs(DataKind::kVector, DataType::kReal, {width});
             vecs.resize(rows);
             for (std::size_t i = 0; i < rows; ++i)
             {
@@ -48,7 +48,7 @@ namespace xdataset
 
         inline DataSeries MakeMatrixSeries(std::size_t rows, Index r, Index c)
         {
-            DataSeries mats(DataKind::kMatrix, DTypeTag::kReal, {r, c});
+            DataSeries mats(DataKind::kMatrix, DataType::kReal, {r, c});
             mats.resize(rows);
             for (std::size_t i = 0; i < rows; ++i)
             {
@@ -62,7 +62,7 @@ namespace xdataset
         }
 
         // =====================================================================
-        // Fixtures: uniform  (2 �� 3)
+        // Fixtures: uniform  (2 x 3)
         // =====================================================================
 
         inline BlockCreateInfo MakeBaseCreateInfo()
@@ -89,7 +89,7 @@ namespace xdataset
             return info;
         }
 
-        // Three independents (2 �� 3 �� 4 uniform), two dependents
+        // Three independents (2 x 3 x 4 uniform), two dependents
         inline BlockCreateInfo MakeThreeDimMultiDepCreateInfo()
         {
             BlockCreateInfo info;
@@ -118,7 +118,7 @@ namespace xdataset
         }
 
         // =====================================================================
-        // Fixtures: string-typed  (2 �� 2)
+        // Fixtures: string-typed  (2 x 2)
         // =====================================================================
 
         inline BlockCreateInfo MakeStringTypedCreateInfo()
@@ -143,7 +143,7 @@ namespace xdataset
         }
 
         // =====================================================================
-        // Fixtures: vector / matrix cell kinds  (2 �� 2)
+        // Fixtures: vector / matrix cell kinds  (2 x 2)
         // =====================================================================
 
         inline BlockCreateInfo MakeVectorCellCreateInfo()

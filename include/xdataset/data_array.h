@@ -55,9 +55,9 @@ namespace xdataset
             return multi_dimension_spec_;
         }
 
-        DataArrayKind kind() const
+        DataArrayKind data_kind() const
         {
-            return kind_;
+            return data_kind_;
         }
 
         const std::string& name() const
@@ -105,7 +105,7 @@ namespace xdataset
         DataSeries data_;
         tsl::ordered_map<std::string, DataSeries> indep_datas_;
         MultiDimensionSpec multi_dimension_spec_;
-        DataArrayKind kind_;
+        DataArrayKind data_kind_;
         mutable std::unique_ptr<DataFrame> data_frame_cache_;
     };
 } // namespace xdataset
@@ -116,20 +116,32 @@ namespace xdataset
 
 namespace xdataset {
 
-// DataArray – DataArray
+// DataArray x DataArray
 DataArray operator+(const DataArray& lhs, const DataArray& rhs);
 DataArray operator-(const DataArray& lhs, const DataArray& rhs);
 DataArray operator*(const DataArray& lhs, const DataArray& rhs);
 DataArray operator/(const DataArray& lhs, const DataArray& rhs);
 
-// DataArray – Measurement (broadcast)
+// DataArray x Measurement (broadcast)
 DataArray operator+(const DataArray& lhs, const Measurement& rhs);
 DataArray operator-(const DataArray& lhs, const Measurement& rhs);
 DataArray operator*(const DataArray& lhs, const Measurement& rhs);
 DataArray operator/(const DataArray& lhs, const Measurement& rhs);
 
-/// pow(base, exponent): exponent must be a dimensionless, non-String scalar Measurement.
+// Measurement x DataArray (broadcast)
+DataArray operator+(const Measurement& lhs, const DataArray& rhs);
+DataArray operator-(const Measurement& lhs, const DataArray& rhs);
+DataArray operator*(const Measurement& lhs, const DataArray& rhs);
+DataArray operator/(const Measurement& lhs, const DataArray& rhs);
+
+/// pow(base, exponent): exponent must be a dimensionless, non-String Measurement.
 DataArray pow(const DataArray& base, const Measurement& exp);
+
+/// pow(base, exponent): broadcast a single Measurement base across exponent's DataSeries.
+DataArray pow(const Measurement& base, const DataArray& exponent);
+
+/// pow(base, exponent): row-by-row pow, exponent array must be dimensionless.
+DataArray pow(const DataArray& base, const DataArray& exponent);
 
 } // namespace xdataset
 

@@ -1,5 +1,5 @@
-#ifndef XDT_UNIT_H
-#define XDT_UNIT_H
+#ifndef UNIT_H
+#define UNIT_H
 
 #include <llnl-units/units.hpp>
 #include <string>
@@ -94,9 +94,6 @@ private:
 
     units::precise_unit unit_;
 };
-
-
-
 } // namespace xdataset
 
-#endif // XDT_UNIT_H
+#endif // UNIT_H

@@ -191,7 +191,7 @@ namespace xdataset
 
         std::vector<std::vector<Index>> all_multi_indices;
         spec.for_each_group_at_dim(0, [&](const MultiDimensionSpec::DimGroup& g) {
-            // g.flat_start → g.flat_end covers exactly one parent row's leaves
+            // g.flat_start -> g.flat_end covers exactly one parent row's leaves
             spec.for_each_leaf_row(
                 [&](const MultiDimensionSpec::LeafRow& lr) {
                     all_multi_indices.push_back(lr.multi_index);

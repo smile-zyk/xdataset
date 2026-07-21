@@ -38,20 +38,20 @@ namespace xdataset
     //     interact arithmetically with Measurement (future).
     //
     // Internals:
-    //   - Storage is a boost::variant over all 12 (DataKind × DTypeTag)
+    //   - Storage is a boost::variant over all 12 (DataKind x DataType)
     //     concrete types.  The variant itself lives on the stack; Eigen
     //     dynamic types allocate their element buffers on the heap, but
     //     this is expected to be modest for a single measurement.
-    //   - DataKind, DTypeTag, and shape are derived from the active
+    //   - DataKind, DataType, and shape are derived from the active
     //     variant alternative at construction time and cached.
     // =========================================================================
 
     class Measurement
     {
     public:
-        // ──────────────────────────────────
-        // Storage variant -- one alternative per (DataKind, DTypeTag)
-        // ──────────────────────────────────
+        // ----------------------------------
+        // Storage variant -- one alternative per (DataKind, DataType)
+        // ----------------------------------
         using Storage = boost::variant<
             // --- DataKind::kScalar ---
             double,
@@ -60,16 +60,16 @@ namespace xdataset
             std::string,
 
             // --- DataKind::kVector ---
-            Eigen::VectorXd,                // DTypeTag::kReal
-            Eigen::VectorXi,                // DTypeTag::kInteger
-            Eigen::VectorXcd,               // DTypeTag::kComplex
-            Eigen::Tensor<std::string, 1>,  // DTypeTag::kString
+            Eigen::VectorXd,                // DataType::kReal
+            Eigen::VectorXi,                // DataType::kInteger
+            Eigen::VectorXcd,               // DataType::kComplex
+            Eigen::Tensor<std::string, 1>,  // DataType::kString
 
             // --- DataKind::kMatrix ---
-            Eigen::MatrixXd,                // DTypeTag::kReal
-            Eigen::MatrixXi,                // DTypeTag::kInteger
-            Eigen::MatrixXcd,               // DTypeTag::kComplex
-            Eigen::Tensor<std::string, 2>   // DTypeTag::kString
+            Eigen::MatrixXd,                // DataType::kReal
+            Eigen::MatrixXi,                // DataType::kInteger
+            Eigen::MatrixXcd,               // DataType::kComplex
+            Eigen::Tensor<std::string, 2>   // DataType::kString
         >;
 
         // ======== construction ==============================================
@@ -120,14 +120,11 @@ namespace xdataset
 
         // ======== metadata queries ==========================================
 
-        DataKind kind() const { return kind_; }
-        DTypeTag dtype() const { return dtype_; }
+        DataKind data_kind() const { return data_kind_; }
+        DataType data_type() const { return data_type_; }
         const std::vector<Index>& shape() const { return shape_; }
         const Unit& unit() const { return unit_; }
         void set_unit(const Unit& u) { unit_ = u; }
-
-        /// Human-readable dtype name (e.g. "Real", "Complex").
-        std::string dtype_name() const;
 
         /// True when the stored value is not the default-constructed zero.
         bool has_value() const;
@@ -203,8 +200,8 @@ namespace xdataset
     private:
         void infer_metadata();
 
-        DataKind             kind_;
-        DTypeTag             dtype_;
+        DataKind             data_kind_;
+        DataType             data_type_;
         std::vector<Index>   shape_;
         Storage              storage_;
         Unit                 unit_;
@@ -242,35 +239,35 @@ namespace xdataset
     };
 
     // =========================================================================
-    // MeasurementTypeVisitor -- extracts DataKind / DTypeTag from a variant.
+    // MeasurementTypeVisitor -- extracts DataKind / DataType from a variant.
     // =========================================================================
 
     struct MeasurementTypeVisitor : public boost::static_visitor<void>
     {
         DataKind kind   = DataKind::kScalar;
-        DTypeTag dtype  = DTypeTag::kReal;
+        DataType dtype  = DataType::kReal;
 
-        void operator()(double)                    { kind = DataKind::kScalar;  dtype = DTypeTag::kReal;    }
-        void operator()(int)                       { kind = DataKind::kScalar;  dtype = DTypeTag::kInteger; }
-        void operator()(const std::complex<double>&){ kind = DataKind::kScalar;  dtype = DTypeTag::kComplex; }
-        void operator()(const std::string&)         { kind = DataKind::kScalar;  dtype = DTypeTag::kString;  }
+        void operator()(double)                    { kind = DataKind::kScalar;  dtype = DataType::kReal;    }
+        void operator()(int)                       { kind = DataKind::kScalar;  dtype = DataType::kInteger; }
+        void operator()(const std::complex<double>&){ kind = DataKind::kScalar;  dtype = DataType::kComplex; }
+        void operator()(const std::string&)         { kind = DataKind::kScalar;  dtype = DataType::kString;  }
 
-        void operator()(const Eigen::VectorXd&)             { kind = DataKind::kVector; dtype = DTypeTag::kReal;    }
-        void operator()(const Eigen::VectorXi&)             { kind = DataKind::kVector; dtype = DTypeTag::kInteger; }
-        void operator()(const Eigen::VectorXcd&)            { kind = DataKind::kVector; dtype = DTypeTag::kComplex; }
-        void operator()(const Eigen::Tensor<std::string, 1>&){ kind = DataKind::kVector; dtype = DTypeTag::kString;  }
+        void operator()(const Eigen::VectorXd&)             { kind = DataKind::kVector; dtype = DataType::kReal;    }
+        void operator()(const Eigen::VectorXi&)             { kind = DataKind::kVector; dtype = DataType::kInteger; }
+        void operator()(const Eigen::VectorXcd&)            { kind = DataKind::kVector; dtype = DataType::kComplex; }
+        void operator()(const Eigen::Tensor<std::string, 1>&){ kind = DataKind::kVector; dtype = DataType::kString;  }
 
-        void operator()(const Eigen::MatrixXd&)             { kind = DataKind::kMatrix; dtype = DTypeTag::kReal;    }
-        void operator()(const Eigen::MatrixXi&)             { kind = DataKind::kMatrix; dtype = DTypeTag::kInteger; }
-        void operator()(const Eigen::MatrixXcd&)            { kind = DataKind::kMatrix; dtype = DTypeTag::kComplex; }
-        void operator()(const Eigen::Tensor<std::string, 2>&){ kind = DataKind::kMatrix; dtype = DTypeTag::kString;  }
+        void operator()(const Eigen::MatrixXd&)             { kind = DataKind::kMatrix; dtype = DataType::kReal;    }
+        void operator()(const Eigen::MatrixXi&)             { kind = DataKind::kMatrix; dtype = DataType::kInteger; }
+        void operator()(const Eigen::MatrixXcd&)            { kind = DataKind::kMatrix; dtype = DataType::kComplex; }
+        void operator()(const Eigen::Tensor<std::string, 2>&){ kind = DataKind::kMatrix; dtype = DataType::kString;  }
     };
 
     // =========================================================================
     // Template implementation
     // =========================================================================
 
-    // ── Measurement constructor ─────────────────────────────────────────────
+    // -- Measurement constructor -------------------------------------------------
 
     template <typename T>
     Measurement::Measurement(T value)
@@ -288,18 +285,18 @@ namespace xdataset
         infer_metadata();
     }
 
-    // ── as_scalar<T> ────────────────────────────────────────────────────────
+    // -- as_scalar<T> ------------------------------------------------------------
 
     template <typename T>
     T Measurement::as_scalar() const
     {
-        if (kind_ != DataKind::kScalar)
+        if (data_kind_ != DataKind::kScalar)
             throw std::logic_error("as_scalar: Measurement is not a scalar (kind=" +
-                std::to_string(static_cast<int>(kind_)) + ")");
+                std::to_string(static_cast<int>(data_kind_)) + ")");
         return boost::get<T>(storage_);
     }
 
-    // ── as_vector<T> (numeric) ──────────────────────────────────────────────
+    // -- as_vector<T> (numeric) --------------------------------------------------
 
     template <typename T>
     typename std::enable_if<
@@ -307,15 +304,15 @@ namespace xdataset
         Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, 1>>>::type
     Measurement::as_vector() const
     {
-        if (kind_ != DataKind::kVector)
+        if (data_kind_ != DataKind::kVector)
             throw std::logic_error("as_vector: Measurement is not a vector (kind=" +
-                std::to_string(static_cast<int>(kind_)) + ")");
+                std::to_string(static_cast<int>(data_kind_)) + ")");
         typedef Eigen::Matrix<T, Eigen::Dynamic, 1> VecType;
         const VecType& vec = boost::get<VecType>(storage_);
         return Eigen::Map<const VecType>(vec.data(), vec.size());
     }
 
-    // ── as_vector<T> (string) ───────────────────────────────────────────────
+    // -- as_vector<T> (string) ---------------------------------------------------
 
     template <typename T>
     typename std::enable_if<
@@ -323,13 +320,13 @@ namespace xdataset
         const Eigen::Tensor<std::string, 1>&>::type
     Measurement::as_vector() const
     {
-        if (kind_ != DataKind::kVector)
+        if (data_kind_ != DataKind::kVector)
             throw std::logic_error("as_vector: Measurement is not a vector (kind=" +
-                std::to_string(static_cast<int>(kind_)) + ")");
+                std::to_string(static_cast<int>(data_kind_)) + ")");
         return boost::get<Eigen::Tensor<std::string, 1>>(storage_);
     }
 
-    // ── as_matrix<T> (numeric) ──────────────────────────────────────────────
+    // -- as_matrix<T> (numeric) --------------------------------------------------
 
     template <typename T>
     typename std::enable_if<
@@ -337,15 +334,15 @@ namespace xdataset
         Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>>>::type
     Measurement::as_matrix() const
     {
-        if (kind_ != DataKind::kMatrix)
+        if (data_kind_ != DataKind::kMatrix)
             throw std::logic_error("as_matrix: Measurement is not a matrix (kind=" +
-                std::to_string(static_cast<int>(kind_)) + ")");
+                std::to_string(static_cast<int>(data_kind_)) + ")");
         typedef Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> MatType;
         const MatType& mat = boost::get<MatType>(storage_);
         return Eigen::Map<const MatType>(mat.data(), mat.rows(), mat.cols());
     }
 
-    // ── as_matrix<T> (string) ───────────────────────────────────────────────
+    // -- as_matrix<T> (string) ---------------------------------------------------
 
     template <typename T>
     typename std::enable_if<
@@ -353,9 +350,9 @@ namespace xdataset
         const Eigen::Tensor<std::string, 2>&>::type
     Measurement::as_matrix() const
     {
-        if (kind_ != DataKind::kMatrix)
+        if (data_kind_ != DataKind::kMatrix)
             throw std::logic_error("as_matrix: Measurement is not a matrix (kind=" +
-                std::to_string(static_cast<int>(kind_)) + ")");
+                std::to_string(static_cast<int>(data_kind_)) + ")");
         return boost::get<Eigen::Tensor<std::string, 2>>(storage_);
     }
 
@@ -367,17 +364,17 @@ namespace xdataset
     /// Returns the result kind, or throws on incompatible combinations.
     DataKind promoted_kind(DataKind a, DataKind b);
 
-    /// dtype promotion: Integer ⊂ Real ⊂ Complex.  String throws.
-    DTypeTag promoted_dtype(DTypeTag a, DTypeTag b);
+    /// dtype promotion: Integer -> Real -> Complex.  String throws.
+    DataType promoted_dtype(DataType a, DataType b);
 
-    // Measurement – Measurement
+    // Measurement x Measurement
     Measurement operator+(const Measurement& lhs, const Measurement& rhs);
     Measurement operator-(const Measurement& lhs, const Measurement& rhs);
     Measurement operator*(const Measurement& lhs, const Measurement& rhs);
     Measurement operator/(const Measurement& lhs, const Measurement& rhs);
 
     /// pow(base, exponent): exponent must be dimensionless, non-String.
-    /// DataKind broadcasting applies (e.g. Scalar^Vector → Vector).
+    /// DataKind broadcasting applies (e.g. Scalar^Vector -> Vector).
     /// When exponent is non-scalar, base must also be dimensionless.
     Measurement pow(const Measurement& base, const Measurement& exponent);
 

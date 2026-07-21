@@ -12,7 +12,7 @@
 using xdataset::DataKind;
 using xdataset::DataSeries;
 using xdataset::Measurement;
-using xdataset::DTypeTag;
+using xdataset::DataType;
 using xdataset::Index;
 using xdataset::Unit;
 using xdataset::DataArray;
@@ -43,31 +43,31 @@ TEST(DataSeriesUnitTest, CanonicalizeFastPathCoherentSI)
 
 TEST(PromotedDTypeTest, IntegerPlusIntegerGivesInteger)
 {
-    EXPECT_EQ(xdataset::promoted_dtype(DTypeTag::kInteger, DTypeTag::kInteger), DTypeTag::kInteger);
+    EXPECT_EQ(xdataset::promoted_dtype(DataType::kInteger, DataType::kInteger), DataType::kInteger);
 }
 
 TEST(PromotedDTypeTest, IntegerPlusRealGivesReal)
 {
-    EXPECT_EQ(xdataset::promoted_dtype(DTypeTag::kInteger, DTypeTag::kReal), DTypeTag::kReal);
-    EXPECT_EQ(xdataset::promoted_dtype(DTypeTag::kReal, DTypeTag::kInteger), DTypeTag::kReal);
+    EXPECT_EQ(xdataset::promoted_dtype(DataType::kInteger, DataType::kReal), DataType::kReal);
+    EXPECT_EQ(xdataset::promoted_dtype(DataType::kReal, DataType::kInteger), DataType::kReal);
 }
 
 TEST(PromotedDTypeTest, RealPlusRealGivesReal)
 {
-    EXPECT_EQ(xdataset::promoted_dtype(DTypeTag::kReal, DTypeTag::kReal), DTypeTag::kReal);
+    EXPECT_EQ(xdataset::promoted_dtype(DataType::kReal, DataType::kReal), DataType::kReal);
 }
 
 TEST(PromotedDTypeTest, ComplexDominatesAll)
 {
-    EXPECT_EQ(xdataset::promoted_dtype(DTypeTag::kReal, DTypeTag::kComplex), DTypeTag::kComplex);
-    EXPECT_EQ(xdataset::promoted_dtype(DTypeTag::kInteger, DTypeTag::kComplex), DTypeTag::kComplex);
-    EXPECT_EQ(xdataset::promoted_dtype(DTypeTag::kComplex, DTypeTag::kComplex), DTypeTag::kComplex);
+    EXPECT_EQ(xdataset::promoted_dtype(DataType::kReal, DataType::kComplex), DataType::kComplex);
+    EXPECT_EQ(xdataset::promoted_dtype(DataType::kInteger, DataType::kComplex), DataType::kComplex);
+    EXPECT_EQ(xdataset::promoted_dtype(DataType::kComplex, DataType::kComplex), DataType::kComplex);
 }
 
 TEST(PromotedDTypeTest, StringThrows)
 {
-    EXPECT_THROW(xdataset::promoted_dtype(DTypeTag::kString, DTypeTag::kReal), std::invalid_argument);
-    EXPECT_THROW(xdataset::promoted_dtype(DTypeTag::kReal, DTypeTag::kString), std::invalid_argument);
+    EXPECT_THROW(xdataset::promoted_dtype(DataType::kString, DataType::kReal), std::invalid_argument);
+    EXPECT_THROW(xdataset::promoted_dtype(DataType::kReal, DataType::kString), std::invalid_argument);
 }
 
 // =========================================================================
@@ -80,7 +80,7 @@ TEST(DataSeriesArithTest, AddRealSeries)
     auto b = DataSeries::CreateScalarFromVector<double>({4.0, 5.0, 6.0});
     DataSeries r = a + b;
     ASSERT_EQ(r.size(), 3u);
-    EXPECT_EQ(r.dtype(), DTypeTag::kReal);
+    EXPECT_EQ(r.data_type(), DataType::kReal);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 5.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 7.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(2), 9.0);
@@ -92,7 +92,7 @@ TEST(DataSeriesArithTest, AddIntegerSeries)
     auto b = DataSeries::CreateScalarFromVector<int>({10, 20, 30});
     DataSeries r = a + b;
     ASSERT_EQ(r.size(), 3u);
-    EXPECT_EQ(r.dtype(), DTypeTag::kInteger);
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
     EXPECT_EQ(r.scalar_at<int>(0), 11);
     EXPECT_EQ(r.scalar_at<int>(1), 22);
     EXPECT_EQ(r.scalar_at<int>(2), 33);
@@ -103,7 +103,7 @@ TEST(DataSeriesArithTest, AddIntegerToRealPromotes)
     auto a = DataSeries::CreateScalarFromVector<int>({1, 2});
     auto b = DataSeries::CreateScalarFromVector<double>({3.5, 4.5});
     DataSeries r = a + b;
-    EXPECT_EQ(r.dtype(), DTypeTag::kReal);
+    EXPECT_EQ(r.data_type(), DataType::kReal);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 4.5);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 6.5);
 }
@@ -114,7 +114,7 @@ TEST(DataSeriesArithTest, AddComplexSeries)
     auto a = DataSeries::CreateScalarFromVector<cd>({cd(1, 2), cd(3, 4)});
     auto b = DataSeries::CreateScalarFromVector<cd>({cd(5, 6), cd(7, 8)});
     DataSeries r = a + b;
-    EXPECT_EQ(r.dtype(), DTypeTag::kComplex);
+    EXPECT_EQ(r.data_type(), DataType::kComplex);
     EXPECT_DOUBLE_EQ(r.scalar_at<cd>(0).real(), 6.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<cd>(0).imag(), 8.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<cd>(1).real(), 10.0);
@@ -188,7 +188,7 @@ TEST(DataSeriesArithTest, SubtractIntegerSeries)
     auto a = DataSeries::CreateScalarFromVector<int>({10, 20});
     auto b = DataSeries::CreateScalarFromVector<int>({3, 7});
     DataSeries r = a - b;
-    EXPECT_EQ(r.dtype(), DTypeTag::kInteger);
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
     EXPECT_EQ(r.scalar_at<int>(0), 7);
     EXPECT_EQ(r.scalar_at<int>(1), 13);
 }
@@ -233,7 +233,7 @@ TEST(DataSeriesArithTest, MultiplyIntegerSeries)
     auto a = DataSeries::CreateScalarFromVector<int>({2, 3});
     auto b = DataSeries::CreateScalarFromVector<int>({4, 5});
     DataSeries r = a * b;
-    EXPECT_EQ(r.dtype(), DTypeTag::kInteger);
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
     EXPECT_EQ(r.scalar_at<int>(0), 8);
     EXPECT_EQ(r.scalar_at<int>(1), 15);
 }
@@ -283,7 +283,7 @@ TEST(DataSeriesArithTest, DivideIntegerSeriesYieldsReal)
     auto b = DataSeries::CreateScalarFromVector<int>({4, 2});
     DataSeries r = a / b;
     // Integer / Integer -> Real
-    EXPECT_EQ(r.dtype(), DTypeTag::kReal);
+    EXPECT_EQ(r.data_type(), DataType::kReal);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 2.5);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 1.5);
 }
@@ -321,7 +321,7 @@ TEST(DataSeriesMeasArithTest, AddMeasurementReal)
     auto s = DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
     Measurement m(10.0);
     DataSeries r = s + m;
-    EXPECT_EQ(r.dtype(), DTypeTag::kReal);
+    EXPECT_EQ(r.data_type(), DataType::kReal);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 11.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 12.0);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(2), 13.0);
@@ -332,7 +332,7 @@ TEST(DataSeriesMeasArithTest, AddMeasurementInteger)
     auto s = DataSeries::CreateScalarFromVector<int>({1, 2, 3});
     Measurement m(100);
     DataSeries r = s + m;
-    EXPECT_EQ(r.dtype(), DTypeTag::kInteger);
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
     EXPECT_EQ(r.scalar_at<int>(0), 101);
     EXPECT_EQ(r.scalar_at<int>(1), 102);
     EXPECT_EQ(r.scalar_at<int>(2), 103);
@@ -343,7 +343,7 @@ TEST(DataSeriesMeasArithTest, AddMeasurementIntegerToRealPromotes)
     auto s = DataSeries::CreateScalarFromVector<double>({1.5, 2.5});
     Measurement m(3);
     DataSeries r = s + m;
-    EXPECT_EQ(r.dtype(), DTypeTag::kReal);
+    EXPECT_EQ(r.data_type(), DataType::kReal);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 4.5);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 5.5);
 }
@@ -476,7 +476,7 @@ TEST(DataSeriesMeasArithTest, MultiplyMeasurementInteger)
     auto s = DataSeries::CreateScalarFromVector<int>({2, 3});
     Measurement m(5);
     DataSeries r = s * m;
-    EXPECT_EQ(r.dtype(), DTypeTag::kInteger);
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
     EXPECT_EQ(r.scalar_at<int>(0), 10);
     EXPECT_EQ(r.scalar_at<int>(1), 15);
 }
@@ -500,7 +500,7 @@ TEST(DataSeriesMeasArithTest, DivideMeasurementIntegerYieldsReal)
     auto s = DataSeries::CreateScalarFromVector<int>({10, 20});
     Measurement m(4);
     DataSeries r = s / m;
-    EXPECT_EQ(r.dtype(), DTypeTag::kReal);
+    EXPECT_EQ(r.data_type(), DataType::kReal);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 2.5);
     EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 5.0);
 }
@@ -592,8 +592,8 @@ TEST(MeasArithTest, AddScalarReal)
 {
     Measurement a(3.0), b(4.0);
     Measurement r = a + b;
-    EXPECT_EQ(r.kind(), DataKind::kScalar);
-    EXPECT_EQ(r.dtype(), DTypeTag::kReal);
+    EXPECT_EQ(r.data_kind(), DataKind::kScalar);
+    EXPECT_EQ(r.data_type(), DataType::kReal);
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 7.0);
 }
 
@@ -601,7 +601,7 @@ TEST(MeasArithTest, AddScalarInt)
 {
     Measurement a(3), b(4);
     Measurement r = a + b;
-    EXPECT_EQ(r.dtype(), DTypeTag::kInteger);
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
     EXPECT_EQ(r.as_scalar<int>(), 7);
 }
 
@@ -609,7 +609,7 @@ TEST(MeasArithTest, AddMixedIntRealPromotes)
 {
     Measurement a(3.5), b(2);  // real + int -> real
     Measurement r = a + b;
-    EXPECT_EQ(r.dtype(), DTypeTag::kReal);
+    EXPECT_EQ(r.data_type(), DataType::kReal);
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 5.5);
 }
 
@@ -682,7 +682,7 @@ TEST(MeasArithTest, AddScalarToVector)
     Measurement vec(v);
     Measurement s(10.0);
     Measurement r = s + vec;
-    EXPECT_EQ(r.kind(), DataKind::kVector);
+    EXPECT_EQ(r.data_kind(), DataKind::kVector);
     auto rv = r.as_vector<double>();
     EXPECT_DOUBLE_EQ(rv(0), 11.0);
     EXPECT_DOUBLE_EQ(rv(1), 12.0);
@@ -695,7 +695,7 @@ TEST(MeasArithTest, AddScalarToMatrix)
     Measurement mat(m);
     Measurement s(10.0);
     Measurement r = s + mat;
-    EXPECT_EQ(r.kind(), DataKind::kMatrix);
+    EXPECT_EQ(r.data_kind(), DataKind::kMatrix);
     auto rm = r.as_matrix<double>();
     EXPECT_DOUBLE_EQ(rm(0, 0), 11.0);
     EXPECT_DOUBLE_EQ(rm(1, 1), 14.0);
@@ -706,7 +706,7 @@ TEST(MeasArithTest, AddVectorToVector)
     Eigen::VectorXd a(2); a << 1.0, 2.0;
     Eigen::VectorXd b(2); b << 3.0, 4.0;
     Measurement r = Measurement(a) + Measurement(b);
-    EXPECT_EQ(r.kind(), DataKind::kVector);
+    EXPECT_EQ(r.data_kind(), DataKind::kVector);
     auto rv = r.as_vector<double>();
     EXPECT_DOUBLE_EQ(rv(0), 4.0);
     EXPECT_DOUBLE_EQ(rv(1), 6.0);
@@ -786,7 +786,7 @@ TEST(MeasArithTest, MultiplyIntScalars)
 {
     Measurement a(3), b(5);
     Measurement r = a * b;
-    EXPECT_EQ(r.dtype(), DTypeTag::kInteger);
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
     EXPECT_EQ(r.as_scalar<int>(), 15);
 }
 
@@ -805,7 +805,7 @@ TEST(MeasArithTest, DivideIntYieldsReal)
 {
     Measurement a(10), b(3);
     Measurement r = a / b;
-    EXPECT_EQ(r.dtype(), DTypeTag::kReal);
+    EXPECT_EQ(r.data_type(), DataType::kReal);
     EXPECT_DOUBLE_EQ(r.as_scalar<double>(), 10.0 / 3.0);
 }
 
@@ -875,7 +875,7 @@ TEST(MeasPowTest, PowVector)
 {
     Eigen::VectorXd v(3); v << 2.0, 3.0, 4.0;
     Measurement r = xdataset::pow(Measurement(v), Measurement(2));
-    EXPECT_EQ(r.kind(), DataKind::kVector);
+    EXPECT_EQ(r.data_kind(), DataKind::kVector);
     auto rv = r.as_vector<double>();
     EXPECT_DOUBLE_EQ(rv(0), 4.0);
     EXPECT_DOUBLE_EQ(rv(1), 9.0);
@@ -886,7 +886,7 @@ TEST(MeasPowTest, PowMatrix)
 {
     Eigen::MatrixXd m(2, 2); m << 2.0, 3.0, 4.0, 5.0;
     Measurement r = xdataset::pow(Measurement(m), Measurement(2));
-    EXPECT_EQ(r.kind(), DataKind::kMatrix);
+    EXPECT_EQ(r.data_kind(), DataKind::kMatrix);
     auto rm = r.as_matrix<double>();
     EXPECT_DOUBLE_EQ(rm(0, 0), 4.0);
     EXPECT_DOUBLE_EQ(rm(1, 1), 25.0);
@@ -947,7 +947,7 @@ TEST(MeasPowMeasTest, PowMeasBroadcastScalarToVector)
     Eigen::VectorXd ev(3); ev << 1.0, 2.0, 3.0;
     Measurement exp(ev);
     Measurement r = xdataset::pow(base, exp);
-    EXPECT_EQ(r.kind(), DataKind::kVector);
+    EXPECT_EQ(r.data_kind(), DataKind::kVector);
     auto rv = r.as_vector<double>();
     EXPECT_DOUBLE_EQ(rv(0), 2.0);
     EXPECT_DOUBLE_EQ(rv(1), 4.0);
@@ -960,7 +960,7 @@ TEST(MeasPowMeasTest, PowMeasBroadcastVectorToScalar)
     Measurement base(bv);
     Measurement exp(2);
     Measurement r = xdataset::pow(base, exp);
-    EXPECT_EQ(r.kind(), DataKind::kVector);
+    EXPECT_EQ(r.data_kind(), DataKind::kVector);
     auto rv = r.as_vector<double>();
     EXPECT_DOUBLE_EQ(rv(0), 4.0);
     EXPECT_DOUBLE_EQ(rv(1), 9.0);
@@ -1016,14 +1016,6 @@ TEST(DataSeriesPowMeasTest, PowMeasExponentMustBeDimless)
 {
     auto s = DataSeries::CreateScalarFromVector<double>({2.0});
     Measurement exp(2, xdataset::Unit::parse("meter"));
-    EXPECT_THROW(xdataset::pow(s, exp), std::invalid_argument);
-}
-
-TEST(DataSeriesPowMeasTest, PowMeasExponentMustBeScalar)
-{
-    auto s = DataSeries::CreateScalarFromVector<double>({2.0});
-    Eigen::VectorXd v(2); v << 1.0, 2.0;
-    Measurement exp(v);
     EXPECT_THROW(xdataset::pow(s, exp), std::invalid_argument);
 }
 
@@ -1129,7 +1121,7 @@ TEST(DataSeriesArithTest, VectorDSTimesMatrixDSThrows)
 {
     auto vecs = DataSeries::CreateVectorFromVector<double>(3,
         std::vector<double>{1.0, 2.0, 3.0});
-    DataSeries mats(DataKind::kMatrix, DTypeTag::kReal, {2, 2});
+    DataSeries mats(DataKind::kMatrix, DataType::kReal, {2, 2});
     mats.resize(1);
     mats.matrix_at<double>(0) << 1, 2, 3, 4;
     EXPECT_THROW(vecs + mats, std::invalid_argument);
@@ -1186,7 +1178,7 @@ TEST(DataArrayArithTest, AddScalarIndependentArrays)
     EXPECT_TRUE(r.data().unit().same_dimension(xdataset::Unit::parse("meter")));
     // Result inherits structure from left operand
     EXPECT_EQ(r.multi_dimension_spec().rank(), a.multi_dimension_spec().rank());
-    EXPECT_EQ(r.kind(), a.kind());
+    EXPECT_EQ(r.data_kind(), a.data_kind());
 }
 
 TEST(DataArrayArithTest, AddArrayUnitMismatchThrows)
@@ -1259,6 +1251,345 @@ TEST(DataArrayArithTest, SubtractArrays)
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 13.0);
 }
 
+// =========================================================================
+//  DataSeries pow  vs  Measurement (non-Scalar exponent)
+// =========================================================================
+
+TEST(DataSeriesPowTest, PowMeasurementVectorExponent)
+{
+    // base: scalar series {2.0, 3.0}, dimensionless
+    auto base = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    // exponent: Vector([1.0, 2.0, 3.0])
+    Measurement exp(Eigen::VectorXd{{1.0, 2.0, 3.0}});
+    DataSeries r = xdataset::pow(base, exp);
+    EXPECT_EQ(r.data_kind(), DataKind::kVector);
+    EXPECT_EQ(r.size(), 2u);
+    EXPECT_EQ(r.data_shape()[0], 3);
+    EXPECT_DOUBLE_EQ(r.vector_at<double>(0)(0), std::pow(2.0, 1.0));
+    EXPECT_DOUBLE_EQ(r.vector_at<double>(0)(1), std::pow(2.0, 2.0));
+    EXPECT_DOUBLE_EQ(r.vector_at<double>(0)(2), std::pow(2.0, 3.0));
+    EXPECT_DOUBLE_EQ(r.vector_at<double>(1)(0), std::pow(3.0, 1.0));
+    EXPECT_DOUBLE_EQ(r.vector_at<double>(1)(2), std::pow(3.0, 3.0));
+}
+
+TEST(DataSeriesPowTest, PowMeasurementMatrixExponent)
+{
+    auto base = DataSeries::CreateScalarFromVector<double>({2.0});
+    Eigen::MatrixXd m(2, 2); m << 1.0, 2.0, 3.0, 4.0;
+    Measurement exp(m);
+    DataSeries r = xdataset::pow(base, exp);
+    EXPECT_EQ(r.data_kind(), DataKind::kMatrix);
+    EXPECT_EQ(r.size(), 1u);
+    EXPECT_DOUBLE_EQ(r.matrix_at<double>(0)(0, 0), std::pow(2.0, 1.0));
+    EXPECT_DOUBLE_EQ(r.matrix_at<double>(0)(1, 1), std::pow(2.0, 4.0));
+}
+
+TEST(DataSeriesPowTest, PowMeasurementWithUnitPreservesBaseUnit)
+{
+    auto base = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    base.set_unit(Unit::parse("meter"));
+    Measurement exp(2);  // dimensionless scalar integer
+    DataSeries r = xdataset::pow(base, exp);
+    EXPECT_TRUE(r.unit().same_dimension(Unit::parse("meter")));
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 4.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 9.0);
+}
+
+TEST(DataSeriesPowTest, PowMeasurementDimensionedExponentThrows)
+{
+    auto base = DataSeries::CreateScalarFromVector<double>({2.0});
+    Measurement exp(2.0, Unit::parse("meter"));
+    EXPECT_THROW(xdataset::pow(base, exp), std::invalid_argument);
+}
+
+// =========================================================================
+//  DataSeries pow  vs  DataSeries
+// =========================================================================
+
+TEST(DataSeriesPowTest, PowSeriesRowByRow)
+{
+    auto base = DataSeries::CreateScalarFromVector<double>({2.0, 3.0, 4.0});
+    auto exp  = DataSeries::CreateScalarFromVector<double>({2.0, 3.0, 0.5});
+    DataSeries r = xdataset::pow(base, exp);
+    EXPECT_EQ(r.size(), 3u);
+    EXPECT_EQ(r.data_kind(), DataKind::kScalar);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), std::pow(2.0, 2.0));   // 4
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), std::pow(3.0, 3.0));   // 27
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(2), std::pow(4.0, 0.5));   // 2
+}
+
+TEST(DataSeriesPowTest, PowSeriesWithUnit)
+{
+    auto base = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    base.set_unit(Unit::parse("meter"));
+    auto exp = DataSeries::CreateScalarFromVector<int>({2, 2});
+    DataSeries r = xdataset::pow(base, exp);
+    EXPECT_TRUE(r.unit().same_dimension(Unit::parse("meter")));
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 4.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 9.0);
+}
+
+TEST(DataSeriesPowTest, PowSeriesSizeMismatchThrows)
+{
+    auto base = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    auto exp  = DataSeries::CreateScalarFromVector<double>({2.0});
+    EXPECT_THROW(xdataset::pow(base, exp), std::invalid_argument);
+}
+
+TEST(DataSeriesPowTest, PowSeriesDimensionalExponentThrows)
+{
+    auto base = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    auto exp  = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    exp.set_unit(Unit::parse("meter"));
+    EXPECT_THROW(xdataset::pow(base, exp), std::invalid_argument);
+}
+
+TEST(DataSeriesPowTest, PowSeriesVectorBroadcast)
+{
+    // base: scalar series, exp: vector series -> result is vector
+    auto base = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    auto exp  = DataSeries::CreateVector<double>(3, 2);
+    exp.vector_at<double>(0) << 1.0, 2.0, 3.0;
+    exp.vector_at<double>(1) << 0.5, 1.0, 1.5;
+    DataSeries r = xdataset::pow(base, exp);
+    EXPECT_EQ(r.data_kind(), DataKind::kVector);
+    EXPECT_EQ(r.size(), 2u);
+    EXPECT_DOUBLE_EQ(r.vector_at<double>(0)(0), std::pow(2.0, 1.0));
+    EXPECT_DOUBLE_EQ(r.vector_at<double>(0)(1), std::pow(2.0, 2.0));
+    EXPECT_DOUBLE_EQ(r.vector_at<double>(0)(2), std::pow(2.0, 3.0));
+    EXPECT_DOUBLE_EQ(r.vector_at<double>(1)(1), std::pow(3.0, 1.0));
+}
+
+// =========================================================================
+//  pow(Measurement, DataSeries)
+// =========================================================================
+
+TEST(DataSeriesPowTest, PowMeasBaseSeriesExponent)
+{
+    Measurement base(2.0);
+    auto exp = DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
+    DataSeries r = xdataset::pow(base, exp);
+    EXPECT_EQ(r.size(), 3u);
+    EXPECT_EQ(r.data_kind(), DataKind::kScalar);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 2.0);   // 2^1
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 4.0);   // 2^2
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(2), 8.0);   // 2^3
+}
+
+TEST(DataSeriesPowTest, PowMeasBaseWithUnit)
+{
+    Measurement base(2.0, Unit::parse("meter"));
+    auto exp = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    DataSeries r = xdataset::pow(base, exp);
+    EXPECT_TRUE(r.unit().same_dimension(Unit::parse("meter")));
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 4.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 8.0);
+}
+
+TEST(DataSeriesPowTest, PowMeasBaseVectorExponent)
+{
+    Measurement base(2.0);
+    auto exp = DataSeries::CreateVector<double>(2, 2);
+    exp.vector_at<double>(0) << 1.0, 2.0;
+    exp.vector_at<double>(1) << 0.5, 3.0;
+    DataSeries r = xdataset::pow(base, exp);
+    EXPECT_EQ(r.data_kind(), DataKind::kVector);
+    EXPECT_EQ(r.size(), 2u);
+    EXPECT_DOUBLE_EQ(r.vector_at<double>(0)(0), std::pow(2.0, 1.0));
+    EXPECT_DOUBLE_EQ(r.vector_at<double>(0)(1), std::pow(2.0, 2.0));
+    EXPECT_DOUBLE_EQ(r.vector_at<double>(1)(0), std::pow(2.0, 0.5));
+    EXPECT_DOUBLE_EQ(r.vector_at<double>(1)(1), std::pow(2.0, 3.0));
+}
+
+TEST(DataSeriesPowTest, PowMeasBaseDimensionalExponentThrows)
+{
+    Measurement base(2.0);
+    auto exp = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
+    exp.set_unit(Unit::parse("meter"));
+    EXPECT_THROW(xdataset::pow(base, exp), std::invalid_argument);
+}
+
+// =========================================================================
+//  DataArray pow  vs  DataArray
+// =========================================================================
+
+TEST(DataArrayPowTest, PowArrayRowByRow)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({2.0, 3.0}));
+    auto b = DataArray::CreateIndependent("b",
+        DataSeries::CreateScalarFromVector<double>({2.0, 3.0}));
+    auto r = xdataset::pow(a, b);
+    EXPECT_EQ(r.data().size(), 2u);
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), std::pow(2.0, 2.0));
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), std::pow(3.0, 3.0));
+}
+
+TEST(DataArrayPowTest, PowArrayWithUnit)
+{
+    auto ds_a = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    ds_a.set_unit(Unit::parse("meter"));
+    auto a = DataArray::CreateIndependent("a", std::move(ds_a));
+
+    auto b = DataArray::CreateIndependent("b",
+        DataSeries::CreateScalarFromVector<int>({2, 2}));
+    auto r = xdataset::pow(a, b);
+    EXPECT_TRUE(r.data().unit().same_dimension(Unit::parse("meter")));
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 4.0);
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 9.0);
+}
+
+// =========================================================================
+//  DataArray pow  vs  Measurement (non-Scalar exponent)
+// =========================================================================
+
+TEST(DataArrayPowTest, PowMeasurementNonScalar)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({2.0, 3.0}));
+    Measurement exp(Eigen::VectorXd{{1.0, 2.0, 3.0}});
+    auto r = xdataset::pow(a, exp);
+    EXPECT_EQ(r.data().data_kind(), DataKind::kVector);
+    EXPECT_EQ(r.data().size(), 2u);
+    EXPECT_DOUBLE_EQ(r.data().vector_at<double>(0)(0), std::pow(2.0, 1.0));
+    EXPECT_DOUBLE_EQ(r.data().vector_at<double>(0)(1), std::pow(2.0, 2.0));
+}
+
+// =========================================================================
+//  pow(Measurement, DataArray)
+// =========================================================================
+
+TEST(DataArrayPowTest, PowMeasBaseArrayExponent)
+{
+    Measurement base(2.0);
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0}));
+    auto r = xdataset::pow(base, a);
+    EXPECT_EQ(r.data().size(), 3u);
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 2.0);
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 4.0);
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(2), 8.0);
+    EXPECT_EQ(r.data_kind(), a.data_kind());
+    EXPECT_EQ(r.multi_dimension_spec().rank(), a.multi_dimension_spec().rank());
+}
+
+TEST(DataArrayPowTest, PowMeasBaseArrayWithUnit)
+{
+    Measurement base(2.0, Unit::parse("meter"));
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({2.0, 3.0}));
+    auto r = xdataset::pow(base, a);
+    EXPECT_TRUE(r.data().unit().same_dimension(Unit::parse("meter")));
+}
+
+// =========================================================================
+//  Measurement op DataSeries (reverse broadcast)
+// =========================================================================
+
+TEST(MeasDataSeriesArithTest, AddMeasurementToSeries)
+{
+    Measurement m(10.0);
+    auto s = DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
+    DataSeries r = m + s;
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 11.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 12.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(2), 13.0);
+}
+
+TEST(MeasDataSeriesArithTest, SubtractMeasurementMinusSeries)
+{
+    Measurement m(10.0);
+    auto s = DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
+    DataSeries r = m - s;
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 9.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 8.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(2), 7.0);
+}
+
+TEST(MeasDataSeriesArithTest, MultiplyMeasurementTimesSeries)
+{
+    Measurement m(2.0);
+    auto s = DataSeries::CreateScalarFromVector<double>({3.0, 4.0, 5.0});
+    DataSeries r = m * s;
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 6.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(2), 10.0);
+}
+
+TEST(MeasDataSeriesArithTest, DivideMeasurementBySeries)
+{
+    Measurement m(10.0);
+    auto s = DataSeries::CreateScalarFromVector<double>({2.0, 5.0});
+    DataSeries r = m / s;
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 5.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 2.0);
+}
+
+TEST(MeasDataSeriesArithTest, AddMeasurementToSeriesWithUnits)
+{
+    Measurement m(100.0, Unit::parse("cm"));  // 1.0 m
+    auto s = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
+    s.set_unit(Unit::parse("meter"));
+    DataSeries r = m + s;
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 2.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 3.0);
+    EXPECT_TRUE(r.unit().same_dimension(Unit::parse("meter")));
+}
+
+TEST(MeasDataSeriesArithTest, MeasurementTimesSeriesDerivesUnit)
+{
+    Measurement m(2.0, Unit::parse("A"));
+    auto s = DataSeries::CreateScalarFromVector<double>({3.0});
+    s.set_unit(Unit::parse("V"));
+    DataSeries r = m * s;
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), 6.0);
+    EXPECT_TRUE(r.unit().same_dimension(Unit::parse("W")));
+}
+
+// =========================================================================
+//  Measurement op DataArray (reverse broadcast)
+// =========================================================================
+
+TEST(MeasDataArrayArithTest, AddMeasurementToArray)
+{
+    Measurement m(10.0);
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0}));
+    auto r = m + a;
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 11.0);
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(2), 13.0);
+    EXPECT_EQ(r.data_kind(), a.data_kind());
+}
+
+TEST(MeasDataArrayArithTest, SubtractMeasurementMinusArray)
+{
+    Measurement m(10.0);
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0}));
+    auto r = m - a;
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 9.0);
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 8.0);
+}
+
+TEST(MeasDataArrayArithTest, MultiplyMeasurementTimesArray)
+{
+    Measurement m(2.0);
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({3.0, 4.0}));
+    auto r = m * a;
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 6.0);
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 8.0);
+}
+
+TEST(MeasDataArrayArithTest, DivideMeasurementByArray)
+{
+    Measurement m(12.0);
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({3.0, 4.0}));
+    auto r = m / a;
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 4.0);
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 3.0);
+}
+
 TEST(DataArrayArithTest, MultiplyArrays)
 {
     auto ds_a = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
@@ -1308,7 +1639,7 @@ TEST(DataArrayMeasArithTest, AddMeasurement)
     EXPECT_EQ(r.data().size(), 3u);
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), 11.0);
     EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(2), 13.0);
-    EXPECT_EQ(r.kind(), a.kind());
+    EXPECT_EQ(r.data_kind(), a.data_kind());
 }
 
 TEST(DataArrayMeasArithTest, SubtractMeasurement)

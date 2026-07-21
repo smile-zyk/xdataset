@@ -13,7 +13,7 @@ using xdataset::DataKind;
 using xdataset::DataSeries;
 using xdataset::Measurement;
 using xdataset::MeasurementDataFrame;
-using xdataset::DTypeTag;
+using xdataset::DataType;
 using xdataset::Index;
 using xdataset::Unit;
 
@@ -25,9 +25,8 @@ using xdataset::Unit;
 
 TEST(CellTest, ScalarCellCreateAndMutate) {
     Measurement m = Measurement(42.0);
-    EXPECT_EQ(m.kind(), DataKind::kScalar);
-    EXPECT_EQ(m.dtype(), DTypeTag::kReal);
-    EXPECT_EQ(m.dtype_name(), "Real");
+    EXPECT_EQ(m.data_kind(), DataKind::kScalar);
+    EXPECT_EQ(m.data_type(), DataType::kReal);
     EXPECT_DOUBLE_EQ(m.as_scalar<double>(), 42.0);
 
     m = Measurement(3.5);
@@ -36,24 +35,21 @@ TEST(CellTest, ScalarCellCreateAndMutate) {
 
 TEST(CellTest, IntegerCellDtype) {
     Measurement m = Measurement(7);
-    EXPECT_EQ(m.dtype(), DTypeTag::kInteger);
-    EXPECT_EQ(m.dtype_name(), "Integer");
+    EXPECT_EQ(m.data_type(), DataType::kInteger);
     EXPECT_EQ(m.as_scalar<int>(), 7);
 }
 
 TEST(CellTest, ComplexCellDtype) {
     using cd = std::complex<double>;
     Measurement m = Measurement(cd(1.0, 2.0));
-    EXPECT_EQ(m.dtype(), DTypeTag::kComplex);
-    EXPECT_EQ(m.dtype_name(), "Complex");
+    EXPECT_EQ(m.data_type(), DataType::kComplex);
     EXPECT_DOUBLE_EQ(m.as_scalar<cd>().real(), 1.0);
     EXPECT_DOUBLE_EQ(m.as_scalar<cd>().imag(), 2.0);
 }
 
 TEST(CellTest, StringCellDtype) {
     Measurement m = Measurement(std::string("hello"));
-    EXPECT_EQ(m.dtype(), DTypeTag::kString);
-    EXPECT_EQ(m.dtype_name(), "String");
+    EXPECT_EQ(m.data_type(), DataType::kString);
     EXPECT_EQ(m.as_scalar<std::string>(), "hello");
 }
 
@@ -87,28 +83,28 @@ TEST(CellTest, AppendUnitMismatchThrows) {
 TEST(CellTest, CellAtRoundtripScalar) {
     DataSeries s = DataSeries::CreateScalarFromVector<int>(std::vector<int>{1, 2, 3});
     Measurement m = s.measurement_at(1);
-    EXPECT_EQ(m.kind(), DataKind::kScalar);
-    EXPECT_EQ(m.dtype(), DTypeTag::kInteger);
+    EXPECT_EQ(m.data_kind(), DataKind::kScalar);
+    EXPECT_EQ(m.data_type(), DataType::kInteger);
     EXPECT_EQ(m.as_scalar<int>(), 2);
 }
 
 TEST(CellTest, CellAtRoundtripVector) {
-    DataSeries vecs(DataKind::kVector, DTypeTag::kReal, {3});
+    DataSeries vecs(DataKind::kVector, DataType::kReal, {3});
     vecs.resize(2);
     vecs.vector_at<double>(0) << 1.0, 2.0, 3.0;
     vecs.vector_at<double>(1) << 4.0, 5.0, 6.0;
     Measurement m = vecs.measurement_at(1);
-    EXPECT_EQ(m.kind(), DataKind::kVector);
+    EXPECT_EQ(m.data_kind(), DataKind::kVector);
     EXPECT_DOUBLE_EQ(m.as_vector<double>()(0), 4.0);
     EXPECT_DOUBLE_EQ(m.as_vector<double>()(2), 6.0);
 }
 
 TEST(CellTest, CellAtRoundtripMatrix) {
-    DataSeries mats(DataKind::kMatrix, DTypeTag::kReal, {2, 2});
+    DataSeries mats(DataKind::kMatrix, DataType::kReal, {2, 2});
     mats.resize(1);
     mats.matrix_at<double>(0) << 1.0, 2.0, 3.0, 4.0;
     Measurement m = mats.measurement_at(0);
-    EXPECT_EQ(m.kind(), DataKind::kMatrix);
+    EXPECT_EQ(m.data_kind(), DataKind::kMatrix);
     EXPECT_DOUBLE_EQ(m.as_matrix<double>()(0, 0), 1.0);
     EXPECT_DOUBLE_EQ(m.as_matrix<double>()(1, 1), 4.0);
 }
@@ -162,7 +158,7 @@ TEST(MeasurementCanonTest, CanonicalizedCmToMeter)
 {
     Measurement m(5.0, xdataset::Unit::parse("cm"));
     Measurement c = m.canonicalized();
-    // 5 cm 鈫?0.05 m
+    // 5 cm -> 0.05 m
     EXPECT_DOUBLE_EQ(c.as_scalar<double>(), 0.05);
     EXPECT_DOUBLE_EQ(c.unit().multiplier(), 1.0);
     EXPECT_TRUE(c.unit().same_dimension(xdataset::Unit::parse("meter")));
@@ -192,7 +188,7 @@ TEST(MeasurementFormatTest, AutoScaleMega)
 {
     Measurement m(1e9, xdataset::Unit::parse("Hz"));
     std::string s = m.to_string();
-    // 1e9 Hz 鈫?1 GHz
+    // 1e9 Hz -> 1 GHz
     EXPECT_TRUE(s.find("GHz") != std::string::npos);
 }
 
@@ -200,7 +196,7 @@ TEST(MeasurementFormatTest, AutoScaleMilli)
 {
     Measurement m(0.002, xdataset::Unit::parse("V"));
     std::string s = m.to_string();
-    // 0.002 V 鈫?2 mV
+    // 0.002 V -> 2 mV
     EXPECT_TRUE(s.find("2") != std::string::npos);
     EXPECT_TRUE(s.find("mV") != std::string::npos);
 }
@@ -209,7 +205,7 @@ TEST(MeasurementFormatTest, AutoScaleKiloMeter)
 {
     Measurement m(5000, xdataset::Unit::parse("meter"));
     std::string s = m.to_string();
-    // 5000 meter 鈫?5 Kmeter
+    // 5000 meter -> 5 Kmeter
     EXPECT_TRUE(s.find("5") != std::string::npos);
     EXPECT_TRUE(s.find("Kmeter") != std::string::npos);
 }
@@ -218,7 +214,7 @@ TEST(MeasurementFormatTest, AutoScaleMilliMeter)
 {
     Measurement m(0.003, xdataset::Unit::parse("meter"));
     std::string s = m.to_string();
-    // 0.003 meter 鈫?3 mmeter
+    // 0.003 meter -> 3 mmeter
     EXPECT_TRUE(s.find("3") != std::string::npos);
     EXPECT_TRUE(s.find("mmeter") != std::string::npos);
 }
@@ -235,7 +231,7 @@ TEST(MeasurementFormatTest, AutoScaleMegaDimensionless)
 {
     Measurement m(1000000);
     std::string s = m.to_string();
-    // 1000000 鈫?1 M (dimensionless auto-scale)
+    // 1000000 -> 1 M (dimensionless auto-scale)
     EXPECT_TRUE(s.find("M") != std::string::npos);
     EXPECT_TRUE(s.find("1") != std::string::npos);
 }
@@ -314,7 +310,7 @@ TEST(MeasurementToDataFrameTest, ToCsvRoundtrip)
 
     // Header row
     EXPECT_NE(csv.find(",velocity(1),velocity(2)"), std::string::npos);
-    // Data row — single measurement, no multi-index
+    // Data row -> single measurement, no multi-index
     //   FormatMultiIndex() gives "[]", EscapeCsvField does not quote it
     //   (no comma / quote / newline characters), so: [],10,20
     EXPECT_NE(csv.find("0,10,20"), std::string::npos);
