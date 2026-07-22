@@ -177,7 +177,9 @@ namespace xdataset
             ++pos;
         }
 
-        const MultiDimensionSpec result_spec(prefix_dims);
+        MultiDimensionSpec result_spec;
+        for (const auto& d : prefix_dims)
+            result_spec.add_dimension(d);
         const std::size_t total_rows = result_spec.compute_cell_count();
 
         // Generate index series for the target column.
@@ -245,6 +247,17 @@ namespace xdataset
             throw std::logic_error("at is invalid for scalar data");
         }
 
+        const std::size_t ndim = data().data_shape().size();  // 1 for vector, 2 for matrix
+        if (selectors.size() > ndim)
+        {
+            throw std::invalid_argument("too many selectors for at");
+        }
+
+        // Pad short selectors with Any so callers can omit trailing dimensions.
+        std::vector<MultiIndexSelector> padded = selectors;
+        while (padded.size() < ndim)
+            padded.push_back(MultiIndexSelector::Any());
+
         DataArrayCreateInfo info;
         info.name = DataArray::kUnnamed;
         info.kind = data_kind_;
@@ -253,30 +266,14 @@ namespace xdataset
 
         if (data().data_kind() == DataKind::kVector)
         {
-            if (selectors.size() != 1)
-            {
-                throw std::invalid_argument("vector at requires exactly one selector");
-            }
-
-            const std::vector<Index> selected = selectors[0].resolve(data().data_shape()[0]);
-            info.data = data().at(selected, selectors[0].is_equal());
-
+            const std::vector<Index> selected = padded[0].resolve(data().data_shape()[0]);
+            info.data = data().at(selected);
             return DataArray(std::move(info));
         }
 
-        if (selectors.size() != 2)
-        {
-            throw std::invalid_argument("matrix at requires exactly two selectors");
-        }
-
-        const std::vector<Index> selected_rows = selectors[0].resolve(data().data_shape()[0]);
-        const std::vector<Index> selected_cols = selectors[1].resolve(data().data_shape()[1]);
-        info.data = data().at(
-            selected_rows,
-            selected_cols,
-            selectors[0].is_equal(),
-            selectors[1].is_equal());
-
+        const std::vector<Index> selected_rows = padded[0].resolve(data().data_shape()[0]);
+        const std::vector<Index> selected_cols = padded[1].resolve(data().data_shape()[1]);
+        info.data = data().at(selected_rows, selected_cols);
         return DataArray(std::move(info));
     }
 
@@ -471,7 +468,7 @@ namespace xdataset
         vinfo.name = name;
         vinfo.indep_datas[vinfo.name] = data;    // raw copy
         vinfo.data = std::move(data);            // expanded = self for single-dim
-        vinfo.multi_dimension_spec = MultiDimensionSpec({DimensionSpec::Regular(size)});
+        vinfo.multi_dimension_spec = MultiDimensionSpec().add_regular(size);
         vinfo.kind = DataArrayKind::kIndependent;
         return DataArray(std::move(vinfo));
     }

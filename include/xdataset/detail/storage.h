@@ -36,25 +36,25 @@ template <>
 struct IsSupported<std::string> : std::true_type {};
 
 template <typename T>
-struct DTypeOf;
+struct DataTypeOf;
 
 template <>
-struct DTypeOf<double> {
+struct DataTypeOf<double> {
     static const DataType tag = DataType::kReal;
 };
 
 template <>
-struct DTypeOf<int> {
+struct DataTypeOf<int> {
     static const DataType tag = DataType::kInteger;
 };
 
 template <>
-struct DTypeOf<std::complex<double> > {
+struct DataTypeOf<std::complex<double> > {
     static const DataType tag = DataType::kComplex;
 };
 
 template <>
-struct DTypeOf<std::string> {
+struct DataTypeOf<std::string> {
     static const DataType tag = DataType::kString;
 };
 

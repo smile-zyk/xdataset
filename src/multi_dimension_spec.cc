@@ -10,15 +10,6 @@ namespace xdataset
     {
     }
 
-    MultiDimensionSpec::MultiDimensionSpec(const std::vector<DimensionSpec>& dims)
-        : dims_()
-    {
-        for (const auto& d : dims)
-        {
-            add_dimension(d);   // validates ragged parent count
-        }
-    }
-
     MultiDimensionSpec& MultiDimensionSpec::add_regular(std::size_t size)
     {
         dims_.push_back(DimensionSpec::Regular(size));

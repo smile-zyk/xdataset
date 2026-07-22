@@ -405,8 +405,7 @@ namespace xdataset
         info.data.vector_at<double>(0) << 1.0, 2.0, 3.0;
         info.data.vector_at<double>(1) << 4.0, 5.0, 6.0;
         info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
-        info.multi_dimension_spec = MultiDimensionSpec(
-            std::vector<DimensionSpec>{DimensionSpec::Regular(2)});
+        info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray v(info);
         DataArray selected =
@@ -435,8 +434,7 @@ namespace xdataset
         info.data.matrix_at<int>(1) << 7, 8, 9,
                                       10, 11, 12;
         info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
-        info.multi_dimension_spec = MultiDimensionSpec(
-            std::vector<DimensionSpec>{DimensionSpec::Regular(2)});
+        info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray m(info);
         DataArray selected = m.at(
@@ -457,8 +455,7 @@ namespace xdataset
         info.kind = DataArrayKind::kDependent;
         info.data = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
         info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
-        info.multi_dimension_spec = MultiDimensionSpec(
-            std::vector<DimensionSpec>{DimensionSpec::Regular(2)});
+        info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray s(info);
         EXPECT_THROW(
@@ -466,6 +463,167 @@ namespace xdataset
                 s.at({MultiIndexSelector::Any()});
             },
             std::logic_error);
+    }
+
+    TEST(DataArrayAtTest, MatrixAtBothEqualReturnsScalar)
+    {
+        DataArrayCreateInfo info;
+        info.kind = DataArrayKind::kDependent;
+        info.data = DataSeries(DataKind::kMatrix, DataType::kInteger, {2, 3});
+        info.data.resize(2);
+        info.data.matrix_at<int>(0) << 1, 2, 3,
+                                      4, 5, 6;
+        info.data.matrix_at<int>(1) << 7, 8, 9,
+                                      10, 11, 12;
+        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
+
+        DataArray m(info);
+        // Both selectors are Equal → selected size is 1 each → auto-reduce to scalar.
+        DataArray selected = m.at({MultiIndexSelector::Equal(0), MultiIndexSelector::Equal(2)});
+        EXPECT_EQ(selected.data().data_kind(), DataKind::kScalar);
+        EXPECT_EQ(selected.data().size(), 2u);
+        EXPECT_EQ(selected.data().scalar_at<int>(0), 3);   // row 0, col 2
+        EXPECT_EQ(selected.data().scalar_at<int>(1), 9);   // row 1, col 2
+        EXPECT_EQ(selected.multi_dimension_spec().rank(), m.multi_dimension_spec().rank());
+    }
+
+    TEST(DataArrayAtTest, MatrixAtBothInReturnsMatrix)
+    {
+        DataArrayCreateInfo info;
+        info.kind = DataArrayKind::kDependent;
+        info.data = DataSeries(DataKind::kMatrix, DataType::kInteger, {2, 3});
+        info.data.resize(2);
+        info.data.matrix_at<int>(0) << 1, 2, 3,
+                                      4, 5, 6;
+        info.data.matrix_at<int>(1) << 7, 8, 9,
+                                      10, 11, 12;
+        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
+
+        DataArray m(info);
+        // Both selectors select >1 index → stays matrix.
+        DataArray selected = m.at(
+            {MultiIndexSelector::In({0, 1}), MultiIndexSelector::In({1, 2})});
+        EXPECT_EQ(selected.data().data_kind(), DataKind::kMatrix);
+        ASSERT_EQ(selected.data().data_shape().size(), 2u);
+        EXPECT_EQ(selected.data().data_shape()[0], 2);
+        EXPECT_EQ(selected.data().data_shape()[1], 2);
+        EXPECT_EQ(selected.data().size(), 2u);
+        // row 0: cols 1,2 → [[2,3],[5,6]]
+        EXPECT_EQ(selected.data().matrix_at<int>(0)(0, 0), 2);
+        EXPECT_EQ(selected.data().matrix_at<int>(0)(0, 1), 3);
+        EXPECT_EQ(selected.data().matrix_at<int>(0)(1, 0), 5);
+        EXPECT_EQ(selected.data().matrix_at<int>(0)(1, 1), 6);
+        // row 1: cols 1,2 → [[8,9],[11,12]]
+        EXPECT_EQ(selected.data().matrix_at<int>(1)(0, 0), 8);
+        EXPECT_EQ(selected.data().matrix_at<int>(1)(0, 1), 9);
+        EXPECT_EQ(selected.data().matrix_at<int>(1)(1, 0), 11);
+        EXPECT_EQ(selected.data().matrix_at<int>(1)(1, 1), 12);
+        EXPECT_EQ(selected.multi_dimension_spec().rank(), m.multi_dimension_spec().rank());
+    }
+
+    TEST(DataArrayAtTest, VectorAtInReturnsVector)
+    {
+        DataArrayCreateInfo info;
+        info.kind = DataArrayKind::kDependent;
+        info.data = DataSeries(DataKind::kVector, DataType::kReal, {3});
+        info.data.resize(2);
+        info.data.vector_at<double>(0) << 1.0, 2.0, 3.0;
+        info.data.vector_at<double>(1) << 4.0, 5.0, 6.0;
+        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
+
+        DataArray v(info);
+        // In selects >1 index → stays vector (no auto-reduce).
+        DataArray selected = v.at({MultiIndexSelector::In({0, 2})});
+        EXPECT_EQ(selected.data().data_kind(), DataKind::kVector);
+        ASSERT_EQ(selected.data().data_shape().size(), 1u);
+        EXPECT_EQ(selected.data().data_shape()[0], 2);
+        EXPECT_EQ(selected.data().size(), 2u);
+        EXPECT_EQ(selected.data().vector_at<double>(0)(0), 1.0);
+        EXPECT_EQ(selected.data().vector_at<double>(0)(1), 3.0);
+        EXPECT_EQ(selected.data().vector_at<double>(1)(0), 4.0);
+        EXPECT_EQ(selected.data().vector_at<double>(1)(1), 6.0);
+        EXPECT_EQ(selected.multi_dimension_spec().rank(), v.multi_dimension_spec().rank());
+    }
+
+    TEST(DataArrayAtTest, MatrixAtSingleSelectorAutoPadsWithAny)
+    {
+        DataArrayCreateInfo info;
+        info.kind = DataArrayKind::kDependent;
+        info.data = DataSeries(DataKind::kMatrix, DataType::kInteger, {2, 3});
+        info.data.resize(2);
+        info.data.matrix_at<int>(0) << 1, 2, 3,
+                                      4, 5, 6;
+        info.data.matrix_at<int>(1) << 7, 8, 9,
+                                      10, 11, 12;
+        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
+
+        DataArray m(info);
+        // Single Equal selector → padded with Any → selected_rows=[1], selected_cols=[0,1,2].
+        // row_reduce → vector of size 3.
+        DataArray selected = m.at({MultiIndexSelector::Equal(1)});
+        EXPECT_EQ(selected.data().data_kind(), DataKind::kVector);
+        ASSERT_EQ(selected.data().data_shape().size(), 1u);
+        EXPECT_EQ(selected.data().data_shape()[0], 3);
+        EXPECT_EQ(selected.data().size(), 2u);
+        EXPECT_EQ(selected.data().vector_at<int>(0)(0), 4);
+        EXPECT_EQ(selected.data().vector_at<int>(0)(1), 5);
+        EXPECT_EQ(selected.data().vector_at<int>(0)(2), 6);
+        EXPECT_EQ(selected.data().vector_at<int>(1)(0), 10);
+        EXPECT_EQ(selected.data().vector_at<int>(1)(1), 11);
+        EXPECT_EQ(selected.data().vector_at<int>(1)(2), 12);
+        EXPECT_EQ(selected.multi_dimension_spec().rank(), m.multi_dimension_spec().rank());
+    }
+
+    TEST(DataArrayAtTest, VectorAtEmptySelectorAutoPadsWithAny)
+    {
+        DataArrayCreateInfo info;
+        info.kind = DataArrayKind::kDependent;
+        info.data = DataSeries(DataKind::kVector, DataType::kReal, {3});
+        info.data.resize(2);
+        info.data.vector_at<double>(0) << 1.0, 2.0, 3.0;
+        info.data.vector_at<double>(1) << 4.0, 5.0, 6.0;
+        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
+
+        DataArray v(info);
+        // Empty selectors → padded with Any → selects all indices → stays vector.
+        DataArray selected = v.at({});
+        EXPECT_EQ(selected.data().data_kind(), DataKind::kVector);
+        ASSERT_EQ(selected.data().data_shape().size(), 1u);
+        EXPECT_EQ(selected.data().data_shape()[0], 3);
+        EXPECT_EQ(selected.data().size(), 2u);
+        EXPECT_EQ(selected.data().vector_at<double>(0)(0), 1.0);
+        EXPECT_EQ(selected.data().vector_at<double>(0)(1), 2.0);
+        EXPECT_EQ(selected.data().vector_at<double>(0)(2), 3.0);
+        EXPECT_EQ(selected.data().vector_at<double>(1)(0), 4.0);
+        EXPECT_EQ(selected.data().vector_at<double>(1)(1), 5.0);
+        EXPECT_EQ(selected.data().vector_at<double>(1)(2), 6.0);
+        EXPECT_EQ(selected.multi_dimension_spec().rank(), v.multi_dimension_spec().rank());
+    }
+
+    TEST(DataArrayAtTest, MatrixAtTooManySelectorsThrows)
+    {
+        DataArrayCreateInfo info;
+        info.kind = DataArrayKind::kDependent;
+        info.data = DataSeries(DataKind::kMatrix, DataType::kInteger, {2, 3});
+        info.data.resize(2);
+        info.data.matrix_at<int>(0) << 1, 2, 3,
+                                      4, 5, 6;
+        info.data.matrix_at<int>(1) << 7, 8, 9,
+                                      10, 11, 12;
+        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
+
+        DataArray m(info);
+        EXPECT_THROW(
+            {
+                m.at({MultiIndexSelector::Any(), MultiIndexSelector::Any(), MultiIndexSelector::Any()});
+            },
+            std::invalid_argument);
     }
 
     // =========================================================================

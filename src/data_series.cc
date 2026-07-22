@@ -10,7 +10,7 @@
 namespace xdataset {
 
 // =========================================================================
-// DataSeries â€?constructors & assignment operators
+// DataSeries -- constructors & assignment operators
 // =========================================================================
 
 DataSeries::DataSeries()
@@ -54,7 +54,7 @@ DataSeries& DataSeries::operator=(DataSeries&& other) noexcept {
 }
 
 // =========================================================================
-// DataSeries â€?unit
+// DataSeries -- unit
 // =========================================================================
 
 void DataSeries::set_unit(const std::string& s) {
@@ -62,7 +62,7 @@ void DataSeries::set_unit(const std::string& s) {
 }
 
 void DataSeries::canonicalize() {
-    // Strings are not numeric â€?only update the unit tag, no value conversion.
+    // Strings are not numeric -- only update the unit tag, no value conversion.
     if (data_type_ == DataType::kString) {
         unit_ = unit_.canonicalized();
         return;
@@ -110,7 +110,7 @@ bool DataSeries::is_canonicalized() const {
 }
 
 // =========================================================================
-// DataSeries â€?slicing
+// DataSeries -- slicing
 // =========================================================================
 
 DataSeries DataSeries::head(std::size_t n) const {
@@ -132,7 +132,7 @@ DataSeries DataSeries::iloc(std::size_t start, std::size_t end) const {
 }
 
 // =========================================================================
-// DataSeries â€?append helpers (non-template overloads)
+// DataSeries -- append helpers (non-template overloads)
 // =========================================================================
 
 void DataSeries::append_vector(const Eigen::Tensor<std::string, 1>& v) {
@@ -237,7 +237,7 @@ void DataSeries::append(const Measurement& m) {
 }
 
 // =========================================================================
-// DataSeries â€?contiguous data
+// DataSeries -- contiguous data
 // =========================================================================
 
 std::size_t DataSeries::contiguous_bytes() const {
@@ -248,7 +248,7 @@ std::size_t DataSeries::contiguous_bytes() const {
 }
 
 // =========================================================================
-// DataSeries â€?measurement_at
+// DataSeries -- measurement_at
 // =========================================================================
 
 Measurement DataSeries::measurement_at(Index i) const {
@@ -278,20 +278,16 @@ Measurement DataSeries::measurement_at(Index i) const {
 }
 
 // =========================================================================
-// DataSeries â€?at (public)
+// DataSeries -- at (public)
 // =========================================================================
 
-DataSeries DataSeries::at(const std::vector<Index>& selected, bool reduce_to_scalar) const {
+DataSeries DataSeries::at(const std::vector<Index>& selected) const {
     if (data_kind_ == DataKind::kScalar) {
         throw std::logic_error("at is invalid for scalar data");
     }
 
     if (data_kind_ == DataKind::kVector) {
-        if (reduce_to_scalar) {
-            if (selected.size() != 1) {
-                throw std::invalid_argument("scalar vector at requires exactly one index");
-            }
-
+        if (selected.size() == 1) {
             if (data_type_ == DataType::kReal) {
                 DataSeries out(DataKind::kScalar, DataType::kReal, {});
                 out.resize(size());
@@ -343,9 +339,7 @@ DataSeries DataSeries::at(const std::vector<Index>& selected, bool reduce_to_sca
 
 DataSeries DataSeries::at(
     const std::vector<Index>& selected_rows,
-    const std::vector<Index>& selected_cols,
-    bool row_reduce,
-    bool col_reduce) const {
+    const std::vector<Index>& selected_cols) const {
     if (data_kind_ == DataKind::kScalar) {
         throw std::logic_error("at is invalid for scalar data");
     }
@@ -354,11 +348,7 @@ DataSeries DataSeries::at(
         throw std::invalid_argument("matrix at requires matrix data");
     }
 
-    if (row_reduce && col_reduce) {
-        if (selected_rows.size() != 1 || selected_cols.size() != 1) {
-            throw std::invalid_argument("scalar matrix at requires exactly one row and one column index");
-        }
-
+    if (selected_rows.size() == 1 && selected_cols.size() == 1) {
         if (data_type_ == DataType::kReal) {
             DataSeries out(DataKind::kScalar, DataType::kReal, {});
             out.resize(size());
@@ -396,8 +386,8 @@ DataSeries DataSeries::at(
         return out;
     }
 
-    if (row_reduce || col_reduce) {
-        const bool select_columns = row_reduce;
+    if (selected_rows.size() == 1 || selected_cols.size() == 1) {
+        const bool select_columns = selected_rows.size() == 1;
         const std::vector<Index>& remaining = select_columns ? selected_cols : selected_rows;
 
         if (data_type_ == DataType::kReal) {
@@ -406,8 +396,8 @@ DataSeries DataSeries::at(
             for (std::size_t row = 0; row < size(); ++row) {
                 auto out_vec = out.vector_at<double>(static_cast<Index>(row));
                 for (std::size_t i = 0; i < remaining.size(); ++i) {
-                    const Index r = row_reduce ? selected_rows[0] : remaining[i];
-                    const Index c = row_reduce ? remaining[i] : selected_cols[0];
+                    const Index r = select_columns ? selected_rows[0] : remaining[i];
+                    const Index c = select_columns ? remaining[i] : selected_cols[0];
                     out_vec(static_cast<Index>(i)) = matrix_at<double>(static_cast<Index>(row))(r, c);
                 }
             }
@@ -419,8 +409,8 @@ DataSeries DataSeries::at(
             for (std::size_t row = 0; row < size(); ++row) {
                 auto out_vec = out.vector_at<int>(static_cast<Index>(row));
                 for (std::size_t i = 0; i < remaining.size(); ++i) {
-                    const Index r = row_reduce ? selected_rows[0] : remaining[i];
-                    const Index c = row_reduce ? remaining[i] : selected_cols[0];
+                    const Index r = select_columns ? selected_rows[0] : remaining[i];
+                    const Index c = select_columns ? remaining[i] : selected_cols[0];
                     out_vec(static_cast<Index>(i)) = matrix_at<int>(static_cast<Index>(row))(r, c);
                 }
             }
@@ -432,8 +422,8 @@ DataSeries DataSeries::at(
             for (std::size_t row = 0; row < size(); ++row) {
                 auto out_vec = out.vector_at<std::complex<double> >(static_cast<Index>(row));
                 for (std::size_t i = 0; i < remaining.size(); ++i) {
-                    const Index r = row_reduce ? selected_rows[0] : remaining[i];
-                    const Index c = row_reduce ? remaining[i] : selected_cols[0];
+                    const Index r = select_columns ? selected_rows[0] : remaining[i];
+                    const Index c = select_columns ? remaining[i] : selected_cols[0];
                     out_vec(static_cast<Index>(i)) = matrix_at<std::complex<double> >(static_cast<Index>(row))(r, c);
                 }
             }
@@ -445,8 +435,8 @@ DataSeries DataSeries::at(
         for (std::size_t row = 0; row < size(); ++row) {
             auto& out_vec = out.vector_at<std::string>(static_cast<Index>(row));
             for (std::size_t i = 0; i < remaining.size(); ++i) {
-                const Index r = row_reduce ? selected_rows[0] : remaining[i];
-                const Index c = row_reduce ? remaining[i] : selected_cols[0];
+                const Index r = select_columns ? selected_rows[0] : remaining[i];
+                const Index c = select_columns ? remaining[i] : selected_cols[0];
                 out_vec(static_cast<Index>(i)) = matrix_at<std::string>(static_cast<Index>(row))(r, c);
             }
         }
@@ -466,7 +456,7 @@ DataSeries DataSeries::at(
 }
 
 // =========================================================================
-// DataSeries â€?at (private helpers)
+// DataSeries -- at (private helpers)
 // =========================================================================
 
 DataSeries DataSeries::at_vector_string_impl(const std::vector<Index>& selected) const {
@@ -505,7 +495,7 @@ DataSeries DataSeries::at_matrix_string_impl(
 }
 
 // =========================================================================
-// DataSeries â€?private: validate_schema / make_storage
+// DataSeries -- private: validate_schema / make_storage
 // =========================================================================
 
 void DataSeries::validate_schema(DataKind kind, const std::vector<Index>& shape) {
@@ -549,7 +539,7 @@ std::unique_ptr<SeriesStorage> DataSeries::make_storage(DataKind kind, DataType 
 }
 
 // =========================================================================
-// DataSeries â€?private: string storage accessors
+// DataSeries -- private: string storage accessors
 // =========================================================================
 
 VectorStringSeriesStorage* DataSeries::vector_storage_string() {
@@ -573,7 +563,7 @@ const MatrixStringSeriesStorage* DataSeries::matrix_storage_string() const {
 }
 
 // =========================================================================
-// DataSeries â€?private: fill helpers (non-template overloads)
+// DataSeries -- private: fill helpers (non-template overloads)
 // =========================================================================
 
 void DataSeries::fill_vector_row(Index row, const std::string& val, std::true_type) {
@@ -591,7 +581,7 @@ void DataSeries::fill_matrix_row(Index row, const std::string& val, std::true_ty
 }
 
 // =========================================================================
-// DataSeries â€?static factories (non-template overloads)
+// DataSeries -- static factories (non-template overloads)
 // =========================================================================
 
 DataSeries DataSeries::CreateScalarFromVector(const std::vector<std::string>& values,

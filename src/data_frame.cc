@@ -204,7 +204,7 @@ namespace xdataset
         headers_    = std::move(headers);
         total_rows_ = rows.size();
         rows_       = std::move(rows);
-        // No generator, no chunk loading â€?rows are fully materialised.
+        // No generator, no chunk loading ï¿½?rows are fully materialised.
         // Mark all rows as already loaded so base GetRow / EnsureChunkLoaded
         // works without a generator.
         loaded_chunks_.assign(
@@ -320,7 +320,9 @@ namespace xdataset
             all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
         }
 
-        const MultiDimensionSpec traversal_spec(dims);
+        MultiDimensionSpec traversal_spec;
+        for (const auto& d : dims)
+            traversal_spec.add_dimension(d);
         const std::size_t total_rows = dims.empty() ? 0 : traversal_spec.compute_cell_count();
         const std::size_t total_headers = all_headers.size();
         const Block*      b = &block;

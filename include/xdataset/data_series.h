@@ -117,7 +117,7 @@ public:
                                    const Unit& u = Unit(),
                                    const T& fill_val = T()) {
         static_assert(IsSupported<T>::value, "unsupported type");
-        DataSeries s(DataKind::kScalar, DTypeOf<T>::tag, {});
+        DataSeries s(DataKind::kScalar, DataTypeOf<T>::tag, {});
         s.set_unit(u);
         s.resize(rows);
         if (rows > 0) s.fill(fill_val);
@@ -129,7 +129,7 @@ public:
                                    const Unit& u = Unit(),
                                    const T& fill_val = T()) {
         static_assert(IsSupported<T>::value, "unsupported type");
-        DataSeries s(DataKind::kVector, DTypeOf<T>::tag, {width});
+        DataSeries s(DataKind::kVector, DataTypeOf<T>::tag, {width});
         s.set_unit(u);
         s.resize(rows);
         if (rows > 0) s.fill(fill_val);
@@ -142,7 +142,7 @@ public:
                                    const Unit& u = Unit(),
                                    const T& fill_val = T()) {
         static_assert(IsSupported<T>::value, "unsupported type");
-        DataSeries s(DataKind::kMatrix, DTypeOf<T>::tag, {cell_rows, cell_cols});
+        DataSeries s(DataKind::kMatrix, DataTypeOf<T>::tag, {cell_rows, cell_cols});
         s.set_unit(u);
         s.resize(n);
         if (n > 0) s.fill(fill_val);
@@ -160,7 +160,7 @@ public:
         static_assert(IsSupported<T>::value, "unsupported type");
         if (len > 0 && values == nullptr)
             throw std::invalid_argument("values pointer must not be null when len > 0");
-        DataSeries s(DataKind::kScalar, DTypeOf<T>::tag, {});
+        DataSeries s(DataKind::kScalar, DataTypeOf<T>::tag, {});
         s.set_unit(u);
         s.resize(len);
         std::copy(values, values + len, s.mutable_contiguous_data<T>());
@@ -179,13 +179,13 @@ public:
         if (w == 0) {
             if (len != 0)
                 throw std::invalid_argument("vector width 0 requires len = 0");
-            DataSeries s(DataKind::kVector, DTypeOf<T>::tag, {width});
+            DataSeries s(DataKind::kVector, DataTypeOf<T>::tag, {width});
             s.set_unit(u);
             return s;
         }
         if (len % w != 0)
             throw std::invalid_argument("vector flat data length must be a multiple of width");
-        DataSeries s(DataKind::kVector, DTypeOf<T>::tag, {width});
+        DataSeries s(DataKind::kVector, DataTypeOf<T>::tag, {width});
         s.set_unit(u);
         s.resize(len / w);
         std::copy(values, values + len, s.mutable_contiguous_data<T>());
@@ -205,13 +205,13 @@ public:
         if (elems == 0) {
             if (len != 0)
                 throw std::invalid_argument("zero-sized matrix cells require len = 0");
-            DataSeries s(DataKind::kMatrix, DTypeOf<T>::tag, {cell_rows, cell_cols});
+            DataSeries s(DataKind::kMatrix, DataTypeOf<T>::tag, {cell_rows, cell_cols});
             s.set_unit(u);
             return s;
         }
         if (len % elems != 0)
             throw std::invalid_argument("matrix flat data length must be a multiple of cell_rows * cell_cols");
-        DataSeries s(DataKind::kMatrix, DTypeOf<T>::tag, {cell_rows, cell_cols});
+        DataSeries s(DataKind::kMatrix, DataTypeOf<T>::tag, {cell_rows, cell_cols});
         s.set_unit(u);
         s.resize(len / elems);
         std::copy(values, values + len, s.mutable_contiguous_data<T>());
@@ -267,12 +267,12 @@ public:
     CreateVectorFromNestedVector(const std::vector<std::vector<T>>& rows,
                                  const Unit& u = Unit()) {
         if (rows.empty()) {
-            DataSeries s(DataKind::kVector, DTypeOf<T>::tag, {0});
+            DataSeries s(DataKind::kVector, DataTypeOf<T>::tag, {0});
             s.set_unit(u);
             return s;
         }
         const Index width = static_cast<Index>(rows[0].size());
-        DataSeries s(DataKind::kVector, DTypeOf<T>::tag, {width});
+        DataSeries s(DataKind::kVector, DataTypeOf<T>::tag, {width});
         s.set_unit(u);
         s.resize(rows.size());
         for (std::size_t i = 0; i < rows.size(); ++i) {
@@ -292,13 +292,13 @@ public:
     CreateMatrixFromNestedVector(const std::vector<std::vector<std::vector<T>>>& rows,
                                  const Unit& u = Unit()) {
         if (rows.empty()) {
-            DataSeries s(DataKind::kMatrix, DTypeOf<T>::tag, {0, 0});
+            DataSeries s(DataKind::kMatrix, DataTypeOf<T>::tag, {0, 0});
             s.set_unit(u);
             return s;
         }
         const Index cell_rows = static_cast<Index>(rows[0].size());
         const Index cell_cols = cell_rows > 0 ? static_cast<Index>(rows[0][0].size()) : 0;
-        DataSeries s(DataKind::kMatrix, DTypeOf<T>::tag, {cell_rows, cell_cols});
+        DataSeries s(DataKind::kMatrix, DataTypeOf<T>::tag, {cell_rows, cell_cols});
         s.set_unit(u);
         s.resize(rows.size());
         for (std::size_t i = 0; i < rows.size(); ++i) {
@@ -480,7 +480,7 @@ public:
 
     template <typename T>
     void fill(const T& val) {
-        if (data_type_ != DTypeOf<T>::tag) throw std::bad_cast();
+        if (data_type_ != DataTypeOf<T>::tag) throw std::bad_cast();
         for (std::size_t i = 0; i < size(); ++i) {
             if (data_kind_ == DataKind::kScalar) {
                 scalar_at<T>(static_cast<Index>(i)) = val;
@@ -494,7 +494,7 @@ public:
 
     template <typename T>
     typename std::enable_if<!std::is_same<T, std::string>::value, T*>::type mutable_contiguous_data() {
-        if (data_type_ != DTypeOf<T>::tag) throw std::bad_cast();
+        if (data_type_ != DataTypeOf<T>::tag) throw std::bad_cast();
         if (data_kind_ == DataKind::kScalar) return scalar_storage<T>()->data();
         if (data_kind_ == DataKind::kVector) return vector_storage_numeric<T>()->data();
         return matrix_storage_numeric<T>()->data();
@@ -502,7 +502,7 @@ public:
 
     template <typename T>
     typename std::enable_if<!std::is_same<T, std::string>::value, const T*>::type contiguous_data() const {
-        if (data_type_ != DTypeOf<T>::tag) throw std::bad_cast();
+        if (data_type_ != DataTypeOf<T>::tag) throw std::bad_cast();
         if (data_kind_ == DataKind::kScalar) return scalar_storage<T>()->data();
         if (data_kind_ == DataKind::kVector) return vector_storage_numeric<T>()->data();
         return matrix_storage_numeric<T>()->data();
@@ -520,18 +520,16 @@ public:
 
     Measurement measurement_at(Index i) const;
 
-    DataSeries at(const std::vector<Index>& selected, bool reduce_to_scalar = false) const;
+    DataSeries at(const std::vector<Index>& selected) const;
 
     DataSeries at(
         const std::vector<Index>& selected_rows,
-        const std::vector<Index>& selected_cols,
-        bool row_reduce = false,
-        bool col_reduce = false) const;
+        const std::vector<Index>& selected_cols) const;
 
 private:
     template <typename T>
     DataSeries at_vector_numeric_impl(const std::vector<Index>& selected) const {
-        DataSeries out(DataKind::kVector, DTypeOf<T>::tag, {static_cast<Index>(selected.size())});
+        DataSeries out(DataKind::kVector, DataTypeOf<T>::tag, {static_cast<Index>(selected.size())});
         out.resize(size());
         for (std::size_t row = 0; row < size(); ++row) {
             auto out_vec = out.vector_at<T>(static_cast<Index>(row));
@@ -550,7 +548,7 @@ private:
         const std::vector<Index>& selected_rows,
         const std::vector<Index>& selected_cols) const {
 
-        DataSeries out(DataKind::kMatrix, DTypeOf<T>::tag,
+        DataSeries out(DataKind::kMatrix, DataTypeOf<T>::tag,
                        {static_cast<Index>(selected_rows.size()),
                         static_cast<Index>(selected_cols.size())});
         out.resize(size());
@@ -578,25 +576,25 @@ private:
 
     template <typename T>
     ScalarSeriesStorage<T>* scalar_storage() {
-        if (data_kind_ != DataKind::kScalar || data_type_ != DTypeOf<T>::tag) throw std::bad_cast();
+        if (data_kind_ != DataKind::kScalar || data_type_ != DataTypeOf<T>::tag) throw std::bad_cast();
         return static_cast<ScalarSeriesStorage<T>*>(storage_.get());
     }
 
     template <typename T>
     const ScalarSeriesStorage<T>* scalar_storage() const {
-        if (data_kind_ != DataKind::kScalar || data_type_ != DTypeOf<T>::tag) throw std::bad_cast();
+        if (data_kind_ != DataKind::kScalar || data_type_ != DataTypeOf<T>::tag) throw std::bad_cast();
         return static_cast<const ScalarSeriesStorage<T>*>(storage_.get());
     }
 
     template <typename T>
     VectorNumericSeriesStorage<T>* vector_storage_numeric() {
-        if (data_kind_ != DataKind::kVector || data_type_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
+        if (data_kind_ != DataKind::kVector || data_type_ != DataTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
         return static_cast<VectorNumericSeriesStorage<T>*>(storage_.get());
     }
 
     template <typename T>
     const VectorNumericSeriesStorage<T>* vector_storage_numeric() const {
-        if (data_kind_ != DataKind::kVector || data_type_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
+        if (data_kind_ != DataKind::kVector || data_type_ != DataTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
         return static_cast<const VectorNumericSeriesStorage<T>*>(storage_.get());
     }
 
@@ -606,13 +604,13 @@ private:
 
     template <typename T>
     MatrixNumericSeriesStorage<T>* matrix_storage_numeric() {
-        if (data_kind_ != DataKind::kMatrix || data_type_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
+        if (data_kind_ != DataKind::kMatrix || data_type_ != DataTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
         return static_cast<MatrixNumericSeriesStorage<T>*>(storage_.get());
     }
 
     template <typename T>
     const MatrixNumericSeriesStorage<T>* matrix_storage_numeric() const {
-        if (data_kind_ != DataKind::kMatrix || data_type_ != DTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
+        if (data_kind_ != DataKind::kMatrix || data_type_ != DataTypeOf<T>::tag || std::is_same<T, std::string>::value) throw std::bad_cast();
         return static_cast<const MatrixNumericSeriesStorage<T>*>(storage_.get());
     }
 

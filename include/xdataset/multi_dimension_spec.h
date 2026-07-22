@@ -21,8 +21,6 @@ namespace xdataset
         using LeafRowVisitor = std::function<void(const LeafRow& leaf_row)>;
 
         MultiDimensionSpec();
-        
-        explicit MultiDimensionSpec(const std::vector<DimensionSpec>& dims);
 
         MultiDimensionSpec& add_regular(std::size_t size);
         
