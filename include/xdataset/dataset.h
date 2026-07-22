@@ -39,7 +39,7 @@ namespace xdataset
     //
     // ========================================================================
 
-    class Dataset
+    class XDATASET_API Dataset
     {
     public:
         /// result_type (e.g. "SP", "HB") -> Block

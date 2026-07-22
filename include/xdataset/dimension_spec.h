@@ -39,7 +39,7 @@ namespace xdataset
         }
     };
 
-    class DimensionSpec
+    class XDATASET_API DimensionSpec
     {
     public:
         static DimensionSpec Regular(std::size_t size);

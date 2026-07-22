@@ -6,7 +6,7 @@
 
 namespace xdataset
 {
-    class MultiIndexSelector
+    class XDATASET_API MultiIndexSelector
     {
     public:
         enum Kind

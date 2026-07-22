@@ -32,7 +32,7 @@ namespace xdataset
         std::vector<DependentSpec>   dependent_specs;
     };
 
-    class Block
+    class XDATASET_API Block
     {
     public:
         explicit Block(const BlockCreateInfo& info);

@@ -4,6 +4,8 @@
 #include <llnl-units/units.hpp>
 #include <string>
 
+#include "xdataset_predefine.h"
+
 namespace xdataset
 {
 
@@ -24,7 +26,7 @@ struct UnitScale {
     std::string name;   ///< Display-unit string (empty if dimensionless).
 };
 
-class Unit
+class XDATASET_API Unit
 {
 public:
     // ---- construction ---------------------------------------------------

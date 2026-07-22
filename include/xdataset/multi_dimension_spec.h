@@ -8,7 +8,7 @@
 
 namespace xdataset
 {
-    class MultiDimensionSpec
+    class XDATASET_API MultiDimensionSpec
     {
     public:
         struct LeafRow

@@ -21,7 +21,7 @@ namespace xdataset {
 
 class DataSeries;
 
-class DataSeries {
+class XDATASET_API DataSeries {
 public:
     class RowView;
     class ConstRowView;
@@ -797,31 +797,31 @@ inline DataSeries::const_iterator::reference DataSeries::const_iterator::operato
 // =========================================================================
 
 // DataSeries x DataSeries
-DataSeries operator+(const DataSeries& lhs, const DataSeries& rhs);
-DataSeries operator-(const DataSeries& lhs, const DataSeries& rhs);
-DataSeries operator*(const DataSeries& lhs, const DataSeries& rhs);
-DataSeries operator/(const DataSeries& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator+(const DataSeries& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator-(const DataSeries& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator*(const DataSeries& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator/(const DataSeries& lhs, const DataSeries& rhs);
 
 // DataSeries x Measurement (broadcast)
-DataSeries operator+(const DataSeries& lhs, const Measurement& rhs);
-DataSeries operator-(const DataSeries& lhs, const Measurement& rhs);
-DataSeries operator*(const DataSeries& lhs, const Measurement& rhs);
-DataSeries operator/(const DataSeries& lhs, const Measurement& rhs);
+XDATASET_API DataSeries operator+(const DataSeries& lhs, const Measurement& rhs);
+XDATASET_API DataSeries operator-(const DataSeries& lhs, const Measurement& rhs);
+XDATASET_API DataSeries operator*(const DataSeries& lhs, const Measurement& rhs);
+XDATASET_API DataSeries operator/(const DataSeries& lhs, const Measurement& rhs);
 
 // Measurement x DataSeries (broadcast)
-DataSeries operator+(const Measurement& lhs, const DataSeries& rhs);
-DataSeries operator-(const Measurement& lhs, const DataSeries& rhs);
-DataSeries operator*(const Measurement& lhs, const DataSeries& rhs);
-DataSeries operator/(const Measurement& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator+(const Measurement& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator-(const Measurement& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator*(const Measurement& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator/(const Measurement& lhs, const DataSeries& rhs);
 
 /// pow(base, exponent): exponent must be a dimensionless, non-String Measurement.
-DataSeries pow(const DataSeries& base, const Measurement& exp);
+XDATASET_API DataSeries pow(const DataSeries& base, const Measurement& exp);
 
 /// pow(base, exponent): broadcast a single Measurement base across every row of exponent.
-DataSeries pow(const Measurement& base, const DataSeries& exponent);
+XDATASET_API DataSeries pow(const Measurement& base, const DataSeries& exponent);
 
 /// pow(base, exponent): row-by-row pow, exponent series must be dimensionless.
-DataSeries pow(const DataSeries& base, const DataSeries& exponent);
+XDATASET_API DataSeries pow(const DataSeries& base, const DataSeries& exponent);
 
 }  // namespace xdataset
 

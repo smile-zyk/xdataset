@@ -3,6 +3,19 @@
 
 #include <Eigen/Dense>
 
+// ---------------------------------------------------------------------------
+//  Windows DLL export / import
+// ---------------------------------------------------------------------------
+#ifdef _WIN32
+  #ifdef XDATASET_BUILD_DLL
+    #define XDATASET_API __declspec(dllexport)
+  #else
+    #define XDATASET_API __declspec(dllimport)
+  #endif
+#else
+  #define XDATASET_API
+#endif
+
 namespace xdataset
 {
     using Index = Eigen::Index;

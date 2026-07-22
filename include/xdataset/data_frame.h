@@ -15,7 +15,7 @@ namespace xdataset
     // =========================================================================
     // DataFrameRow -- a single row in a DataFrame table
     // =========================================================================
-    struct DataFrameRow
+    struct XDATASET_API DataFrameRow
     {
         std::vector<Index>       multi_index;
         std::vector<Measurement> fields;
@@ -32,7 +32,7 @@ namespace xdataset
     // populates rows from their respective data sources.
     // =========================================================================
 
-    class DataFrame
+    class XDATASET_API DataFrame
     {
     public:
         const std::vector<std::string>& headers()   const { return headers_;   }
@@ -76,7 +76,7 @@ namespace xdataset
     // BlockDataFrame -- DataFrame backed by a Block's independent/dependent data
     // =========================================================================
     class Block;
-    class BlockDataFrame : public DataFrame
+    class XDATASET_API BlockDataFrame : public DataFrame
     {
     public:
         explicit BlockDataFrame(const Block& block);
@@ -86,7 +86,7 @@ namespace xdataset
     // DataArrayDataFrame -- DataFrame backed by a DataArray's data
     // =========================================================================
     class DataArray;
-    class DataArrayDataFrame : public DataFrame
+    class XDATASET_API DataArrayDataFrame : public DataFrame
     {
     public:
         explicit DataArrayDataFrame(const DataArray& variable);
@@ -105,7 +105,7 @@ namespace xdataset
     // Unlike BlockDataFrame / DataArrayDataFrame, there is no lazy loading
     // or chunk cache — the single row is stored eagerly.
     // =========================================================================
-    class MeasurementDataFrame : public DataFrame
+    class XDATASET_API MeasurementDataFrame : public DataFrame
     {
     public:
         MeasurementDataFrame(const Measurement& measurement, std::string name);

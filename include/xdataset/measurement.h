@@ -46,7 +46,7 @@ namespace xdataset
     //     variant alternative at construction time and cached.
     // =========================================================================
 
-    class Measurement
+    class XDATASET_API Measurement
     {
     public:
         // ----------------------------------
@@ -212,7 +212,7 @@ namespace xdataset
     //                         alternative to a human-readable string.
     // =========================================================================
 
-    struct MeasurementFormatter : public boost::static_visitor<std::string>
+    struct XDATASET_API MeasurementFormatter : public boost::static_visitor<std::string>
     {
         MeasurementFormatter() = default;
         explicit MeasurementFormatter(Unit u) : unit_(std::move(u)) {}
@@ -362,21 +362,21 @@ namespace xdataset
 
     /// DataKind promotion for binary ops (per the Scalar/Vector/Matrix table).
     /// Returns the result kind, or throws on incompatible combinations.
-    DataKind promoted_kind(DataKind a, DataKind b);
+    XDATASET_API DataKind promoted_kind(DataKind a, DataKind b);
 
     /// dtype promotion: Integer -> Real -> Complex.  String throws.
-    DataType promoted_dtype(DataType a, DataType b);
+    XDATASET_API DataType promoted_dtype(DataType a, DataType b);
 
     // Measurement x Measurement
-    Measurement operator+(const Measurement& lhs, const Measurement& rhs);
-    Measurement operator-(const Measurement& lhs, const Measurement& rhs);
-    Measurement operator*(const Measurement& lhs, const Measurement& rhs);
-    Measurement operator/(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator+(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator-(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator*(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator/(const Measurement& lhs, const Measurement& rhs);
 
     /// pow(base, exponent): exponent must be dimensionless, non-String.
     /// DataKind broadcasting applies (e.g. Scalar^Vector -> Vector).
     /// When exponent is non-scalar, base must also be dimensionless.
-    Measurement pow(const Measurement& base, const Measurement& exponent);
+    XDATASET_API Measurement pow(const Measurement& base, const Measurement& exponent);
 
 } // namespace xdataset
 

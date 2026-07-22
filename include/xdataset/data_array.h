@@ -28,7 +28,7 @@ namespace xdataset
         DataArrayKind kind = DataArrayKind::kDependent;
     };
 
-    class DataArray
+    class XDATASET_API DataArray
     {
     public:
         /// Placeholder name for temporary / derived DataArrays.
@@ -117,31 +117,31 @@ namespace xdataset
 namespace xdataset {
 
 // DataArray x DataArray
-DataArray operator+(const DataArray& lhs, const DataArray& rhs);
-DataArray operator-(const DataArray& lhs, const DataArray& rhs);
-DataArray operator*(const DataArray& lhs, const DataArray& rhs);
-DataArray operator/(const DataArray& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator+(const DataArray& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator-(const DataArray& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator*(const DataArray& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator/(const DataArray& lhs, const DataArray& rhs);
 
 // DataArray x Measurement (broadcast)
-DataArray operator+(const DataArray& lhs, const Measurement& rhs);
-DataArray operator-(const DataArray& lhs, const Measurement& rhs);
-DataArray operator*(const DataArray& lhs, const Measurement& rhs);
-DataArray operator/(const DataArray& lhs, const Measurement& rhs);
+XDATASET_API DataArray operator+(const DataArray& lhs, const Measurement& rhs);
+XDATASET_API DataArray operator-(const DataArray& lhs, const Measurement& rhs);
+XDATASET_API DataArray operator*(const DataArray& lhs, const Measurement& rhs);
+XDATASET_API DataArray operator/(const DataArray& lhs, const Measurement& rhs);
 
 // Measurement x DataArray (broadcast)
-DataArray operator+(const Measurement& lhs, const DataArray& rhs);
-DataArray operator-(const Measurement& lhs, const DataArray& rhs);
-DataArray operator*(const Measurement& lhs, const DataArray& rhs);
-DataArray operator/(const Measurement& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator+(const Measurement& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator-(const Measurement& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator*(const Measurement& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator/(const Measurement& lhs, const DataArray& rhs);
 
 /// pow(base, exponent): exponent must be a dimensionless, non-String Measurement.
-DataArray pow(const DataArray& base, const Measurement& exp);
+XDATASET_API DataArray pow(const DataArray& base, const Measurement& exp);
 
 /// pow(base, exponent): broadcast a single Measurement base across exponent's DataSeries.
-DataArray pow(const Measurement& base, const DataArray& exponent);
+XDATASET_API DataArray pow(const Measurement& base, const DataArray& exponent);
 
 /// pow(base, exponent): row-by-row pow, exponent array must be dimensionless.
-DataArray pow(const DataArray& base, const DataArray& exponent);
+XDATASET_API DataArray pow(const DataArray& base, const DataArray& exponent);
 
 } // namespace xdataset
 
