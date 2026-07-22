@@ -13,6 +13,20 @@ find_package(tsl-ordered-map CONFIG REQUIRED)
 find_package(llnl-units CONFIG REQUIRED)
 include(GoogleTest)
 
+# --- pybind11: find via Python ------------------------------------------
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+execute_process(
+    COMMAND ${Python3_EXECUTABLE} -m pybind11 --cmakedir
+    OUTPUT_VARIABLE pybind11_cmake_dir
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT pybind11_cmake_dir)
+    message(FATAL_ERROR "pybind11 not found via 'python -m pybind11 --cmakedir'")
+endif()
+list(APPEND CMAKE_PREFIX_PATH "${pybind11_cmake_dir}")
+find_package(pybind11 CONFIG REQUIRED)
+
 enable_testing()
 
 set(XDATASET_SOURCES
@@ -53,7 +67,7 @@ target_include_directories(xdataset PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include/x
 target_include_directories(xdataset_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(xdataset_playground PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(xdataset PUBLIC Eigen3::Eigen Boost::headers tsl::ordered_map llnl-units::units)
+target_link_libraries(xdataset PUBLIC Eigen3::Eigen Boost::headers tsl::ordered_map llnl-units::units pybind11::headers)
 target_link_libraries(xdataset_test PRIVATE xdataset GTest::gtest_main)
 target_link_libraries(xdataset_playground PRIVATE xdataset)
 
