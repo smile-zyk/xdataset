@@ -43,6 +43,14 @@ namespace xdataset
         std::string ToCsv() const;
         void        WriteToCsv(const std::string& file_path) const;
 
+        /// Return a human-readable ASCII table representation.
+        /// Only the first @p max_display_rows data rows are shown;
+        /// when row_count() exceeds this limit, an ellipsis row and
+        /// a footer indicate how many rows were omitted.
+        /// @param max_display_rows  Maximum number of data rows to show
+        ///                         (default 32).
+        std::string to_string(std::size_t max_display_rows = 32) const;
+
     protected:
         using RowGenerator = std::function<std::vector<DataFrameRow>(
             Index start_row,
@@ -53,7 +61,7 @@ namespace xdataset
         void ConfigureDynamic(std::vector<std::string> headers,
                               std::size_t total_rows,
                               RowGenerator generator,
-                              std::size_t chunk_size = 256);
+                              std::size_t chunk_size = 128);
 
         /// Configure with pre-built rows -- no lazy loading, no generator.
         /// Suitable for small DataFrames where caching is unnecessary.
@@ -65,7 +73,7 @@ namespace xdataset
 
         std::vector<std::string>   headers_;
         std::size_t                total_rows_  = 0;
-        std::size_t                chunk_size_  = 256;
+        std::size_t                chunk_size_  = 128;
         RowGenerator               generator_;
 
         mutable std::vector<DataFrameRow>  rows_;

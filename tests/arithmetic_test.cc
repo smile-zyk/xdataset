@@ -16,9 +16,6 @@ using xdataset::DataType;
 using xdataset::Index;
 using xdataset::Unit;
 using xdataset::DataArray;
-using xdataset::DataArrayKind;
-using xdataset::MultiDimensionSpec;
-using xdataset::DimensionSpec;
 
 // ---------------------------------------------------------------------------
 
@@ -1849,14 +1846,14 @@ TEST(MeasCmpTest, CmpUnitMismatchThrows)
 {
     Measurement a(1.0, Unit::parse("meter"));
     Measurement b(1.0, Unit::parse("sec"));
-    EXPECT_THROW(a == b, std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(a == b), std::invalid_argument);
 }
 
 TEST(MeasCmpTest, CmpStringThrows)
 {
     Measurement a(1.0);
     Measurement b(std::string("x"));
-    EXPECT_THROW(a == b, std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(a == b), std::invalid_argument);
 }
 
 // =========================================================================
@@ -2047,7 +2044,7 @@ TEST(DataSeriesCmpTest, CmpSizeMismatchThrows)
 {
     auto a = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
     auto b = DataSeries::CreateScalarFromVector<double>({1.0});
-    EXPECT_THROW(a == b, std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(a == b), std::invalid_argument);
 }
 
 // =========================================================================

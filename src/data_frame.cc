@@ -294,6 +294,125 @@ namespace xdataset
     }
 
     // =========================================================================
+    // to_string -- human-readable ASCII table
+    // =========================================================================
+
+    std::string DataFrame::to_string(std::size_t max_display_rows) const
+    {
+        // Column list: "#" for multi-index, then headers_
+        std::vector<std::string> columns;
+        columns.reserve(1 + headers_.size());
+        columns.emplace_back("#");
+        columns.insert(columns.end(), headers_.begin(), headers_.end());
+
+        const std::size_t num_cols = columns.size();
+        const std::size_t total    = total_rows_;
+
+        // ---- decide which rows to display (head only) ----
+        const bool        truncated = total > max_display_rows;
+        const std::size_t shown     = truncated ? max_display_rows : total;
+        const std::size_t omitted   = total - shown;
+
+        std::vector<std::size_t> display_indices;
+        display_indices.reserve(shown);
+        for (std::size_t i = 0; i < shown; ++i)
+            display_indices.push_back(i);
+
+        // ---- compute column widths ----
+        std::vector<std::size_t> widths(num_cols, 0);
+        for (std::size_t c = 0; c < num_cols; ++c)
+            widths[c] = columns[c].size();
+
+        for (std::size_t row_idx : display_indices)
+        {
+            const DataFrameRow& row = GetRow(static_cast<Index>(row_idx));
+            const std::string mi = row.FormatMultiIndex();
+            if (mi.size() > widths[0])
+                widths[0] = mi.size();
+            for (std::size_t c = 0; c < row.fields.size(); ++c)
+            {
+                const std::string fs = row.fields[c].to_string();
+                const std::size_t col = c + 1;
+                if (col < widths.size() && fs.size() > widths[col])
+                    widths[col] = fs.size();
+            }
+        }
+
+        // Ensure ellipsis "..." fits in every column when truncated
+        if (truncated)
+        {
+            for (std::size_t c = 0; c < num_cols; ++c)
+                if (widths[c] < 3)
+                    widths[c] = 3;
+        }
+
+        // ---- helper lambdas ----
+        static const std::string kEmpty;
+
+        auto make_border = [&](char corner, char tee, char end, char fill)
+        {
+            std::string s;
+            s += corner;
+            for (std::size_t c = 0; c < num_cols; ++c)
+            {
+                if (c > 0) s += tee;
+                s.append(widths[c] + 2, fill);
+            }
+            s += end;
+            s += '\n';
+            return s;
+        };
+
+        auto make_row = [&](const std::vector<std::string>& values)
+        {
+            std::string s;
+            s += '|';
+            for (std::size_t c = 0; c < num_cols; ++c)
+            {
+                const std::string& val = c < values.size() ? values[c] : kEmpty;
+                s += ' ';
+                s += val;
+                s.append(widths[c] - val.size() + 1, ' ');
+                s += '|';
+            }
+            s += '\n';
+            return s;
+        };
+
+        // ---- build output ----
+        std::ostringstream oss;
+
+        oss << make_border('+', '+', '+', '-');
+        oss << make_row(columns);
+        oss << make_border('+', '+', '+', '-');
+
+        for (std::size_t row_idx : display_indices)
+        {
+            const DataFrameRow& row = GetRow(static_cast<Index>(row_idx));
+            std::vector<std::string> vals;
+            vals.reserve(num_cols);
+            vals.push_back(row.FormatMultiIndex());
+            for (const Measurement& field : row.fields)
+                vals.push_back(field.to_string());
+            oss << make_row(vals);
+        }
+
+        if (truncated)
+        {
+            std::vector<std::string> dots(num_cols, "...");
+            oss << make_row(dots);
+        }
+
+        oss << make_border('+', '+', '+', '-');
+
+        if (truncated)
+            oss << "(" << omitted << " row" << (omitted != 1 ? "s" : "")
+                << " omitted, " << shown << " shown)\n";
+
+        return oss.str();
+    }
+
+    // =========================================================================
     // BlockDataFrame
     // =========================================================================
 

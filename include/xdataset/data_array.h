@@ -69,6 +69,8 @@ namespace xdataset
 
         const DataFrame& GetOrCreateDataFrame() const;
 
+        std::string to_string(std::size_t max_display_rows = 32) const;
+
         const tsl::ordered_map<std::string, DataSeries>& indep_datas() const
         {
             return indep_datas_;

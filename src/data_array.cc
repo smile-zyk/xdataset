@@ -114,6 +114,11 @@ namespace xdataset
         return *data_frame_cache_;
     }
 
+    std::string DataArray::to_string(std::size_t max_display_rows) const
+    {
+        return GetOrCreateDataFrame().to_string(max_display_rows);
+    }
+
     const DataSeries& DataArray::indep_data(Index index) const
     {
         if (index <= 0)

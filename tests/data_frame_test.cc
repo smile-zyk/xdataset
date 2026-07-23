@@ -221,4 +221,291 @@ namespace xdataset
             [](Index, Index) -> std::vector<DataFrameRow> { return {}; });
         EXPECT_THROW(model.WriteToCsv(""), std::invalid_argument);
     }
+
+    // =========================================================================
+    // DataFrame to_string (ASCII table)
+    // =========================================================================
+
+    TEST(DataFrameToStringTest, StaticSmallTableNoTruncation)
+    {
+        // 3 rows, max_display_rows=10 → all rows shown, no ellipsis
+        std::vector<DataFrameRow> rows;
+        for (int i = 0; i < 3; ++i)
+        {
+            DataFrameRow r;
+            r.multi_index = {i};
+            r.fields.push_back(Measurement(i * 10));
+            r.fields.push_back(Measurement(std::string(1, 'A' + i)));
+            rows.push_back(std::move(r));
+        }
+
+        TestDataFrame model;
+        model.ConfigureStatic({"val", "label"}, std::move(rows));
+
+        const std::string out = model.to_string(10);
+
+        // Should contain the header row
+        EXPECT_NE(out.find("| # "), std::string::npos);
+        EXPECT_NE(out.find("| val "), std::string::npos);
+        EXPECT_NE(out.find("| label "), std::string::npos);
+        // Should contain all data rows
+        EXPECT_NE(out.find("| 0 "), std::string::npos);
+        EXPECT_NE(out.find("| 1 "), std::string::npos);
+        EXPECT_NE(out.find("| 2 "), std::string::npos);
+        EXPECT_NE(out.find("| 0 "), std::string::npos);
+        EXPECT_NE(out.find("| 10 "), std::string::npos);
+        EXPECT_NE(out.find("| 20 "), std::string::npos);
+        EXPECT_NE(out.find("| A "), std::string::npos);
+        EXPECT_NE(out.find("| B "), std::string::npos);
+        EXPECT_NE(out.find("| C "), std::string::npos);
+        // No ellipsis and no footer
+        EXPECT_EQ(out.find("..."), std::string::npos);
+        EXPECT_EQ(out.find("omitted"), std::string::npos);
+    }
+
+    TEST(DataFrameToStringTest, StaticTruncatedHeadOnly)
+    {
+        // 10 rows, max_display_rows=6 → head-only truncation
+        // rows 0-5 shown, then ellipsis, then footer
+        std::vector<DataFrameRow> rows;
+        for (int i = 0; i < 10; ++i)
+        {
+            DataFrameRow r;
+            r.multi_index = {i};
+            r.fields.push_back(Measurement(i));
+            rows.push_back(std::move(r));
+        }
+
+        TestDataFrame model;
+        model.ConfigureStatic({"n"}, std::move(rows));
+
+        const std::string out = model.to_string(6);
+
+        // Should have ellipsis row at the end
+        EXPECT_NE(out.find("..."), std::string::npos);
+        // Footer: 4 rows omitted, 6 shown
+        EXPECT_NE(out.find("omitted"), std::string::npos);
+        EXPECT_NE(out.find("4 row"), std::string::npos);
+        EXPECT_NE(out.find("6 shown"), std::string::npos);
+        // Head rows 0-5 should appear
+        EXPECT_NE(out.find("| 0 "), std::string::npos);
+        EXPECT_NE(out.find("| 5 "), std::string::npos);
+        // Tail rows should NOT appear
+        EXPECT_EQ(out.find("| 6 "), std::string::npos);
+        EXPECT_EQ(out.find("| 9 "), std::string::npos);
+    }
+
+    TEST(DataFrameToStringTest, TruncationFooterPlural)
+    {
+        // 10 rows, max_display_rows=6 → 4 rows omitted (plural)
+        std::vector<DataFrameRow> rows;
+        for (int i = 0; i < 10; ++i)
+        {
+            DataFrameRow r;
+            r.multi_index = {i};
+            r.fields.push_back(Measurement(i));
+            rows.push_back(std::move(r));
+        }
+
+        TestDataFrame model;
+        model.ConfigureStatic({"n"}, std::move(rows));
+        const std::string out = model.to_string(6);
+        // Plural "4 rows omitted"
+        EXPECT_NE(out.find("4 rows omitted"), std::string::npos);
+    }
+
+    TEST(DataFrameToStringTest, TruncationFooterSingular)
+    {
+        // 9 rows, max_display_rows=8 → 1 row omitted (singular)
+        std::vector<DataFrameRow> rows;
+        for (int i = 0; i < 9; ++i)
+        {
+            DataFrameRow r;
+            r.multi_index = {i};
+            r.fields.push_back(Measurement(i));
+            rows.push_back(std::move(r));
+        }
+
+        TestDataFrame model;
+        model.ConfigureStatic({"n"}, std::move(rows));
+        const std::string out = model.to_string(8);
+        // Singular "1 row omitted"
+        EXPECT_NE(out.find("1 row omitted"), std::string::npos);
+    }
+
+    TEST(DataFrameToStringTest, ExactFitNoTruncation)
+    {
+        // 6 rows, max_display_rows=6 → exact fit, no truncation
+        std::vector<DataFrameRow> rows;
+        for (int i = 0; i < 6; ++i)
+        {
+            DataFrameRow r;
+            r.multi_index = {i};
+            r.fields.push_back(Measurement(i));
+            rows.push_back(std::move(r));
+        }
+
+        TestDataFrame model;
+        model.ConfigureStatic({"n"}, std::move(rows));
+        const std::string out = model.to_string(6);
+
+        EXPECT_EQ(out.find("..."), std::string::npos);
+        EXPECT_EQ(out.find("omitted"), std::string::npos);
+    }
+
+    TEST(DataFrameToStringTest, MaxDisplayRowsOf1Works)
+    {
+        // Passing 1 shows exactly 1 row (no clamp needed in head-only mode)
+        std::vector<DataFrameRow> rows;
+        for (int i = 0; i < 5; ++i)
+        {
+            DataFrameRow r;
+            r.multi_index = {i};
+            r.fields.push_back(Measurement(i));
+            rows.push_back(std::move(r));
+        }
+
+        TestDataFrame model;
+        model.ConfigureStatic({"n"}, std::move(rows));
+        const std::string out = model.to_string(1);
+
+        // Should show row 0 and then ellipsis + footer
+        EXPECT_NE(out.find("| 0 "), std::string::npos);
+        EXPECT_NE(out.find("..."), std::string::npos);
+        EXPECT_NE(out.find("4 rows omitted"), std::string::npos);
+        // Should be a valid table
+        EXPECT_NE(out.find('+'), std::string::npos);
+        EXPECT_NE(out.find('|'), std::string::npos);
+    }
+
+    TEST(DataFrameToStringTest, DefaultParameterIs32)
+    {
+        // Only 10 rows — default 32 should show all without truncation
+        std::vector<DataFrameRow> rows;
+        for (int i = 0; i < 10; ++i)
+        {
+            DataFrameRow r;
+            r.multi_index = {i};
+            r.fields.push_back(Measurement(i));
+            rows.push_back(std::move(r));
+        }
+
+        TestDataFrame model;
+        model.ConfigureStatic({"n"}, std::move(rows));
+        const std::string out = model.to_string();  // default = 32
+
+        EXPECT_EQ(out.find("..."), std::string::npos);
+        EXPECT_EQ(out.find("omitted"), std::string::npos);
+        EXPECT_NE(out.find("| 0 "), std::string::npos);
+        EXPECT_NE(out.find("| 9 "), std::string::npos);
+    }
+
+    TEST(DataFrameToStringTest, FromBlockNoTruncation)
+    {
+        Block block(MakeValueRichCreateInfo());
+        const DataFrame& table = block.GetOrCreateDataFrame();
+
+        const std::string out = table.to_string(10);
+
+        // 2×3 = 6 rows, all should fit
+        EXPECT_EQ(out.find("..."), std::string::npos);
+        EXPECT_EQ(out.find("omitted"), std::string::npos);
+        // Header
+        EXPECT_NE(out.find("| # "), std::string::npos);
+        EXPECT_NE(out.find("| x "), std::string::npos);
+        EXPECT_NE(out.find("| y "), std::string::npos);
+        EXPECT_NE(out.find("| z "), std::string::npos);
+        // Data
+        EXPECT_NE(out.find("0,0"), std::string::npos);
+        EXPECT_NE(out.find("1,2"), std::string::npos);
+    }
+
+    TEST(DataFrameToStringTest, FromBlockTruncated)
+    {
+        // 2×3×4 = 24 rows, max_display_rows=8 → truncation
+        Block block(MakeThreeDimMultiDepCreateInfo());
+        const DataFrame& table = block.GetOrCreateDataFrame();
+
+        const std::string out = table.to_string(8);
+
+        EXPECT_NE(out.find("..."), std::string::npos);
+        EXPECT_NE(out.find("omitted"), std::string::npos);
+    }
+
+    TEST(DataFrameToStringTest, FromDataArrayNoTruncation)
+    {
+        Block block(MakeValueRichCreateInfo());
+        DataArray arr = block.GetOrCreateDataArray("z");
+        const DataFrame& table = arr.GetOrCreateDataFrame();
+
+        const std::string out = table.to_string(10);
+
+        EXPECT_EQ(out.find("..."), std::string::npos);
+        EXPECT_EQ(out.find("omitted"), std::string::npos);
+        EXPECT_NE(out.find("| # "), std::string::npos);
+        EXPECT_NE(out.find("| data "), std::string::npos);
+    }
+
+    TEST(DataFrameToStringTest, HasTableBorders)
+    {
+        std::vector<DataFrameRow> rows;
+        DataFrameRow r;
+        r.multi_index = {0};
+        r.fields.push_back(Measurement(42));
+        rows.push_back(std::move(r));
+
+        TestDataFrame model;
+        model.ConfigureStatic({"val"}, std::move(rows));
+        const std::string out = model.to_string();
+
+        // Should have box-drawing characters
+        EXPECT_NE(out.find('+'), std::string::npos);
+        EXPECT_NE(out.find('|'), std::string::npos);
+        EXPECT_NE(out.find('-'), std::string::npos);
+    }
+
+    TEST(DataFrameToStringTest, WideColumnAlignment)
+    {
+        // Values of differing lengths should still produce aligned columns
+        std::vector<DataFrameRow> rows;
+        {
+            DataFrameRow r;
+            r.multi_index = {0};
+            r.fields.push_back(Measurement(1));
+            r.fields.push_back(Measurement(std::string("short")));
+            rows.push_back(std::move(r));
+        }
+        {
+            DataFrameRow r;
+            r.multi_index = {1};
+            r.fields.push_back(Measurement(99999));
+            r.fields.push_back(Measurement(std::string("very_long_string")));
+            rows.push_back(std::move(r));
+        }
+
+        TestDataFrame model;
+        model.ConfigureStatic({"num", "text"}, std::move(rows));
+        const std::string out = model.to_string();
+
+        // Both rows present
+        EXPECT_NE(out.find("short"), std::string::npos);
+        EXPECT_NE(out.find("very_long_string"), std::string::npos);
+        // Borders present (implies not broken)
+        EXPECT_NE(out.find('+'), std::string::npos);
+    }
+
+    TEST(DataFrameToStringTest, WithMultiIndex)
+    {
+        std::vector<DataFrameRow> rows;
+        DataFrameRow r;
+        r.multi_index = {1, 2, 3};
+        r.fields.push_back(Measurement(100.0));
+        rows.push_back(std::move(r));
+
+        TestDataFrame model;
+        model.ConfigureStatic({"val"}, std::move(rows));
+        const std::string out = model.to_string();
+
+        EXPECT_NE(out.find("1,2,3"), std::string::npos);
+    }
 } // namespace xdataset
