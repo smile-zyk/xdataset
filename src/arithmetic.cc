@@ -3,20 +3,28 @@
 // =============================================================================
 //
 //  All binary arithmetic for the type system lives in this single translation
-//  unit, organised in four sections:
+//  unit, organised in sections:
 //
-//    Sec.1  Type promotion helpers  -- promoted_dtype / promoted_kind
-//    Sec.2  Measurement  vs  Measurement  -- + - * / pow
-//    Sec.3  DataSeries  vs  DataSeries   -- + - * / (delegates to Sec.2)
-//    Sec.4  DataSeries  vs  Measurement  -- + - * / pow (delegates to Sec.2)
-//    Sec.5  DataArray  vs  DataArray     -- + - * / (delegates to Sec.3)
-//    Sec.6  DataArray  vs  Measurement   -- + - * / (delegates to Sec.4)
-//    Sec.7  pow(DataArray, Measurement)
+//    Sec.1  Type promotion helpers
+//    Sec.2  Measurement  vs  Measurement  -- all binary & unary (leaf impl)
+//    Sec.3  DataSeries  vs  DataSeries   -- delegates to Sec.2
+//    Sec.4  DataSeries  vs  Measurement  -- delegates to Sec.2
+//    Sec.5  Measurement  vs  DataSeries  -- delegates to Sec.2
+//    Sec.6  DataArray   vs  DataArray    -- delegates to Sec.3
+//    Sec.7  DataArray   vs  Measurement  -- delegates to Sec.4
+//    Sec.8  Measurement vs  DataArray    -- delegates to Sec.5
+//    Sec.9  pow (DataSeries / DataArray / Measurement overloads)
+//    Sec.10 DataArray / DataSeries unary operators
+//
+//  Operators are grouped by OpCategory, which drives dimension checks,
+//  result DataType policy, and operand-type constraints at the engine
+//  level — no per-operator boolean flags are needed.
 //
 //  Design principle: the Measurement operators (Sec.2) are the sole "leaf"
 //  implementation that touches element-level storage.  DataSeries operators
-//  (Sec.3, Sec.4) are thin wrappers: they canonicalise, validate, then delegate
-//  per-row work to the Measurement layer.
+//  (Sec.3-5) are thin wrappers: they canonicalise, validate, then delegate
+//  per-row work to the Measurement layer.  DataArray operators (Sec.6-8)
+//  validate coordinate compatibility then delegate to DataSeries.
 // =============================================================================
 
 #include "data_series.h"
@@ -184,17 +192,37 @@ inline void get_shape(const Measurement& a, const Measurement& b,
 }
 
 // =========================================================================
-//  Operator trait: captures the per-op differences
+//  OpCategory -- classifies binary operators by their semantic behaviour
+// =========================================================================
+//
+//  The category drives every behavioural difference in the generic
+//  meas_binop engine: dimension/unit checks, result-dtype policy, and
+//  operand-type requirements.  No separate boolean flags are needed.
+
+enum class OpCategory {
+    kAddSub,   // unit from resolve_add_sub_unit; dtype promoted
+    kMul,      // unit = a * b;                dtype promoted
+    kDiv,      // unit = a / b;                dtype promoted, int/int → Real
+    kCompare,  // unit = dimensionless;        dtype Integer; same-dim required
+    kLogical,  // unit = dimensionless;        dtype Integer
+    kBitwise,  // unit = dimensionless;        dtype Integer; integer-only
+    kShift,    // unit from left operand;      dtype Integer; integer-only
+    kMod,      // unit from left operand;      dtype promoted
+};
+
+// =========================================================================
+//  Operator trait: the per-op differences not covered by the category
 // =========================================================================
 
 struct MeasOpTraits {
     const char*  op_name;
-    bool         require_same_dim;   // + - require it; * / pow do not
-    bool         int_div_to_real;    // / needs it; + - * pow do not
+    OpCategory   category;
+
+    // Unit derivation.  For kAddSub this is resolve_add_sub_unit; for
+    // kMul/kDiv it is the obvious * /; for dimensionless results it
+    // returns Unit().
     std::function<Unit(const Unit&, const Unit&)> derive_unit;
 
-    // The scalar element operation (all operands are canonicalised double or
-    // complex; int-overflow comes from meas_as_int directly).
     double (*real_op)(double, double);
     std::complex<double> (*cplx_op)(std::complex<double>, std::complex<double>);
     int    (*int_op)(int, int);
@@ -206,18 +234,34 @@ struct MeasOpTraits {
 
 Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
                        const MeasOpTraits& tr) {
+    // --- derive behavioural flags from the category ------------------------
+    const bool require_same_base_unit = (tr.category == OpCategory::kCompare);
+    const bool int_div_to_real  = (tr.category == OpCategory::kDiv);
+    const bool force_integer    = (tr.category == OpCategory::kCompare ||
+                                   tr.category == OpCategory::kLogical ||
+                                   tr.category == OpCategory::kBitwise  ||
+                                   tr.category == OpCategory::kShift);
+    const bool integer_only     = (tr.category == OpCategory::kBitwise ||
+                                   tr.category == OpCategory::kShift);
+
     // --- Step 1: validation ------------------------------------------------
     if (lhs.data_type() == DataType::kString || rhs.data_type() == DataType::kString)
         throw std::invalid_argument(
             std::string(tr.op_name) + ": string cannot participate in arithmetic");
     promoted_kind(lhs.data_kind(), rhs.data_kind());  // throws on VectorxMatrix
 
+    if (integer_only) {
+        if (lhs.data_type() != DataType::kInteger || rhs.data_type() != DataType::kInteger)
+            throw std::invalid_argument(
+                std::string(tr.op_name) + ": requires Integer operands");
+    }
+
     // --- Step 2: canonicalise ----------------------------------------------
     Measurement a = lhs.canonicalized();
     Measurement b = rhs.canonicalized();
 
-    // --- Step 3: unit check (+ / -) ----------------------------------------
-    if (tr.require_same_dim && !a.unit().same_dimension(b.unit()))
+    // --- Step 3: unit check -----------------------------------------------
+    if (require_same_base_unit && !a.unit().same_dimension(b.unit()))
         throw std::invalid_argument(
             std::string(tr.op_name) + ": unit dimension mismatch [" +
             a.unit().to_string() + "] vs [" + b.unit().to_string() + "]");
@@ -225,9 +269,11 @@ Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
     // --- Step 4: result metadata -------------------------------------------
     DataKind  res_kind  = promoted_kind(a.data_kind(), b.data_kind());
     DataType  res_dtype = promoted_dtype(a.data_type(), b.data_type());
-    if (tr.int_div_to_real &&
+    if (int_div_to_real &&
         a.data_type() == DataType::kInteger && b.data_type() == DataType::kInteger)
         res_dtype = DataType::kReal;
+    if (force_integer)
+        res_dtype = DataType::kInteger;
 
     Index a_cnt = meas_element_count(a);
     Index b_cnt = meas_element_count(b);
@@ -266,27 +312,55 @@ Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
         return make_matrix_cplx(m, result_unit);
     }
 
-    // Integer path (only when both are Integer and op is + - *)
+    // Integer path
     if (res_dtype == DataType::kInteger) {
+        // When force_integer is true but operands aren't Integer, compute
+        // via the Real/Complex path then cast to int.
+        bool pure_int = (a.data_type() == DataType::kInteger) &&
+                        (b.data_type() == DataType::kInteger);
+
         if (res_kind == DataKind::kScalar) {
-            return make_scalar_int(tr.int_op(
-                meas_as_int(a, 0), meas_as_int(b, 0)), result_unit);
+            if (pure_int)
+                return make_scalar_int(tr.int_op(meas_as_int(a, 0), meas_as_int(b, 0)), result_unit);
+            if (a.data_type() == DataType::kComplex || b.data_type() == DataType::kComplex) {
+                auto c = tr.cplx_op(meas_as_complex(a, 0), meas_as_complex(b, 0));
+                return make_scalar_int(static_cast<int>(c.real()), result_unit);
+            }
+            return make_scalar_int(
+                static_cast<int>(tr.real_op(meas_as_double(a, 0), meas_as_double(b, 0))),
+                result_unit);
         }
         if (res_kind == DataKind::kVector) {
             Eigen::VectorXi v(n_elems);
-            for (Index i = 0; i < n_elems; ++i)
-                v(i) = tr.int_op(meas_as_int(a, a_broad ? 0 : i),
-                                  meas_as_int(b, b_broad ? 0 : i));
+            for (Index i = 0; i < n_elems; ++i) {
+                if (pure_int)
+                    v(i) = tr.int_op(meas_as_int(a, a_broad ? 0 : i), meas_as_int(b, b_broad ? 0 : i));
+                else if (a.data_type() == DataType::kComplex || b.data_type() == DataType::kComplex)
+                    v(i) = static_cast<int>(tr.cplx_op(meas_as_complex(a, a_broad ? 0 : i),
+                                                         meas_as_complex(b, b_broad ? 0 : i)).real());
+                else
+                    v(i) = static_cast<int>(tr.real_op(meas_as_double(a, a_broad ? 0 : i),
+                                                        meas_as_double(b, b_broad ? 0 : i)));
+            }
             return make_vector_int(v, result_unit);
         }
+        // Matrix
         Index rows, cols; get_shape(a, b, rows, cols);
         Eigen::MatrixXi m(rows, cols);
-        for (Index r = 0; r < rows; ++r)
+        for (Index r = 0; r < rows; ++r) {
             for (Index c = 0; c < cols; ++c) {
                 Index ai = a_broad ? 0 : r * cols + c;
                 Index bi = b_broad ? 0 : r * cols + c;
-                m(r, c) = tr.int_op(meas_as_int(a, ai), meas_as_int(b, bi));
+                if (pure_int)
+                    m(r, c) = tr.int_op(meas_as_int(a, ai), meas_as_int(b, bi));
+                else if (a.data_type() == DataType::kComplex || b.data_type() == DataType::kComplex)
+                    m(r, c) = static_cast<int>(tr.cplx_op(meas_as_complex(a, ai),
+                                                            meas_as_complex(b, bi)).real());
+                else
+                    m(r, c) = static_cast<int>(tr.real_op(meas_as_double(a, ai),
+                                                            meas_as_double(b, bi)));
             }
+        }
         return make_matrix_int(m, result_unit);
     }
 
@@ -350,17 +424,124 @@ inline Unit resolve_add_sub_unit(const Unit& a, const Unit& b) {
 }
 
 const MeasOpTraits kMeasAdd = {
-    "operator+", false, false, resolve_add_sub_unit, op_add_d, op_add_c, op_add_i};
+    "operator+", OpCategory::kAddSub, resolve_add_sub_unit, op_add_d, op_add_c, op_add_i};
 const MeasOpTraits kMeasSub = {
-    "operator-", false, false, resolve_add_sub_unit, op_sub_d, op_sub_c, op_sub_i};
+    "operator-", OpCategory::kAddSub, resolve_add_sub_unit, op_sub_d, op_sub_c, op_sub_i};
 const MeasOpTraits kMeasMul = {
-    "operator*", false, false,
+    "operator*", OpCategory::kMul,
     [](const Unit& a, const Unit& b) { return a * b; },
     op_mul_d, op_mul_c, op_mul_i};
 const MeasOpTraits kMeasDiv = {
-    "operator/", false, true,
+    "operator/", OpCategory::kDiv,
     [](const Unit& a, const Unit& b) { return a / b; },
     op_div_d, op_div_c, op_div_i};
+
+// =========================================================================
+//  Traits for new operators
+// =========================================================================
+
+// --- Comparison operators -------------------------------------------------
+// Unit: both sides must be dimensionless or share dimension.
+// Result: Integer 0/1, dimensionless.
+
+inline int op_eq_i(int a, int b) { return a == b ? 1 : 0; }
+inline double op_eq_d(double a, double b) { return a == b ? 1.0 : 0.0; }
+inline std::complex<double> op_eq_c(std::complex<double> a, std::complex<double> b) {
+    return (a == b) ? std::complex<double>(1.0, 0.0) : std::complex<double>(0.0, 0.0);
+}
+
+inline int op_ne_i(int a, int b) { return a != b ? 1 : 0; }
+inline double op_ne_d(double a, double b) { return a != b ? 1.0 : 0.0; }
+inline std::complex<double> op_ne_c(std::complex<double> a, std::complex<double> b) {
+    return (a != b) ? std::complex<double>(1.0, 0.0) : std::complex<double>(0.0, 0.0);
+}
+
+inline int op_lt_i(int a, int b) { return a < b ? 1 : 0; }
+inline double op_lt_d(double a, double b) { return a < b ? 1.0 : 0.0; }
+inline std::complex<double> op_lt_c(std::complex<double> a, std::complex<double> b) {
+    return (std::abs(a) < std::abs(b)) ? std::complex<double>(1.0, 0.0) : std::complex<double>(0.0, 0.0);
+}
+
+inline int op_gt_i(int a, int b) { return a > b ? 1 : 0; }
+inline double op_gt_d(double a, double b) { return a > b ? 1.0 : 0.0; }
+inline std::complex<double> op_gt_c(std::complex<double> a, std::complex<double> b) {
+    return (std::abs(a) > std::abs(b)) ? std::complex<double>(1.0, 0.0) : std::complex<double>(0.0, 0.0);
+}
+
+inline int op_le_i(int a, int b) { return a <= b ? 1 : 0; }
+inline double op_le_d(double a, double b) { return a <= b ? 1.0 : 0.0; }
+inline std::complex<double> op_le_c(std::complex<double> a, std::complex<double> b) {
+    return (std::abs(a) <= std::abs(b)) ? std::complex<double>(1.0, 0.0) : std::complex<double>(0.0, 0.0);
+}
+
+inline int op_ge_i(int a, int b) { return a >= b ? 1 : 0; }
+inline double op_ge_d(double a, double b) { return a >= b ? 1.0 : 0.0; }
+inline std::complex<double> op_ge_c(std::complex<double> a, std::complex<double> b) {
+    return (std::abs(a) >= std::abs(b)) ? std::complex<double>(1.0, 0.0) : std::complex<double>(0.0, 0.0);
+}
+
+/// Unit derivation for comparison: both sides must be compatible.
+/// Returns dimensionless (comparison result carries no unit).
+inline Unit unit_cmp(const Unit&, const Unit&) { return Unit(); }
+
+const MeasOpTraits kMeasEq  = {"operator==",  OpCategory::kCompare, unit_cmp, op_eq_d, op_eq_c, op_eq_i};
+const MeasOpTraits kMeasNeq = {"operator!=", OpCategory::kCompare, unit_cmp, op_ne_d, op_ne_c, op_ne_i};
+const MeasOpTraits kMeasLt  = {"operator<",  OpCategory::kCompare, unit_cmp, op_lt_d, op_lt_c, op_lt_i};
+const MeasOpTraits kMeasGt  = {"operator>",  OpCategory::kCompare, unit_cmp, op_gt_d, op_gt_c, op_gt_i};
+const MeasOpTraits kMeasLe  = {"operator<=", OpCategory::kCompare, unit_cmp, op_le_d, op_le_c, op_le_i};
+const MeasOpTraits kMeasGe  = {"operator>=", OpCategory::kCompare, unit_cmp, op_ge_d, op_ge_c, op_ge_i};
+
+// --- Logical operators ----------------------------------------------------
+// Result: Integer 0/1, dimensionless.  Non-zero is truthy.
+
+/// Convert a real value to its truthiness (0 or 1).
+inline int truthy(double v) { return v != 0.0 ? 1 : 0; }
+inline int truthy(int v) { return v != 0 ? 1 : 0; }
+inline int truthy(std::complex<double> v) { return (v.real() != 0.0 || v.imag() != 0.0) ? 1 : 0; }
+
+inline int op_and_i(int a, int b) { return (truthy(a) && truthy(b)) ? 1 : 0; }
+inline double op_and_d(double a, double b) { return (truthy(a) && truthy(b)) ? 1.0 : 0.0; }
+inline std::complex<double> op_and_c(std::complex<double> a, std::complex<double> b) {
+    return (truthy(a) && truthy(b)) ? std::complex<double>(1.0, 0.0) : std::complex<double>(0.0, 0.0);
+}
+
+inline int op_or_i(int a, int b) { return (truthy(a) || truthy(b)) ? 1 : 0; }
+inline double op_or_d(double a, double b) { return (truthy(a) || truthy(b)) ? 1.0 : 0.0; }
+inline std::complex<double> op_or_c(std::complex<double> a, std::complex<double> b) {
+    return (truthy(a) || truthy(b)) ? std::complex<double>(1.0, 0.0) : std::complex<double>(0.0, 0.0);
+}
+
+inline Unit unit_logical(const Unit&, const Unit&) { return Unit(); }
+
+const MeasOpTraits kMeasAnd = {"operator&&", OpCategory::kLogical, unit_logical, op_and_d, op_and_c, op_and_i};
+const MeasOpTraits kMeasOr  = {"operator||", OpCategory::kLogical, unit_logical, op_or_d, op_or_c, op_or_i};
+
+// --- Bitwise operators (Integer only) -------------------------------------
+
+inline int op_bit_and_i(int a, int b) { return a & b; }
+inline int op_bit_or_i(int a, int b)  { return a | b; }
+inline int op_bit_xor_i(int a, int b) { return a ^ b; }
+
+const MeasOpTraits kMeasBitAnd = {"operator&", OpCategory::kBitwise, unit_logical, nullptr, nullptr, op_bit_and_i};
+const MeasOpTraits kMeasBitOr  = {"operator|", OpCategory::kBitwise, unit_logical, nullptr, nullptr, op_bit_or_i};
+const MeasOpTraits kMeasBitXor = {"operator^", OpCategory::kBitwise, unit_logical, nullptr, nullptr, op_bit_xor_i};
+
+// --- Shift operators (Integer only) ---------------------------------------
+inline int op_shl_i(int a, int b) { return a << b; }
+inline int op_shr_i(int a, int b) { return a >> b; }
+inline Unit unit_left_only(const Unit& a, const Unit&) { return a; }
+
+const MeasOpTraits kMeasShl = {"operator<<", OpCategory::kShift, unit_left_only, nullptr, nullptr, op_shl_i};
+const MeasOpTraits kMeasShr = {"operator>>", OpCategory::kShift, unit_left_only, nullptr, nullptr, op_shr_i};
+
+// --- Modulo ---------------------------------------------------------------
+inline int op_mod_i(int a, int b) { return a % b; }
+inline double op_mod_d(double a, double b) { return std::fmod(a, b); }
+inline std::complex<double> op_mod_c(std::complex<double>, std::complex<double>) {
+    throw std::invalid_argument("operator%: complex modulo is not supported");
+}
+
+const MeasOpTraits kMeasMod = {"operator%", OpCategory::kMod, unit_left_only, op_mod_d, op_mod_c, op_mod_i};
 
 }  // anonymous namespace
 
@@ -464,6 +645,201 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
     return make_matrix_real(mat, result_unit);
 }
 
+// =========================================================================
+//  Measurement comparison / logical / bitwise / shift / modulo
+// =========================================================================
+
+Measurement operator==(const Measurement& lhs, const Measurement& rhs) {
+    return meas_binop(lhs, rhs, kMeasEq);
+}
+
+Measurement operator!=(const Measurement& lhs, const Measurement& rhs) {
+    return meas_binop(lhs, rhs, kMeasNeq);
+}
+
+Measurement operator<(const Measurement& lhs, const Measurement& rhs) {
+    return meas_binop(lhs, rhs, kMeasLt);
+}
+
+Measurement operator>(const Measurement& lhs, const Measurement& rhs) {
+    return meas_binop(lhs, rhs, kMeasGt);
+}
+
+Measurement operator<=(const Measurement& lhs, const Measurement& rhs) {
+    return meas_binop(lhs, rhs, kMeasLe);
+}
+
+Measurement operator>=(const Measurement& lhs, const Measurement& rhs) {
+    return meas_binop(lhs, rhs, kMeasGe);
+}
+
+Measurement operator&&(const Measurement& lhs, const Measurement& rhs) {
+    return meas_binop(lhs, rhs, kMeasAnd);
+}
+
+Measurement operator||(const Measurement& lhs, const Measurement& rhs) {
+    return meas_binop(lhs, rhs, kMeasOr);
+}
+
+Measurement operator&(const Measurement& lhs, const Measurement& rhs) {
+    return meas_binop(lhs, rhs, kMeasBitAnd);
+}
+
+Measurement operator|(const Measurement& lhs, const Measurement& rhs) {
+    return meas_binop(lhs, rhs, kMeasBitOr);
+}
+
+Measurement operator^(const Measurement& lhs, const Measurement& rhs) {
+    return meas_binop(lhs, rhs, kMeasBitXor);
+}
+
+Measurement operator<<(const Measurement& lhs, const Measurement& rhs) {
+    return meas_binop(lhs, rhs, kMeasShl);
+}
+
+Measurement operator>>(const Measurement& lhs, const Measurement& rhs) {
+    return meas_binop(lhs, rhs, kMeasShr);
+}
+
+Measurement operator%(const Measurement& lhs, const Measurement& rhs) {
+    return meas_binop(lhs, rhs, kMeasMod);
+}
+
+// =========================================================================
+//  Measurement unary operators (member functions)
+// =========================================================================
+
+Measurement Measurement::operator-() const {
+    if (data_type() == DataType::kString)
+        throw std::invalid_argument("unary -: string is not supported");
+
+    Measurement a = canonicalized();
+
+    switch (a.data_kind()) {
+        case DataKind::kScalar: {
+            switch (a.data_type()) {
+                case DataType::kInteger: return make_scalar_int(-meas_as_int(a, 0), a.unit());
+                case DataType::kReal:    return make_scalar_real(-meas_as_double(a, 0), a.unit());
+                case DataType::kComplex: return make_scalar_cplx(-meas_as_complex(a, 0), a.unit());
+                default: break;
+            }
+            break;
+        }
+        case DataKind::kVector: {
+            Index n = meas_element_count(a);
+            switch (a.data_type()) {
+                case DataType::kInteger: {
+                    Eigen::VectorXi v(n);
+                    for (Index i = 0; i < n; ++i) v(i) = -meas_as_int(a, i);
+                    return make_vector_int(v, a.unit());
+                }
+                case DataType::kReal: {
+                    Eigen::VectorXd v(n);
+                    for (Index i = 0; i < n; ++i) v(i) = -meas_as_double(a, i);
+                    return make_vector_real(v, a.unit());
+                }
+                case DataType::kComplex: {
+                    Eigen::VectorXcd v(n);
+                    for (Index i = 0; i < n; ++i) v(i) = -meas_as_complex(a, i);
+                    return make_vector_cplx(v, a.unit());
+                }
+                default: break;
+            }
+            break;
+        }
+        case DataKind::kMatrix: {
+            Index rows = a.shape()[0], cols = a.shape()[1];
+            switch (a.data_type()) {
+                case DataType::kInteger: {
+                    Eigen::MatrixXi m(rows, cols);
+                    for (Index r = 0; r < rows; ++r)
+                        for (Index c = 0; c < cols; ++c)
+                            m(r, c) = -meas_as_int(a, r * cols + c);
+                    return make_matrix_int(m, a.unit());
+                }
+                case DataType::kReal: {
+                    Eigen::MatrixXd m(rows, cols);
+                    for (Index r = 0; r < rows; ++r)
+                        for (Index c = 0; c < cols; ++c)
+                            m(r, c) = -meas_as_double(a, r * cols + c);
+                    return make_matrix_real(m, a.unit());
+                }
+                case DataType::kComplex: {
+                    Eigen::MatrixXcd m(rows, cols);
+                    for (Index r = 0; r < rows; ++r)
+                        for (Index c = 0; c < cols; ++c)
+                            m(r, c) = -meas_as_complex(a, r * cols + c);
+                    return make_matrix_cplx(m, a.unit());
+                }
+                default: break;
+            }
+            break;
+        }
+    }
+    return Measurement();  // unreachable
+}
+
+Measurement Measurement::operator!() const {
+    if (data_type() == DataType::kString)
+        throw std::invalid_argument("operator!: string is not supported");
+
+    auto not_val = [](const Measurement& m, Index i) -> int {
+        switch (m.data_type()) {
+            case DataType::kInteger: return meas_as_int(m, i) == 0 ? 1 : 0;
+            case DataType::kReal:    return meas_as_double(m, i) == 0.0 ? 1 : 0;
+            case DataType::kComplex: {
+                auto c = meas_as_complex(m, i);
+                return (c.real() == 0.0 && c.imag() == 0.0) ? 1 : 0;
+            }
+            default: return 0;
+        }
+    };
+
+    Measurement a = canonicalized();
+
+    switch (a.data_kind()) {
+        case DataKind::kScalar:
+            return make_scalar_int(not_val(a, 0), Unit());
+        case DataKind::kVector: {
+            Index n = meas_element_count(a);
+            Eigen::VectorXi v(n);
+            for (Index i = 0; i < n; ++i) v(i) = not_val(a, i);
+            return make_vector_int(v, Unit());
+        }
+        case DataKind::kMatrix: {
+            Index rows = a.shape()[0], cols = a.shape()[1];
+            Eigen::MatrixXi m(rows, cols);
+            for (Index r = 0; r < rows; ++r)
+                for (Index c = 0; c < cols; ++c)
+                    m(r, c) = not_val(a, r * cols + c);
+            return make_matrix_int(m, Unit());
+        }
+    }
+    return Measurement();
+}
+
+Measurement Measurement::operator~() const {
+    if (data_type() != DataType::kInteger)
+        throw std::invalid_argument("operator~: only integer is supported");
+    if (data_kind() == DataKind::kScalar)
+        return make_scalar_int(~meas_as_int(*this, 0), Unit());
+
+    Measurement a = canonicalized();
+    Index n = meas_element_count(a);
+
+    if (a.data_kind() == DataKind::kVector) {
+        Eigen::VectorXi v(n);
+        for (Index i = 0; i < n; ++i) v(i) = ~meas_as_int(a, i);
+        return make_vector_int(v, Unit());
+    }
+    Index rows = a.shape()[0], cols = a.shape()[1];
+    Eigen::MatrixXi m(rows, cols);
+    for (Index r = 0; r < rows; ++r)
+        for (Index c = 0; c < cols; ++c)
+            m(r, c) = ~meas_as_int(a, r * cols + c);
+    return make_matrix_int(m, Unit());
+}
+
 // =============================================================================
 //  Sec.3  DataSeries  vs  DataSeries
 // =============================================================================
@@ -520,13 +896,20 @@ std::vector<Index> ds_ds_result_shape(const DataSeries& a, const DataSeries& b) 
 template <typename MeasOp, typename UnitOp>
 DataSeries ds_ds_apply(const DataSeries& lhs, const DataSeries& rhs,
                        const char* op_name, MeasOp meas_op, UnitOp unit_op,
-                       bool same_dim_required, bool int_div_to_real) {
+                       OpCategory cat) {
     validate_ds_ds(lhs, rhs, op_name);
 
     DataSeries a = lhs.canonicalized();
     DataSeries b = rhs.canonicalized();
 
-    if (same_dim_required && !a.unit().same_dimension(b.unit()))
+    const bool require_same_base_unit = (cat == OpCategory::kCompare);
+    const bool int_div_to_real  = (cat == OpCategory::kDiv);
+    const bool force_integer    = (cat == OpCategory::kCompare ||
+                                   cat == OpCategory::kLogical ||
+                                   cat == OpCategory::kBitwise  ||
+                                   cat == OpCategory::kShift);
+
+    if (require_same_base_unit && !a.unit().same_dimension(b.unit()))
         throw std::invalid_argument(
             std::string(op_name) + ": unit dimension mismatch [" +
             a.unit().to_string() + "] vs [" + b.unit().to_string() + "]");
@@ -536,6 +919,8 @@ DataSeries ds_ds_apply(const DataSeries& lhs, const DataSeries& rhs,
     if (int_div_to_real &&
         a.data_type() == DataType::kInteger && b.data_type() == DataType::kInteger)
         res_dtype = DataType::kReal;
+    if (force_integer)
+        res_dtype = DataType::kInteger;
 
     DataSeries result(res_kind, res_dtype, ds_ds_result_shape(a, b));
     result.set_unit(unit_op(a.unit(), b.unit()));
@@ -552,29 +937,27 @@ DataSeries ds_ds_apply(const DataSeries& lhs, const DataSeries& rhs,
 DataSeries operator+(const DataSeries& lhs, const DataSeries& rhs) {
     return ds_ds_apply(lhs, rhs, "operator+",
         [](const Measurement& a, const Measurement& b) { return a + b; },
-        resolve_add_sub_unit,
-        /*same_dim*/ false, /*int_div_real*/ false);
+        resolve_add_sub_unit, OpCategory::kAddSub);
 }
 
 DataSeries operator-(const DataSeries& lhs, const DataSeries& rhs) {
     return ds_ds_apply(lhs, rhs, "operator-",
         [](const Measurement& a, const Measurement& b) { return a - b; },
-        resolve_add_sub_unit,
-        /*same_dim*/ false, /*int_div_real*/ false);
+        resolve_add_sub_unit, OpCategory::kAddSub);
 }
 
 DataSeries operator*(const DataSeries& lhs, const DataSeries& rhs) {
     return ds_ds_apply(lhs, rhs, "operator*",
         [](const Measurement& a, const Measurement& b) { return a * b; },
         [](const Unit& a, const Unit& b) { return a * b; },
-        /*same_dim*/ false, /*int_div_real*/ false);
+        OpCategory::kMul);
 }
 
 DataSeries operator/(const DataSeries& lhs, const DataSeries& rhs) {
     return ds_ds_apply(lhs, rhs, "operator/",
         [](const Measurement& a, const Measurement& b) { return a / b; },
         [](const Unit& a, const Unit& b) { return a / b; },
-        /*same_dim*/ false, /*int_div_real*/ true);
+        OpCategory::kDiv);
 }
 
 // =============================================================================
@@ -608,13 +991,20 @@ std::vector<Index> ds_meas_result_shape(const DataSeries& ds, const Measurement&
 template <typename MeasOp, typename UnitOp>
 DataSeries ds_meas_apply(const DataSeries& lhs, const Measurement& rhs,
                           const char* op_name, MeasOp meas_op, UnitOp unit_op,
-                          bool same_dim_required, bool int_div_to_real) {
+                          OpCategory cat) {
     validate_ds_meas(lhs, rhs, op_name);
 
     DataSeries  a     = lhs.canonicalized();
     Measurement rhs_c = rhs.canonicalized();
 
-    if (same_dim_required && !a.unit().same_dimension(rhs_c.unit()))
+    const bool require_same_base_unit = (cat == OpCategory::kCompare);
+    const bool int_div_to_real  = (cat == OpCategory::kDiv);
+    const bool force_integer    = (cat == OpCategory::kCompare ||
+                                   cat == OpCategory::kLogical ||
+                                   cat == OpCategory::kBitwise  ||
+                                   cat == OpCategory::kShift);
+
+    if (require_same_base_unit && !a.unit().same_dimension(rhs_c.unit()))
         throw std::invalid_argument(
             std::string(op_name) + ": unit dimension mismatch [" +
             a.unit().to_string() + "] vs [" + rhs_c.unit().to_string() + "]");
@@ -624,6 +1014,8 @@ DataSeries ds_meas_apply(const DataSeries& lhs, const Measurement& rhs,
     if (int_div_to_real &&
         a.data_type() == DataType::kInteger && rhs_c.data_type() == DataType::kInteger)
         res_dtype = DataType::kReal;
+    if (force_integer)
+        res_dtype = DataType::kInteger;
 
     DataSeries result(res_kind, res_dtype, ds_meas_result_shape(a, rhs_c));
     result.set_unit(unit_op(a.unit(), rhs_c.unit()));
@@ -639,29 +1031,27 @@ DataSeries ds_meas_apply(const DataSeries& lhs, const Measurement& rhs,
 DataSeries operator+(const DataSeries& lhs, const Measurement& rhs) {
     return ds_meas_apply(lhs, rhs, "operator+",
         [](const Measurement& a, const Measurement& b) { return a + b; },
-        resolve_add_sub_unit,
-        /*same_dim*/ false, /*int_div_real*/ false);
+        resolve_add_sub_unit, OpCategory::kAddSub);
 }
 
 DataSeries operator-(const DataSeries& lhs, const Measurement& rhs) {
     return ds_meas_apply(lhs, rhs, "operator-",
         [](const Measurement& a, const Measurement& b) { return a - b; },
-        resolve_add_sub_unit,
-        /*same_dim*/ false, /*int_div_real*/ false);
+        resolve_add_sub_unit, OpCategory::kAddSub);
 }
 
 DataSeries operator*(const DataSeries& lhs, const Measurement& rhs) {
     return ds_meas_apply(lhs, rhs, "operator*",
         [](const Measurement& a, const Measurement& b) { return a * b; },
         [](const Unit& a, const Unit& b) { return a * b; },
-        /*same_dim*/ false, /*int_div_real*/ false);
+        OpCategory::kMul);
 }
 
 DataSeries operator/(const DataSeries& lhs, const Measurement& rhs) {
     return ds_meas_apply(lhs, rhs, "operator/",
         [](const Measurement& a, const Measurement& b) { return a / b; },
         [](const Unit& a, const Unit& b) { return a / b; },
-        /*same_dim*/ false, /*int_div_real*/ true);
+        OpCategory::kDiv);
 }
 
 // =============================================================================
@@ -676,7 +1066,7 @@ namespace {
 template <typename MeasOp, typename UnitOp>
 DataSeries meas_ds_apply(const Measurement& lhs, const DataSeries& rhs,
                           const char* op_name, MeasOp meas_op, UnitOp unit_op,
-                          bool same_dim_required, bool int_div_to_real) {
+                          OpCategory cat) {
     if (lhs.data_type() == DataType::kString || rhs.data_type() == DataType::kString)
         throw std::invalid_argument(
             std::string(op_name) + ": string cannot participate in arithmetic");
@@ -685,7 +1075,14 @@ DataSeries meas_ds_apply(const Measurement& lhs, const DataSeries& rhs,
     Measurement lhs_c = lhs.canonicalized();
     DataSeries  rhs_c = rhs.canonicalized();
 
-    if (same_dim_required && !lhs_c.unit().same_dimension(rhs_c.unit()))
+    const bool require_same_base_unit = (cat == OpCategory::kCompare);
+    const bool int_div_to_real  = (cat == OpCategory::kDiv);
+    const bool force_integer    = (cat == OpCategory::kCompare ||
+                                   cat == OpCategory::kLogical ||
+                                   cat == OpCategory::kBitwise  ||
+                                   cat == OpCategory::kShift);
+
+    if (require_same_base_unit && !lhs_c.unit().same_dimension(rhs_c.unit()))
         throw std::invalid_argument(
             std::string(op_name) + ": unit dimension mismatch");
 
@@ -694,6 +1091,8 @@ DataSeries meas_ds_apply(const Measurement& lhs, const DataSeries& rhs,
     if (int_div_to_real &&
         lhs_c.data_type() == DataType::kInteger && rhs_c.data_type() == DataType::kInteger)
         res_dtype = DataType::kReal;
+    if (force_integer)
+        res_dtype = DataType::kInteger;
 
     DataSeries result(res_kind, res_dtype, ds_meas_result_shape(rhs_c, lhs_c));
     result.set_unit(unit_op(lhs_c.unit(), rhs_c.unit()));
@@ -708,29 +1107,366 @@ DataSeries meas_ds_apply(const Measurement& lhs, const DataSeries& rhs,
 DataSeries operator+(const Measurement& lhs, const DataSeries& rhs) {
     return meas_ds_apply(lhs, rhs, "operator+",
         [](const Measurement& a, const Measurement& b) { return a + b; },
-        resolve_add_sub_unit,
-        /*same_dim*/ false, /*int_div_real*/ false);
+        resolve_add_sub_unit, OpCategory::kAddSub);
 }
 
 DataSeries operator-(const Measurement& lhs, const DataSeries& rhs) {
     return meas_ds_apply(lhs, rhs, "operator-",
         [](const Measurement& a, const Measurement& b) { return a - b; },
-        resolve_add_sub_unit,
-        /*same_dim*/ false, /*int_div_real*/ false);
+        resolve_add_sub_unit, OpCategory::kAddSub);
 }
 
 DataSeries operator*(const Measurement& lhs, const DataSeries& rhs) {
     return meas_ds_apply(lhs, rhs, "operator*",
         [](const Measurement& a, const Measurement& b) { return a * b; },
         [](const Unit& a, const Unit& b) { return a * b; },
-        /*same_dim*/ false, /*int_div_real*/ false);
+        OpCategory::kMul);
 }
 
 DataSeries operator/(const Measurement& lhs, const DataSeries& rhs) {
     return meas_ds_apply(lhs, rhs, "operator/",
         [](const Measurement& a, const Measurement& b) { return a / b; },
         [](const Unit& a, const Unit& b) { return a / b; },
-        /*same_dim*/ false, /*int_div_real*/ true);
+        OpCategory::kDiv);
+}
+
+// =============================================================================
+//  Sec.4c  New DataSeries binary operators (comparison / logical / bitwise / shift / modulo)
+// =============================================================================
+
+// --- DataSeries  vs  DataSeries -----------------------------------------------
+
+DataSeries operator==(const DataSeries& lhs, const DataSeries& rhs) {
+    return ds_ds_apply(lhs, rhs, "operator==",
+        [](const Measurement& a, const Measurement& b) { return a == b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator!=(const DataSeries& lhs, const DataSeries& rhs) {
+    return ds_ds_apply(lhs, rhs, "operator!=",
+        [](const Measurement& a, const Measurement& b) { return a != b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator<(const DataSeries& lhs, const DataSeries& rhs) {
+    return ds_ds_apply(lhs, rhs, "operator<",
+        [](const Measurement& a, const Measurement& b) { return a < b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator>(const DataSeries& lhs, const DataSeries& rhs) {
+    return ds_ds_apply(lhs, rhs, "operator>",
+        [](const Measurement& a, const Measurement& b) { return a > b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator<=(const DataSeries& lhs, const DataSeries& rhs) {
+    return ds_ds_apply(lhs, rhs, "operator<=",
+        [](const Measurement& a, const Measurement& b) { return a <= b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator>=(const DataSeries& lhs, const DataSeries& rhs) {
+    return ds_ds_apply(lhs, rhs, "operator>=",
+        [](const Measurement& a, const Measurement& b) { return a >= b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator&&(const DataSeries& lhs, const DataSeries& rhs) {
+    return ds_ds_apply(lhs, rhs, "operator&&",
+        [](const Measurement& a, const Measurement& b) { return a && b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kLogical);
+}
+
+DataSeries operator||(const DataSeries& lhs, const DataSeries& rhs) {
+    return ds_ds_apply(lhs, rhs, "operator||",
+        [](const Measurement& a, const Measurement& b) { return a || b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kLogical);
+}
+
+DataSeries operator&(const DataSeries& lhs, const DataSeries& rhs) {
+    return ds_ds_apply(lhs, rhs, "operator&",
+        [](const Measurement& a, const Measurement& b) { return a & b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kBitwise);
+}
+
+DataSeries operator|(const DataSeries& lhs, const DataSeries& rhs) {
+    return ds_ds_apply(lhs, rhs, "operator|",
+        [](const Measurement& a, const Measurement& b) { return a | b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kBitwise);
+}
+
+DataSeries operator^(const DataSeries& lhs, const DataSeries& rhs) {
+    return ds_ds_apply(lhs, rhs, "operator^",
+        [](const Measurement& a, const Measurement& b) { return a ^ b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kBitwise);
+}
+
+DataSeries operator<<(const DataSeries& lhs, const DataSeries& rhs) {
+    return ds_ds_apply(lhs, rhs, "operator<<",
+        [](const Measurement& a, const Measurement& b) { return a << b; },
+        [](const Unit& a, const Unit&) { return a; },
+        OpCategory::kShift);
+}
+
+DataSeries operator>>(const DataSeries& lhs, const DataSeries& rhs) {
+    return ds_ds_apply(lhs, rhs, "operator>>",
+        [](const Measurement& a, const Measurement& b) { return a >> b; },
+        [](const Unit& a, const Unit&) { return a; },
+        OpCategory::kShift);
+}
+
+DataSeries operator%(const DataSeries& lhs, const DataSeries& rhs) {
+    return ds_ds_apply(lhs, rhs, "operator%",
+        [](const Measurement& a, const Measurement& b) { return a % b; },
+        [](const Unit& a, const Unit&) { return a; },
+        OpCategory::kMod);
+}
+
+// --- DataSeries  vs  Measurement -----------------------------------------------
+
+DataSeries operator==(const DataSeries& lhs, const Measurement& rhs) {
+    return ds_meas_apply(lhs, rhs, "operator==",
+        [](const Measurement& a, const Measurement& b) { return a == b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator!=(const DataSeries& lhs, const Measurement& rhs) {
+    return ds_meas_apply(lhs, rhs, "operator!=",
+        [](const Measurement& a, const Measurement& b) { return a != b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator<(const DataSeries& lhs, const Measurement& rhs) {
+    return ds_meas_apply(lhs, rhs, "operator<",
+        [](const Measurement& a, const Measurement& b) { return a < b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator>(const DataSeries& lhs, const Measurement& rhs) {
+    return ds_meas_apply(lhs, rhs, "operator>",
+        [](const Measurement& a, const Measurement& b) { return a > b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator<=(const DataSeries& lhs, const Measurement& rhs) {
+    return ds_meas_apply(lhs, rhs, "operator<=",
+        [](const Measurement& a, const Measurement& b) { return a <= b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator>=(const DataSeries& lhs, const Measurement& rhs) {
+    return ds_meas_apply(lhs, rhs, "operator>=",
+        [](const Measurement& a, const Measurement& b) { return a >= b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator&&(const DataSeries& lhs, const Measurement& rhs) {
+    return ds_meas_apply(lhs, rhs, "operator&&",
+        [](const Measurement& a, const Measurement& b) { return a && b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kLogical);
+}
+
+DataSeries operator||(const DataSeries& lhs, const Measurement& rhs) {
+    return ds_meas_apply(lhs, rhs, "operator||",
+        [](const Measurement& a, const Measurement& b) { return a || b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kLogical);
+}
+
+DataSeries operator&(const DataSeries& lhs, const Measurement& rhs) {
+    return ds_meas_apply(lhs, rhs, "operator&",
+        [](const Measurement& a, const Measurement& b) { return a & b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kBitwise);
+}
+
+DataSeries operator|(const DataSeries& lhs, const Measurement& rhs) {
+    return ds_meas_apply(lhs, rhs, "operator|",
+        [](const Measurement& a, const Measurement& b) { return a | b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kBitwise);
+}
+
+DataSeries operator^(const DataSeries& lhs, const Measurement& rhs) {
+    return ds_meas_apply(lhs, rhs, "operator^",
+        [](const Measurement& a, const Measurement& b) { return a ^ b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kBitwise);
+}
+
+DataSeries operator<<(const DataSeries& lhs, const Measurement& rhs) {
+    return ds_meas_apply(lhs, rhs, "operator<<",
+        [](const Measurement& a, const Measurement& b) { return a << b; },
+        [](const Unit& a, const Unit&) { return a; },
+        OpCategory::kShift);
+}
+
+DataSeries operator>>(const DataSeries& lhs, const Measurement& rhs) {
+    return ds_meas_apply(lhs, rhs, "operator>>",
+        [](const Measurement& a, const Measurement& b) { return a >> b; },
+        [](const Unit& a, const Unit&) { return a; },
+        OpCategory::kShift);
+}
+
+DataSeries operator%(const DataSeries& lhs, const Measurement& rhs) {
+    return ds_meas_apply(lhs, rhs, "operator%",
+        [](const Measurement& a, const Measurement& b) { return a % b; },
+        [](const Unit& a, const Unit&) { return a; },
+        OpCategory::kMod);
+}
+
+// --- Measurement  vs  DataSeries -----------------------------------------------
+
+DataSeries operator==(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator==",
+        [](const Measurement& a, const Measurement& b) { return a == b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator!=(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator!=",
+        [](const Measurement& a, const Measurement& b) { return a != b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator<(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator<",
+        [](const Measurement& a, const Measurement& b) { return a < b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator>(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator>",
+        [](const Measurement& a, const Measurement& b) { return a > b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator<=(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator<=",
+        [](const Measurement& a, const Measurement& b) { return a <= b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator>=(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator>=",
+        [](const Measurement& a, const Measurement& b) { return a >= b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kCompare);
+}
+
+DataSeries operator&&(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator&&",
+        [](const Measurement& a, const Measurement& b) { return a && b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kLogical);
+}
+
+DataSeries operator||(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator||",
+        [](const Measurement& a, const Measurement& b) { return a || b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kLogical);
+}
+
+DataSeries operator&(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator&",
+        [](const Measurement& a, const Measurement& b) { return a & b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kBitwise);
+}
+
+DataSeries operator|(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator|",
+        [](const Measurement& a, const Measurement& b) { return a | b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kBitwise);
+}
+
+DataSeries operator^(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator^",
+        [](const Measurement& a, const Measurement& b) { return a ^ b; },
+        [](const Unit&, const Unit&) { return Unit(); },
+        OpCategory::kBitwise);
+}
+
+DataSeries operator<<(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator<<",
+        [](const Measurement& a, const Measurement& b) { return a << b; },
+        [](const Unit& a, const Unit&) { return a; },
+        OpCategory::kShift);
+}
+
+DataSeries operator>>(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator>>",
+        [](const Measurement& a, const Measurement& b) { return a >> b; },
+        [](const Unit& a, const Unit&) { return a; },
+        OpCategory::kShift);
+}
+
+DataSeries operator%(const Measurement& lhs, const DataSeries& rhs) {
+    return meas_ds_apply(lhs, rhs, "operator%",
+        [](const Measurement& a, const Measurement& b) { return a % b; },
+        [](const Unit& a, const Unit&) { return a; },
+        OpCategory::kMod);
+}
+
+// --- DataSeries unary operators ------------------------------------------------
+
+DataSeries operator-(const DataSeries& lhs) {
+    if (lhs.data_type() == DataType::kString)
+        throw std::invalid_argument("unary -: string series is not supported");
+    DataSeries a = lhs.canonicalized();
+    DataSeries result(a.data_kind(), a.data_type(), a.data_shape());
+    result.set_unit(a.unit());
+    for (std::size_t i = 0; i < a.size(); ++i)
+        result.append(-a.measurement_at(static_cast<Index>(i)));
+    return result;
+}
+
+DataSeries operator!(const DataSeries& lhs) {
+    if (lhs.data_type() == DataType::kString)
+        throw std::invalid_argument("operator!: string series is not supported");
+    DataSeries a = lhs.canonicalized();
+    DataSeries result(a.data_kind(), DataType::kInteger, a.data_shape());
+    result.set_unit(Unit());
+    for (std::size_t i = 0; i < a.size(); ++i)
+        result.append(!a.measurement_at(static_cast<Index>(i)));
+    return result;
+}
+
+DataSeries operator~(const DataSeries& lhs) {
+    if (lhs.data_type() != DataType::kInteger)
+        throw std::invalid_argument("operator~: only integer series is supported");
+    DataSeries a = lhs.canonicalized();
+    DataSeries result(a.data_kind(), DataType::kInteger, a.data_shape());
+    result.set_unit(Unit());
+    for (std::size_t i = 0; i < a.size(); ++i)
+        result.append(~a.measurement_at(static_cast<Index>(i)));
+    return result;
 }
 
 // =============================================================================
@@ -1100,6 +1836,231 @@ DataArray pow(const Measurement& base, const DataArray& exponent) {
     info.indep_datas          = exponent.indep_datas();
     info.multi_dimension_spec = exponent.multi_dimension_spec();
     info.kind                 = exponent.data_kind();
+    return DataArray(std::move(info));
+}
+
+// =============================================================================
+//  Sec.8  New DataArray binary operators (comparison / logical / bitwise / shift / modulo)
+// =============================================================================
+
+// --- DataArray  vs  DataArray -------------------------------------------------
+
+DataArray operator==(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator==", "==",
+        [](const DataSeries& a, const DataSeries& b) { return a == b; });
+}
+DataArray operator!=(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator!=", "!=",
+        [](const DataSeries& a, const DataSeries& b) { return a != b; });
+}
+DataArray operator<(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator<", "<",
+        [](const DataSeries& a, const DataSeries& b) { return a < b; });
+}
+DataArray operator>(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator>", ">",
+        [](const DataSeries& a, const DataSeries& b) { return a > b; });
+}
+DataArray operator<=(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator<=", "<=",
+        [](const DataSeries& a, const DataSeries& b) { return a <= b; });
+}
+DataArray operator>=(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator>=", ">=",
+        [](const DataSeries& a, const DataSeries& b) { return a >= b; });
+}
+
+DataArray operator&&(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator&&", "&&",
+        [](const DataSeries& a, const DataSeries& b) { return a && b; });
+}
+DataArray operator||(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator||", "||",
+        [](const DataSeries& a, const DataSeries& b) { return a || b; });
+}
+
+DataArray operator&(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator&", "&",
+        [](const DataSeries& a, const DataSeries& b) { return a & b; });
+}
+DataArray operator|(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator|", "|",
+        [](const DataSeries& a, const DataSeries& b) { return a | b; });
+}
+DataArray operator^(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator^", "^",
+        [](const DataSeries& a, const DataSeries& b) { return a ^ b; });
+}
+
+DataArray operator<<(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator<<", "<<",
+        [](const DataSeries& a, const DataSeries& b) { return a << b; });
+}
+DataArray operator>>(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator>>", ">>",
+        [](const DataSeries& a, const DataSeries& b) { return a >> b; });
+}
+
+DataArray operator%(const DataArray& lhs, const DataArray& rhs) {
+    return array_array_op(lhs, rhs, "operator%", "%",
+        [](const DataSeries& a, const DataSeries& b) { return a % b; });
+}
+
+// --- DataArray  vs  Measurement ------------------------------------------------
+
+DataArray operator==(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator==", "==",
+        [](const DataSeries& a, const Measurement& b) { return a == b; });
+}
+DataArray operator!=(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator!=", "!=",
+        [](const DataSeries& a, const Measurement& b) { return a != b; });
+}
+DataArray operator<(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator<", "<",
+        [](const DataSeries& a, const Measurement& b) { return a < b; });
+}
+DataArray operator>(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator>", ">",
+        [](const DataSeries& a, const Measurement& b) { return a > b; });
+}
+DataArray operator<=(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator<=", "<=",
+        [](const DataSeries& a, const Measurement& b) { return a <= b; });
+}
+DataArray operator>=(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator>=", ">=",
+        [](const DataSeries& a, const Measurement& b) { return a >= b; });
+}
+
+DataArray operator&&(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator&&", "&&",
+        [](const DataSeries& a, const Measurement& b) { return a && b; });
+}
+DataArray operator||(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator||", "||",
+        [](const DataSeries& a, const Measurement& b) { return a || b; });
+}
+
+DataArray operator&(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator&", "&",
+        [](const DataSeries& a, const Measurement& b) { return a & b; });
+}
+DataArray operator|(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator|", "|",
+        [](const DataSeries& a, const Measurement& b) { return a | b; });
+}
+DataArray operator^(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator^", "^",
+        [](const DataSeries& a, const Measurement& b) { return a ^ b; });
+}
+
+DataArray operator<<(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator<<", "<<",
+        [](const DataSeries& a, const Measurement& b) { return a << b; });
+}
+DataArray operator>>(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator>>", ">>",
+        [](const DataSeries& a, const Measurement& b) { return a >> b; });
+}
+
+DataArray operator%(const DataArray& lhs, const Measurement& rhs) {
+    return array_meas_op(lhs, rhs, "operator%", "%",
+        [](const DataSeries& a, const Measurement& b) { return a % b; });
+}
+
+// --- Measurement  vs  DataArray ------------------------------------------------
+
+DataArray operator==(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a == b; });
+}
+DataArray operator!=(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a != b; });
+}
+DataArray operator<(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a < b; });
+}
+DataArray operator>(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a > b; });
+}
+DataArray operator<=(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a <= b; });
+}
+DataArray operator>=(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a >= b; });
+}
+
+DataArray operator&&(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a && b; });
+}
+DataArray operator||(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a || b; });
+}
+
+DataArray operator&(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a & b; });
+}
+DataArray operator|(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a | b; });
+}
+DataArray operator^(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a ^ b; });
+}
+
+DataArray operator<<(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a << b; });
+}
+DataArray operator>>(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a >> b; });
+}
+
+DataArray operator%(const Measurement& lhs, const DataArray& rhs) {
+    return meas_array_op(lhs, rhs,
+        [](const Measurement& a, const DataSeries& b) { return a % b; });
+}
+
+// --- DataArray unary operators -------------------------------------------------
+
+DataArray operator-(const DataArray& lhs) {
+    DataArrayCreateInfo info;
+    info.name                 = DataArray::kUnnamed;
+    info.data                 = -lhs.data();
+    info.indep_datas          = lhs.indep_datas();
+    info.multi_dimension_spec = lhs.multi_dimension_spec();
+    info.kind                 = lhs.data_kind();
+    return DataArray(std::move(info));
+}
+
+DataArray operator!(const DataArray& lhs) {
+    DataArrayCreateInfo info;
+    info.name                 = DataArray::kUnnamed;
+    info.data                 = !lhs.data();
+    info.indep_datas          = lhs.indep_datas();
+    info.multi_dimension_spec = lhs.multi_dimension_spec();
+    info.kind                 = lhs.data_kind();
+    return DataArray(std::move(info));
+}
+
+DataArray operator~(const DataArray& lhs) {
+    DataArrayCreateInfo info;
+    info.name                 = DataArray::kUnnamed;
+    info.data                 = ~lhs.data();
+    info.indep_datas          = lhs.indep_datas();
+    info.multi_dimension_spec = lhs.multi_dimension_spec();
+    info.kind                 = lhs.data_kind();
     return DataArray(std::move(info));
 }
 

@@ -143,6 +143,111 @@ XDATASET_API DataArray pow(const Measurement& base, const DataArray& exponent);
 /// pow(base, exponent): row-by-row pow, exponent array must be dimensionless.
 XDATASET_API DataArray pow(const DataArray& base, const DataArray& exponent);
 
+// =========================================================================
+//  Comparison operators (result is Integer 0/1, dimensionless)
+// =========================================================================
+
+// DataArray x DataArray
+XDATASET_API DataArray operator==(const DataArray& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator!=(const DataArray& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator<(const DataArray& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator>(const DataArray& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator<=(const DataArray& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator>=(const DataArray& lhs, const DataArray& rhs);
+
+// DataArray x Measurement
+XDATASET_API DataArray operator==(const DataArray& lhs, const Measurement& rhs);
+XDATASET_API DataArray operator!=(const DataArray& lhs, const Measurement& rhs);
+XDATASET_API DataArray operator<(const DataArray& lhs, const Measurement& rhs);
+XDATASET_API DataArray operator>(const DataArray& lhs, const Measurement& rhs);
+XDATASET_API DataArray operator<=(const DataArray& lhs, const Measurement& rhs);
+XDATASET_API DataArray operator>=(const DataArray& lhs, const Measurement& rhs);
+
+// Measurement x DataArray
+XDATASET_API DataArray operator==(const Measurement& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator!=(const Measurement& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator<(const Measurement& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator>(const Measurement& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator<=(const Measurement& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator>=(const Measurement& lhs, const DataArray& rhs);
+
+// =========================================================================
+//  Logical operators (result is Integer 0/1, dimensionless)
+// =========================================================================
+
+// DataArray x DataArray
+XDATASET_API DataArray operator&&(const DataArray& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator||(const DataArray& lhs, const DataArray& rhs);
+
+// DataArray x Measurement
+XDATASET_API DataArray operator&&(const DataArray& lhs, const Measurement& rhs);
+XDATASET_API DataArray operator||(const DataArray& lhs, const Measurement& rhs);
+
+// Measurement x DataArray
+XDATASET_API DataArray operator&&(const Measurement& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator||(const Measurement& lhs, const DataArray& rhs);
+
+// =========================================================================
+//  Bitwise operators (Integer only, result is Integer, dimensionless)
+// =========================================================================
+
+// DataArray x DataArray
+XDATASET_API DataArray operator&(const DataArray& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator|(const DataArray& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator^(const DataArray& lhs, const DataArray& rhs);
+
+// DataArray x Measurement
+XDATASET_API DataArray operator&(const DataArray& lhs, const Measurement& rhs);
+XDATASET_API DataArray operator|(const DataArray& lhs, const Measurement& rhs);
+XDATASET_API DataArray operator^(const DataArray& lhs, const Measurement& rhs);
+
+// Measurement x DataArray
+XDATASET_API DataArray operator&(const Measurement& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator|(const Measurement& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator^(const Measurement& lhs, const DataArray& rhs);
+
+// =========================================================================
+//  Shift operators (Integer only, result is Integer)
+// =========================================================================
+
+// DataArray x DataArray
+XDATASET_API DataArray operator<<(const DataArray& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator>>(const DataArray& lhs, const DataArray& rhs);
+
+// DataArray x Measurement
+XDATASET_API DataArray operator<<(const DataArray& lhs, const Measurement& rhs);
+XDATASET_API DataArray operator>>(const DataArray& lhs, const Measurement& rhs);
+
+// Measurement x DataArray
+XDATASET_API DataArray operator<<(const Measurement& lhs, const DataArray& rhs);
+XDATASET_API DataArray operator>>(const Measurement& lhs, const DataArray& rhs);
+
+// =========================================================================
+//  Modulo
+// =========================================================================
+
+// DataArray x DataArray
+XDATASET_API DataArray operator%(const DataArray& lhs, const DataArray& rhs);
+
+// DataArray x Measurement
+XDATASET_API DataArray operator%(const DataArray& lhs, const Measurement& rhs);
+
+// Measurement x DataArray
+XDATASET_API DataArray operator%(const Measurement& lhs, const DataArray& rhs);
+
+// =========================================================================
+//  Unary operators
+// =========================================================================
+
+/// Negation: flips sign, preserves unit and coordinate structure.
+XDATASET_API DataArray operator-(const DataArray& lhs);
+
+/// Logical NOT: returns Integer 0/1, dimensionless.
+XDATASET_API DataArray operator!(const DataArray& lhs);
+
+/// Bitwise NOT (Integer only, dimensionless).
+XDATASET_API DataArray operator~(const DataArray& lhs);
+
 } // namespace xdataset
 
 #endif // DATA_ARRAY_H

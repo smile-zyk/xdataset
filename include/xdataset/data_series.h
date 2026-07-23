@@ -823,6 +823,111 @@ XDATASET_API DataSeries pow(const Measurement& base, const DataSeries& exponent)
 /// pow(base, exponent): row-by-row pow, exponent series must be dimensionless.
 XDATASET_API DataSeries pow(const DataSeries& base, const DataSeries& exponent);
 
+// =========================================================================
+//  Comparison operators (result is Integer 0/1, dimensionless)
+// =========================================================================
+
+// DataSeries x DataSeries
+XDATASET_API DataSeries operator==(const DataSeries& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator!=(const DataSeries& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator<(const DataSeries& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator>(const DataSeries& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator<=(const DataSeries& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator>=(const DataSeries& lhs, const DataSeries& rhs);
+
+// DataSeries x Measurement
+XDATASET_API DataSeries operator==(const DataSeries& lhs, const Measurement& rhs);
+XDATASET_API DataSeries operator!=(const DataSeries& lhs, const Measurement& rhs);
+XDATASET_API DataSeries operator<(const DataSeries& lhs, const Measurement& rhs);
+XDATASET_API DataSeries operator>(const DataSeries& lhs, const Measurement& rhs);
+XDATASET_API DataSeries operator<=(const DataSeries& lhs, const Measurement& rhs);
+XDATASET_API DataSeries operator>=(const DataSeries& lhs, const Measurement& rhs);
+
+// Measurement x DataSeries
+XDATASET_API DataSeries operator==(const Measurement& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator!=(const Measurement& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator<(const Measurement& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator>(const Measurement& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator<=(const Measurement& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator>=(const Measurement& lhs, const DataSeries& rhs);
+
+// =========================================================================
+//  Logical operators (result is Integer 0/1, dimensionless)
+// =========================================================================
+
+// DataSeries x DataSeries
+XDATASET_API DataSeries operator&&(const DataSeries& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator||(const DataSeries& lhs, const DataSeries& rhs);
+
+// DataSeries x Measurement
+XDATASET_API DataSeries operator&&(const DataSeries& lhs, const Measurement& rhs);
+XDATASET_API DataSeries operator||(const DataSeries& lhs, const Measurement& rhs);
+
+// Measurement x DataSeries
+XDATASET_API DataSeries operator&&(const Measurement& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator||(const Measurement& lhs, const DataSeries& rhs);
+
+// =========================================================================
+//  Bitwise operators (Integer only, result is Integer, dimensionless)
+// =========================================================================
+
+// DataSeries x DataSeries
+XDATASET_API DataSeries operator&(const DataSeries& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator|(const DataSeries& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator^(const DataSeries& lhs, const DataSeries& rhs);
+
+// DataSeries x Measurement
+XDATASET_API DataSeries operator&(const DataSeries& lhs, const Measurement& rhs);
+XDATASET_API DataSeries operator|(const DataSeries& lhs, const Measurement& rhs);
+XDATASET_API DataSeries operator^(const DataSeries& lhs, const Measurement& rhs);
+
+// Measurement x DataSeries
+XDATASET_API DataSeries operator&(const Measurement& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator|(const Measurement& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator^(const Measurement& lhs, const DataSeries& rhs);
+
+// =========================================================================
+//  Shift operators (Integer only, result is Integer)
+// =========================================================================
+
+// DataSeries x DataSeries
+XDATASET_API DataSeries operator<<(const DataSeries& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator>>(const DataSeries& lhs, const DataSeries& rhs);
+
+// DataSeries x Measurement
+XDATASET_API DataSeries operator<<(const DataSeries& lhs, const Measurement& rhs);
+XDATASET_API DataSeries operator>>(const DataSeries& lhs, const Measurement& rhs);
+
+// Measurement x DataSeries
+XDATASET_API DataSeries operator<<(const Measurement& lhs, const DataSeries& rhs);
+XDATASET_API DataSeries operator>>(const Measurement& lhs, const DataSeries& rhs);
+
+// =========================================================================
+//  Modulo
+// =========================================================================
+
+// DataSeries x DataSeries
+XDATASET_API DataSeries operator%(const DataSeries& lhs, const DataSeries& rhs);
+
+// DataSeries x Measurement
+XDATASET_API DataSeries operator%(const DataSeries& lhs, const Measurement& rhs);
+
+// Measurement x DataSeries
+XDATASET_API DataSeries operator%(const Measurement& lhs, const DataSeries& rhs);
+
+// =========================================================================
+//  Unary operators
+// =========================================================================
+
+/// Negation: flips sign, preserves unit.
+XDATASET_API DataSeries operator-(const DataSeries& lhs);
+
+/// Logical NOT: returns Integer 0/1, dimensionless.
+XDATASET_API DataSeries operator!(const DataSeries& lhs);
+
+/// Bitwise NOT (Integer only, dimensionless).
+XDATASET_API DataSeries operator~(const DataSeries& lhs);
+
 }  // namespace xdataset
 
 #endif  // XDATASET_DATA_SERIES_H_

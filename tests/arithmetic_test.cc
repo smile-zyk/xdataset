@@ -1773,3 +1773,620 @@ TEST(DataArrayArithTest, ResultHasAutoName)
     auto r = a + b;
     EXPECT_EQ(r.name(), DataArray::kUnnamed);
 }
+
+// =========================================================================
+//  Measurement comparison operators
+// =========================================================================
+
+TEST(MeasCmpTest, EqualScalar)
+{
+    Measurement r = Measurement(3.0) == Measurement(3.0);
+    EXPECT_EQ(r.data_kind(), DataKind::kScalar);
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
+    EXPECT_EQ(r.as_scalar<int>(), 1);
+}
+
+TEST(MeasCmpTest, NotEqualScalar)
+{
+    Measurement r = Measurement(3.0) != Measurement(4.0);
+    EXPECT_EQ(r.as_scalar<int>(), 1);
+}
+
+TEST(MeasCmpTest, LessThanScalar)
+{
+    Measurement r = Measurement(3.0) < Measurement(5.0);
+    EXPECT_EQ(r.as_scalar<int>(), 1);
+    r = Measurement(5.0) < Measurement(3.0);
+    EXPECT_EQ(r.as_scalar<int>(), 0);
+}
+
+TEST(MeasCmpTest, GreaterThanScalar)
+{
+    Measurement r = Measurement(5.0) > Measurement(3.0);
+    EXPECT_EQ(r.as_scalar<int>(), 1);
+}
+
+TEST(MeasCmpTest, LessEqualScalar)
+{
+    EXPECT_EQ((Measurement(3.0) <= Measurement(3.0)).as_scalar<int>(), 1);
+    EXPECT_EQ((Measurement(3.0) <= Measurement(5.0)).as_scalar<int>(), 1);
+    EXPECT_EQ((Measurement(5.0) <= Measurement(3.0)).as_scalar<int>(), 0);
+}
+
+TEST(MeasCmpTest, GreaterEqualScalar)
+{
+    EXPECT_EQ((Measurement(5.0) >= Measurement(3.0)).as_scalar<int>(), 1);
+    EXPECT_EQ((Measurement(3.0) >= Measurement(3.0)).as_scalar<int>(), 1);
+    EXPECT_EQ((Measurement(3.0) >= Measurement(5.0)).as_scalar<int>(), 0);
+}
+
+TEST(MeasCmpTest, CmpInteger)
+{
+    EXPECT_EQ((Measurement(5) == Measurement(5)).as_scalar<int>(), 1);
+    EXPECT_EQ((Measurement(5) != Measurement(3)).as_scalar<int>(), 1);
+    EXPECT_EQ((Measurement(3) < Measurement(5)).as_scalar<int>(), 1);
+}
+
+TEST(MeasCmpTest, CmpMixedIntReal)
+{
+    EXPECT_EQ((Measurement(3) == Measurement(3.0)).as_scalar<int>(), 1);
+    EXPECT_EQ((Measurement(3) < Measurement(3.5)).as_scalar<int>(), 1);
+}
+
+TEST(MeasCmpTest, CmpVector)
+{
+    Eigen::VectorXd a(3); a << 1.0, 2.0, 3.0;
+    Eigen::VectorXd b(3); b << 1.0, 4.0, 3.0;
+    Measurement r = Measurement(a) < Measurement(b);
+    EXPECT_EQ(r.data_kind(), DataKind::kVector);
+    auto rv = r.as_vector<int>();
+    EXPECT_EQ(rv(0), 0);  // 1.0 < 1.0 false
+    EXPECT_EQ(rv(1), 1);  // 2.0 < 4.0 true
+    EXPECT_EQ(rv(2), 0);  // 3.0 < 3.0 false
+}
+
+TEST(MeasCmpTest, CmpUnitMismatchThrows)
+{
+    Measurement a(1.0, Unit::parse("meter"));
+    Measurement b(1.0, Unit::parse("sec"));
+    EXPECT_THROW(a == b, std::invalid_argument);
+}
+
+TEST(MeasCmpTest, CmpStringThrows)
+{
+    Measurement a(1.0);
+    Measurement b(std::string("x"));
+    EXPECT_THROW(a == b, std::invalid_argument);
+}
+
+// =========================================================================
+//  Measurement logical operators
+// =========================================================================
+
+TEST(MeasLogicalTest, AndScalar)
+{
+    EXPECT_EQ((Measurement(1.0) && Measurement(1.0)).as_scalar<int>(), 1);
+    EXPECT_EQ((Measurement(1.0) && Measurement(0.0)).as_scalar<int>(), 0);
+    EXPECT_EQ((Measurement(0.0) && Measurement(1.0)).as_scalar<int>(), 0);
+}
+
+TEST(MeasLogicalTest, OrScalar)
+{
+    EXPECT_EQ((Measurement(1.0) || Measurement(0.0)).as_scalar<int>(), 1);
+    EXPECT_EQ((Measurement(0.0) || Measurement(0.0)).as_scalar<int>(), 0);
+    EXPECT_EQ((Measurement(0) || Measurement(1)).as_scalar<int>(), 1);
+}
+
+TEST(MeasLogicalTest, AndVector)
+{
+    Eigen::VectorXd a(2); a << 1.0, 0.0;
+    Eigen::VectorXd b(2); b << 1.0, 1.0;
+    Measurement r = Measurement(a) && Measurement(b);
+    auto rv = r.as_vector<int>();
+    EXPECT_EQ(rv(0), 1);
+    EXPECT_EQ(rv(1), 0);
+}
+
+// =========================================================================
+//  Measurement bitwise operators
+// =========================================================================
+
+TEST(MeasBitwiseTest, And)
+{
+    Measurement r = Measurement(6) & Measurement(3);  // 110 & 011 = 010
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
+    EXPECT_EQ(r.as_scalar<int>(), 2);
+}
+
+TEST(MeasBitwiseTest, Or)
+{
+    Measurement r = Measurement(6) | Measurement(3);  // 110 | 011 = 111
+    EXPECT_EQ(r.as_scalar<int>(), 7);
+}
+
+TEST(MeasBitwiseTest, Xor)
+{
+    Measurement r = Measurement(6) ^ Measurement(3);  // 110 ^ 011 = 101
+    EXPECT_EQ(r.as_scalar<int>(), 5);
+}
+
+TEST(MeasBitwiseTest, BitwiseOnRealThrows)
+{
+    EXPECT_THROW(Measurement(1.0) & Measurement(1.0), std::invalid_argument);
+}
+
+// =========================================================================
+//  Measurement shift operators
+// =========================================================================
+
+TEST(MeasShiftTest, LeftShift)
+{
+    Measurement r = Measurement(1) << Measurement(3);
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
+    EXPECT_EQ(r.as_scalar<int>(), 8);
+}
+
+TEST(MeasShiftTest, RightShift)
+{
+    Measurement r = Measurement(8) >> Measurement(2);
+    EXPECT_EQ(r.as_scalar<int>(), 2);
+}
+
+TEST(MeasShiftTest, ShiftOnRealThrows)
+{
+    EXPECT_THROW(Measurement(1.0) << Measurement(1), std::invalid_argument);
+}
+
+// =========================================================================
+//  Measurement modulo
+// =========================================================================
+
+TEST(MeasModTest, ModInteger)
+{
+    Measurement r = Measurement(10) % Measurement(3);
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
+    EXPECT_EQ(r.as_scalar<int>(), 1);
+}
+
+TEST(MeasModTest, ModReal)
+{
+    Measurement r = Measurement(10.5) % Measurement(3.0);
+    EXPECT_EQ(r.data_type(), DataType::kReal);
+    EXPECT_DOUBLE_EQ(r.as_scalar<double>(), std::fmod(10.5, 3.0));
+}
+
+TEST(MeasModTest, ModComplexThrows)
+{
+    EXPECT_THROW(Measurement(std::complex<double>(1, 2)) % Measurement(3.0), std::invalid_argument);
+}
+
+// =========================================================================
+//  Measurement unary operators
+// =========================================================================
+
+TEST(MeasUnaryTest, NegateScalar)
+{
+    Measurement m(3.0);
+    Measurement r = -m;
+    EXPECT_DOUBLE_EQ(r.as_scalar<double>(), -3.0);
+}
+
+TEST(MeasUnaryTest, NegatePreservesUnit)
+{
+    Measurement m(3.0, Unit::parse("meter"));
+    Measurement r = -m;
+    EXPECT_DOUBLE_EQ(r.as_scalar<double>(), -3.0);
+    EXPECT_TRUE(r.unit().same_dimension(Unit::parse("meter")));
+}
+
+TEST(MeasUnaryTest, NegateVector)
+{
+    Eigen::VectorXd v(2); v << 1.0, -2.0;
+    Measurement r = -Measurement(v);
+    auto rv = r.as_vector<double>();
+    EXPECT_DOUBLE_EQ(rv(0), -1.0);
+    EXPECT_DOUBLE_EQ(rv(1), 2.0);
+}
+
+TEST(MeasUnaryTest, LogicalNotScalar)
+{
+    EXPECT_EQ((!Measurement(0.0)).as_scalar<int>(), 1);
+    EXPECT_EQ((!Measurement(1.0)).as_scalar<int>(), 0);
+    EXPECT_EQ((!Measurement(0)).as_scalar<int>(), 1);
+    EXPECT_EQ((!Measurement(5)).as_scalar<int>(), 0);
+}
+
+TEST(MeasUnaryTest, LogicalNotVector)
+{
+    Eigen::VectorXd v(3); v << 1.0, 0.0, 3.0;
+    Measurement r = !Measurement(v);
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
+    auto rv = r.as_vector<int>();
+    EXPECT_EQ(rv(0), 0);
+    EXPECT_EQ(rv(1), 1);
+    EXPECT_EQ(rv(2), 0);
+}
+
+TEST(MeasUnaryTest, BitwiseNot)
+{
+    Measurement r = ~Measurement(0);  // ~0 = -1 (all bits set in 2's complement)
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
+    EXPECT_EQ(r.as_scalar<int>(), ~0);
+}
+
+TEST(MeasUnaryTest, BitwiseNotOnRealThrows)
+{
+    EXPECT_THROW(~Measurement(1.0), std::invalid_argument);
+}
+
+// =========================================================================
+//  DataSeries comparison operators
+// =========================================================================
+
+TEST(DataSeriesCmpTest, Equal)
+{
+    auto a = DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
+    auto b = DataSeries::CreateScalarFromVector<double>({1.0, 0.0, 3.0});
+    DataSeries r = a == b;
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
+    EXPECT_EQ(r.scalar_at<int>(0), 1);
+    EXPECT_EQ(r.scalar_at<int>(1), 0);
+    EXPECT_EQ(r.scalar_at<int>(2), 1);
+}
+
+TEST(DataSeriesCmpTest, LessThan)
+{
+    auto a = DataSeries::CreateScalarFromVector<double>({1.0, 5.0});
+    auto b = DataSeries::CreateScalarFromVector<double>({3.0, 2.0});
+    DataSeries r = a < b;
+    EXPECT_EQ(r.scalar_at<int>(0), 1);
+    EXPECT_EQ(r.scalar_at<int>(1), 0);
+}
+
+TEST(DataSeriesCmpTest, CmpSizeMismatchThrows)
+{
+    auto a = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
+    auto b = DataSeries::CreateScalarFromVector<double>({1.0});
+    EXPECT_THROW(a == b, std::invalid_argument);
+}
+
+// =========================================================================
+//  DataSeries logical operators
+// =========================================================================
+
+TEST(DataSeriesLogicalTest, And)
+{
+    auto a = DataSeries::CreateScalarFromVector<double>({1.0, 0.0, 2.0});
+    auto b = DataSeries::CreateScalarFromVector<double>({1.0, 1.0, 0.0});
+    DataSeries r = a && b;
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
+    EXPECT_EQ(r.scalar_at<int>(0), 1);
+    EXPECT_EQ(r.scalar_at<int>(1), 0);
+    EXPECT_EQ(r.scalar_at<int>(2), 0);
+}
+
+TEST(DataSeriesLogicalTest, Or)
+{
+    auto a = DataSeries::CreateScalarFromVector<double>({0.0, 0.0, 1.0});
+    auto b = DataSeries::CreateScalarFromVector<double>({0.0, 1.0, 0.0});
+    DataSeries r = a || b;
+    EXPECT_EQ(r.scalar_at<int>(0), 0);
+    EXPECT_EQ(r.scalar_at<int>(1), 1);
+    EXPECT_EQ(r.scalar_at<int>(2), 1);
+}
+
+// =========================================================================
+//  DataSeries bitwise / shift / modulo
+// =========================================================================
+
+TEST(DataSeriesBitwiseTest, And)
+{
+    auto a = DataSeries::CreateScalarFromVector<int>({6, 3});
+    auto b = DataSeries::CreateScalarFromVector<int>({3, 5});
+    DataSeries r = a & b;
+    EXPECT_EQ(r.scalar_at<int>(0), 2);
+    EXPECT_EQ(r.scalar_at<int>(1), 1);
+}
+
+TEST(DataSeriesShiftTest, LeftShift)
+{
+    auto a = DataSeries::CreateScalarFromVector<int>({1, 2});
+    auto b = DataSeries::CreateScalarFromVector<int>({3, 1});
+    DataSeries r = a << b;
+    EXPECT_EQ(r.scalar_at<int>(0), 8);
+    EXPECT_EQ(r.scalar_at<int>(1), 4);
+}
+
+TEST(DataSeriesModTest, Mod)
+{
+    auto a = DataSeries::CreateScalarFromVector<int>({10, 15});
+    auto b = DataSeries::CreateScalarFromVector<int>({3, 4});
+    DataSeries r = a % b;
+    EXPECT_EQ(r.scalar_at<int>(0), 1);
+    EXPECT_EQ(r.scalar_at<int>(1), 3);
+}
+
+// =========================================================================
+//  DataSeries unary operators
+// =========================================================================
+
+TEST(DataSeriesUnaryTest, Negate)
+{
+    auto s = DataSeries::CreateScalarFromVector<double>({1.0, -2.0, 3.0});
+    DataSeries r = -s;
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(0), -1.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(1), 2.0);
+    EXPECT_DOUBLE_EQ(r.scalar_at<double>(2), -3.0);
+}
+
+TEST(DataSeriesUnaryTest, LogicalNot)
+{
+    auto s = DataSeries::CreateScalarFromVector<double>({1.0, 0.0, 5.0});
+    DataSeries r = !s;
+    EXPECT_EQ(r.data_type(), DataType::kInteger);
+    EXPECT_EQ(r.scalar_at<int>(0), 0);
+    EXPECT_EQ(r.scalar_at<int>(1), 1);
+    EXPECT_EQ(r.scalar_at<int>(2), 0);
+}
+
+TEST(DataSeriesUnaryTest, BitwiseNot)
+{
+    auto s = DataSeries::CreateScalarFromVector<int>({0, -1, 1});
+    DataSeries r = ~s;
+    EXPECT_EQ(r.scalar_at<int>(0), ~0);
+    EXPECT_EQ(r.scalar_at<int>(1), ~(-1));
+    EXPECT_EQ(r.scalar_at<int>(2), ~1);
+}
+
+// =========================================================================
+//  DataSeries op Measurement (new operators)
+// =========================================================================
+
+TEST(DataSeriesMeasCmpTest, EqualMeas)
+{
+    auto s = DataSeries::CreateScalarFromVector<double>({2.0, 2.0, 3.0});
+    Measurement m(2.0);
+    DataSeries r = s == m;
+    EXPECT_EQ(r.scalar_at<int>(0), 1);
+    EXPECT_EQ(r.scalar_at<int>(1), 1);
+    EXPECT_EQ(r.scalar_at<int>(2), 0);
+}
+
+TEST(DataSeriesMeasCmpTest, LessThanMeas)
+{
+    auto s = DataSeries::CreateScalarFromVector<double>({1.0, 5.0});
+    Measurement m(3.0);
+    DataSeries r = s < m;
+    EXPECT_EQ(r.scalar_at<int>(0), 1);
+    EXPECT_EQ(r.scalar_at<int>(1), 0);
+}
+
+TEST(DataSeriesMeasLogicalTest, AndMeas)
+{
+    auto s = DataSeries::CreateScalarFromVector<double>({1.0, 0.0});
+    Measurement m(1.0);
+    DataSeries r = s && m;
+    EXPECT_EQ(r.scalar_at<int>(0), 1);
+    EXPECT_EQ(r.scalar_at<int>(1), 0);
+}
+
+// =========================================================================
+//  Measurement op DataSeries (new operators)
+// =========================================================================
+
+TEST(MeasDataSeriesCmpTest, Equal)
+{
+    Measurement m(2.0);
+    auto s = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    DataSeries r = m == s;
+    EXPECT_EQ(r.scalar_at<int>(0), 1);
+    EXPECT_EQ(r.scalar_at<int>(1), 0);
+}
+
+TEST(MeasDataSeriesLogicalTest, Or)
+{
+    Measurement m(0.0);
+    auto s = DataSeries::CreateScalarFromVector<double>({0.0, 1.0});
+    DataSeries r = m || s;
+    EXPECT_EQ(r.scalar_at<int>(0), 0);
+    EXPECT_EQ(r.scalar_at<int>(1), 1);
+}
+
+TEST(MeasDataSeriesBitwiseTest, And)
+{
+    Measurement m(7);
+    auto s = DataSeries::CreateScalarFromVector<int>({3, 5});
+    DataSeries r = m & s;
+    EXPECT_EQ(r.scalar_at<int>(0), 3);
+    EXPECT_EQ(r.scalar_at<int>(1), 5);
+}
+
+// =========================================================================
+//  DataArray comparison
+// =========================================================================
+
+TEST(DataArrayCmpTest, EqualScalar)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0}));
+    auto b = DataArray::CreateIndependent("b",
+        DataSeries::CreateScalarFromVector<double>({1.0, 0.0, 3.0}));
+
+    auto r = a == b;
+    EXPECT_EQ(r.data().data_type(), DataType::kInteger);
+    EXPECT_EQ(r.data().scalar_at<int>(0), 1);
+    EXPECT_EQ(r.data().scalar_at<int>(1), 0);
+    EXPECT_EQ(r.data().scalar_at<int>(2), 1);
+}
+
+TEST(DataArrayCmpTest, LessThan)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({1.0, 5.0}));
+    auto b = DataArray::CreateIndependent("b",
+        DataSeries::CreateScalarFromVector<double>({3.0, 2.0}));
+
+    auto r = a < b;
+    EXPECT_EQ(r.data().scalar_at<int>(0), 1);
+    EXPECT_EQ(r.data().scalar_at<int>(1), 0);
+}
+
+// =========================================================================
+//  DataArray logical
+// =========================================================================
+
+TEST(DataArrayLogicalTest, And)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({1.0, 0.0}));
+    auto b = DataArray::CreateIndependent("b",
+        DataSeries::CreateScalarFromVector<double>({1.0, 1.0}));
+
+    auto r = a && b;
+    EXPECT_EQ(r.data().scalar_at<int>(0), 1);
+    EXPECT_EQ(r.data().scalar_at<int>(1), 0);
+}
+
+TEST(DataArrayLogicalTest, Or)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({0.0, 0.0}));
+    auto b = DataArray::CreateIndependent("b",
+        DataSeries::CreateScalarFromVector<double>({1.0, 0.0}));
+
+    auto r = a || b;
+    EXPECT_EQ(r.data().scalar_at<int>(0), 1);
+    EXPECT_EQ(r.data().scalar_at<int>(1), 0);
+}
+
+// =========================================================================
+//  DataArray bitwise / shift / modulo
+// =========================================================================
+
+TEST(DataArrayBitwiseTest, And)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<int>({6, 3}));
+    auto b = DataArray::CreateIndependent("b",
+        DataSeries::CreateScalarFromVector<int>({3, 5}));
+
+    auto r = a & b;
+    EXPECT_EQ(r.data().scalar_at<int>(0), 2);
+    EXPECT_EQ(r.data().scalar_at<int>(1), 1);
+}
+
+TEST(DataArrayShiftTest, LeftShift)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<int>({1, 2}));
+    auto b = DataArray::CreateIndependent("b",
+        DataSeries::CreateScalarFromVector<int>({3, 1}));
+
+    auto r = a << b;
+    EXPECT_EQ(r.data().scalar_at<int>(0), 8);
+    EXPECT_EQ(r.data().scalar_at<int>(1), 4);
+}
+
+TEST(DataArrayModTest, Mod)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<int>({10, 15}));
+    auto b = DataArray::CreateIndependent("b",
+        DataSeries::CreateScalarFromVector<int>({3, 4}));
+
+    auto r = a % b;
+    EXPECT_EQ(r.data().scalar_at<int>(0), 1);
+    EXPECT_EQ(r.data().scalar_at<int>(1), 3);
+}
+
+// =========================================================================
+//  DataArray unary
+// =========================================================================
+
+TEST(DataArrayUnaryTest, Negate)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({1.0, -2.0, 3.0}));
+
+    auto r = -a;
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(0), -1.0);
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(1), 2.0);
+    EXPECT_DOUBLE_EQ(r.data().scalar_at<double>(2), -3.0);
+}
+
+TEST(DataArrayUnaryTest, LogicalNot)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({1.0, 0.0, 5.0}));
+
+    auto r = !a;
+    EXPECT_EQ(r.data().data_type(), DataType::kInteger);
+    EXPECT_EQ(r.data().scalar_at<int>(0), 0);
+    EXPECT_EQ(r.data().scalar_at<int>(1), 1);
+    EXPECT_EQ(r.data().scalar_at<int>(2), 0);
+}
+
+// =========================================================================
+//  DataArray op Measurement (new operators)
+// =========================================================================
+
+TEST(DataArrayMeasCmpTest, EqualMeas)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({2.0, 2.0, 3.0}));
+    Measurement m(2.0);
+
+    auto r = a == m;
+    EXPECT_EQ(r.data().scalar_at<int>(0), 1);
+    EXPECT_EQ(r.data().scalar_at<int>(1), 1);
+    EXPECT_EQ(r.data().scalar_at<int>(2), 0);
+}
+
+TEST(DataArrayMeasCmpTest, LessThanMeas)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({1.0, 5.0}));
+    Measurement m(3.0);
+
+    auto r = a < m;
+    EXPECT_EQ(r.data().scalar_at<int>(0), 1);
+    EXPECT_EQ(r.data().scalar_at<int>(1), 0);
+}
+
+TEST(DataArrayMeasLogicalTest, AndMeas)
+{
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({1.0, 0.0}));
+    Measurement m(1.0);
+
+    auto r = a && m;
+    EXPECT_EQ(r.data().scalar_at<int>(0), 1);
+    EXPECT_EQ(r.data().scalar_at<int>(1), 0);
+}
+
+// =========================================================================
+//  Measurement op DataArray (new operators)
+// =========================================================================
+
+TEST(MeasDataArrayCmpTest, Equal)
+{
+    Measurement m(2.0);
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({2.0, 3.0}));
+
+    auto r = m == a;
+    EXPECT_EQ(r.data().scalar_at<int>(0), 1);
+    EXPECT_EQ(r.data().scalar_at<int>(1), 0);
+}
+
+TEST(MeasDataArrayLogicalTest, Or)
+{
+    Measurement m(0.0);
+    auto a = DataArray::CreateIndependent("a",
+        DataSeries::CreateScalarFromVector<double>({0.0, 1.0}));
+
+    auto r = m || a;
+    EXPECT_EQ(r.data().scalar_at<int>(0), 0);
+    EXPECT_EQ(r.data().scalar_at<int>(1), 1);
+    EXPECT_EQ(r.data_kind(), a.data_kind());
+}

@@ -178,6 +178,17 @@ namespace xdataset
         /// Return the (r, c)-th element as a scalar Measurement (preserves unit).
         Measurement element_at(Index r, Index c) const;
 
+        // ======== unary operators (member functions to avoid ADL ambiguity) =====
+
+        /// Negation: flips sign, preserves unit.
+        Measurement operator-() const;
+
+        /// Logical NOT: returns Integer 0/1, dimensionless.
+        Measurement operator!() const;
+
+        /// Bitwise NOT (Integer only, dimensionless).
+        Measurement operator~() const;
+
         // ======== formatting ================================================
 
         /// Return a human-readable string representation.
@@ -377,6 +388,37 @@ namespace xdataset
     /// DataKind broadcasting applies (e.g. Scalar^Vector -> Vector).
     /// When exponent is non-scalar, base must also be dimensionless.
     XDATASET_API Measurement pow(const Measurement& base, const Measurement& exponent);
+
+    // --- Comparison operators (result is Integer 0/1, dimensionless) -----------
+
+    XDATASET_API Measurement operator==(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator!=(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator<(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator>(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator<=(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator>=(const Measurement& lhs, const Measurement& rhs);
+
+    // --- Logical operators (result is Integer 0/1, dimensionless) ---------------
+
+    XDATASET_API Measurement operator&&(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator||(const Measurement& lhs, const Measurement& rhs);
+
+    // --- Bitwise operators (Integer only, result is Integer, dimensionless) -----
+
+    XDATASET_API Measurement operator&(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator|(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator^(const Measurement& lhs, const Measurement& rhs);
+
+    // --- Shift operators (Integer only, result is Integer) ----------------------
+
+    XDATASET_API Measurement operator<<(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator>>(const Measurement& lhs, const Measurement& rhs);
+
+    // --- Modulo (integer remainder; promotes int/int → Integer) -----------------
+
+    XDATASET_API Measurement operator%(const Measurement& lhs, const Measurement& rhs);
+
+
 
 } // namespace xdataset
 

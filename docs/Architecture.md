@@ -607,7 +607,23 @@ BlockDataFrame 和 DataArrayDataFrame 按固定行数分块生成，默认每块
 
 ## Arithmetic
 
-`Measurement` 与 `DataArray` 之间的 `+`、`-`、`*`、`/`、`pow` 遵循统一的运算规则，按**参与者类型** → **类型提升** → **形状兼容** → **单位推导**的顺序依次确定结果。
+Me 与 Da 的运算结果由以下四个步骤依次确定：**Measurement/DataArray 推导** → **DataType推导** → **DataShape推导** → **Unit推导**。
+
+### 运算符类别
+
+| 类别 | 运算符 | 结果 DataType | 结果 Unit | 说明 |
+|------|--------|--------------|----------|------|
+| `kAddSub` | `+` `-` | 按提升规则 | 双方同量纲取任一方，一方无量纲取另一方 | 双方同量纲或无 dim 冲突 |
+| `kMul` | `*` | 按提升规则 | 量纲相乘 | -- |
+| `kDiv` | `/` | 按提升规则，int/int → Real | 量纲相除 | -- |
+| `kMod` | `%` | 按提升规则 | 继承左操作数 | Real 用 `fmod`，Complex 不支持 |
+| `kCompare` | `==` `!=` `<` `>` `<=` `>=` | Integer 0/1 | 无量纲 | 要求双方量纲一致; 复数用模值比较 |
+| `kLogical` | `&&` `\|\|` | Integer 0/1 | 无量纲 | 非零为真 |
+| `kBitwise` | `&` `\|` `^` | Integer | 无量纲 | 仅 Integer 操作数 |
+| `kShift` | `<<` `>>` | Integer | 继承左操作数 | 仅 Integer 操作数 |
+| `kPow` | `pow` | 按提升规则 | 继承底数 | 指数必须无量纲 |
+
+> 一元运算符 `-`（取负）保持操作数类型和单位；`!`（逻辑非）和 `~`（按位取反）返回 Integer 无量纲。
 
 四种组合决定了结果类型及 DataArray 各成员变量的取值：
 
@@ -618,11 +634,16 @@ BlockDataFrame 和 DataArrayDataFrame 按固定行数分块生成，默认每块
 | `DataArray op Measurement` | `DataArray` | `data` 为 Measurement 广播到每行后的运算结果，`indep_datas`、`multi_dimension_spec`、`kind` 继承 DataArray 侧 |
 | `Measurement op DataArray` | `DataArray` | 同上，`indep_datas`、`multi_dimension_spec`、`kind` 继承 DataArray 侧
 
-`pow` 支持以上全部组合，`Measurement` 可出现在底数或指数任意一侧。
-
 ### DataType推导
 
-参与者类型确定后，运算双方按以下矩阵合并 `DataType`：
+运算符类别决定结果 DataType：
+
+- **kAddSub / kMul / kMod** — 按提升规则: Integer → Real → Complex
+- **kDiv** — 同提升规则，但 `Integer / Integer` 强制提升为 `Real`
+- **kCompare / kLogical / kBitwise / kShift** — 结果始终为 `Integer`
+- **kPow** — 按提升规则
+
+提升规则矩阵：
 
 | × | Integer | Real | Complex | String |
 |---|---|---|---|---|
@@ -630,8 +651,6 @@ BlockDataFrame 和 DataArrayDataFrame 按固定行数分块生成，默认每块
 | **Real** | Real | Real | Complex | -- |
 | **Complex** | Complex | Complex | Complex | -- |
 | **String** | -- | -- | -- | -- |
-
-> `Integer / Integer` 强制提升为 `Real`。
 
 ### DataShape推导
 
@@ -647,14 +666,17 @@ BlockDataFrame 和 DataArrayDataFrame 按固定行数分块生成，默认每块
 
 ### Unit推导
 
-运算前双方先 canonicalize（将 multiplier 吸收到基础 SI 单位），再按以下规则确定结果单位：
+运算前双方先 canonicalize（将 multiplier 吸收到基础 SI 单位），再按类别确定结果单位：
 
-| 运算 | 结果单位 | 约束 |
+| 类别 | 结果单位 | 约束 |
 |---|---|---|
-| `a ± b` | 双方同量纲时取任一方，一方无量纲时取另一方 | 双方同量纲，或一方无量纲 |
-| `a × b` | 量纲相乘 | -- |
-| `a / b` | 量纲相除 | -- |
-| `pow(a, exp)` | 继承 a 的单位 | exp 必须无量纲 |
+| `kAddSub` | 双方同量纲时取任一方，一方无量纲时取另一方 | 双方同量纲，或一方无量纲 |
+| `kMul` | 量纲相乘 | -- |
+| `kDiv` | 量纲相除 | -- |
+| `kMod` | 继承左操作数 | -- |
+| `kCompare / kLogical / kBitwise` | 无量纲 | kCompare 要求双方量纲一致 |
+| `kShift` | 继承左操作数 | -- |
+| `pow(base, exp)` | 继承 base 的量纲 | exp 必须无量纲 |
 
 ### Example
 
@@ -684,10 +706,10 @@ BlockDataFrame 和 DataArrayDataFrame 按固定行数分块生成，默认每块
 
 **运算后 (result = Vout × I):**
 
-- 参与者类型: `DataArray op Measurement` → 结果为 DataArray
-- 类型提升: Real × Real → Real
-- 形状兼容: Scalar × Vector(2) → Vector(2)
-- 单位推导: V × A = W
+- Measurement/DataArray 推导: `DataArray op Measurement` → 结果为 DataArray
+- DataType 推导: Real × Real → Real
+- DataShape 推导: Scalar × Vector(2) → Vector(2)
+- Unit 推导: V × A = W
 
 | | freq | power | P(1) | P(2) |
 |---|---|---|---|---|
