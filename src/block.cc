@@ -202,9 +202,4 @@ namespace xdataset
             data_frame_cache_.reset(new BlockDataFrame(*this));
         return *data_frame_cache_;
     }
-
-    std::string Block::to_string(std::size_t max_display_rows) const
-    {
-        return GetOrCreateDataFrame().to_string(max_display_rows);
-    }
 } // namespace xdataset

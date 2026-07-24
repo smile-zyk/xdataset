@@ -104,11 +104,6 @@ namespace xdataset
         return *data_frame_cache_;
     }
 
-    std::string DataArray::to_string(std::size_t max_display_rows) const
-    {
-        return GetOrCreateDataFrame().to_string(max_display_rows);
-    }
-
     const DataSeries& DataArray::indep_data(Index index) const
     {
         if (index <= 0)
@@ -451,7 +446,7 @@ namespace xdataset
 
     DataArray DataArray::CreateDependent(
         DataSeries data,
-        const std::vector<std::pair<std::string, const DataArray*>>& indep_variables)
+        const tsl::ordered_map<std::string, const DataArray*>& indep_variables)
     {
         if (indep_variables.empty())
         {

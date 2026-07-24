@@ -61,8 +61,6 @@ namespace xdataset
 
         const DataFrame& GetOrCreateDataFrame(const std::string& variable_name = "data") const;
 
-        std::string to_string(std::size_t max_display_rows = 32) const;
-
         const tsl::ordered_map<std::string, DataSeries>& indep_datas() const
         {
             return indep_datas_;
@@ -91,7 +89,7 @@ namespace xdataset
         // Dependent variable with named independent DataArray objects.
         static DataArray CreateDependent(
             DataSeries data,
-            const std::vector<std::pair<std::string, const DataArray*>>& indep_variables);
+            const tsl::ordered_map<std::string, const DataArray*>& indep_variables);
 
     private:
         DataSeries data_;

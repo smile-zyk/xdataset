@@ -50,11 +50,12 @@ package "xdataset" #FAFAFA {
         - data_: DataSeries
         - indep_datas_: ordered_map<string, DataSeries>
         - multi_dimension_spec_: MultiDimensionSpec
+        + {static} kSelf : const char*
         + {static} CreateIndependent / CreateDependent
         + at(selectors)
         + select(selectors)
         + indep(index|name)
-        + GetOrCreateDataFrame()
+        + GetOrCreateDataFrame(variable_name)
     }
 
     enum DataArrayKind {
@@ -248,7 +249,7 @@ note right of Dataset : Analysis → ResultType → Block
 `DataArray` 有四种生成途径：
 
 1. **`Block::GetOrCreateDataArray(name)`** — 最常用。Block 根据 Spec 将独立的 DataSeries 组合为 DataArray：独立变量生成 `kIndependent` DataArray，依赖变量生成 `kDependent` DataArray，`multi_dimension_spec` 由所有独立变量的 DimensionSpec 共同决定，坐标轴数据自动绑定。
-2. **静态工厂** — `DataArray::CreateIndependent(...)` 和 `DataArray::CreateDependent(...)` 手动构造。
+2. **静态工厂** — `DataArray::CreateIndependent(DataSeries)` 和 `DataArray::CreateDependent(DataSeries, ordered_map<string, DataArray*>)` 手动构造
 3. **Selection** — `select`、`at`、`indep` 从已有 DataArray 派生新的 DataArray（详见 [Selection](#selection)）。
 4. **算术运算** — `DataArray op DataArray` 或 `DataArray op Measurement` 的结果为新的 DataArray。
 
@@ -316,12 +317,12 @@ dim 0 (bias): Regular(2) -> [1.0V, 2.0V]
 
 **Independent**
 
-`indep_datas` 包含所有上游独立变量的原始 DataSeries 以及自身的原始 DataSeries。`data` 为自身数据展开到完整坐标空间行数后的副本（单维时等于原始）。`multi_dimension_spec` 的维数等于自身在所有独立变量中的序数（含自身）。
+`indep_datas` 包含所有上游独立变量的原始 DataSeries 以及自身的原始 DataSeries。Self 列的 key 固定为 `DataArray::kSelf`（空字符串），表示自身引用。`data` 为自身数据展开到完整坐标空间行数后的副本（单维时等于原始）。`multi_dimension_spec` 的维数等于自身在所有独立变量中的序数（含自身）。
 
 以 `power`（第二个独立变量，上游有 `freq`）为例：
 
 ```
-indep_datas = {"freq": raw(1GHz, 2GHz, 3GHz), "power": raw(10, 20)}   // 上游原始 + 自身原始
+indep_datas = {"freq": raw(1GHz, 2GHz, 3GHz), "": raw(10, 20)}       // 上游原始 + self (kSelf="")
 data        = expand_to (3,2)  ->  {10, 20, 10, 20, 10, 20}            // 自身展开到 6 行
 spec        = [Regular(3), Regular(2)]
 ```
@@ -360,6 +361,8 @@ spec        = [Regular(3), Regular(2)]
 #### select
 
 对 `multi_dimension_spec` 的每个维度施加选择器，返回子集 DataArray。`Equal` 消除该维度，`In` 保留但缩小，`Any` 全选。
+
+> **特例：Independent 的 self 维度保护** — 对 Independent DataArray 执行 `select` 时，最后维度（self 维度）永远不会被 `Equal` 消除。因为 self 维度承载自身数据，消除后结果将为空。
 
 以三维 Dependent `Vout`（bias(2) × freq: Ragged({3,5}) × temp(2)）为例，三种选择器同时使用：
 
@@ -573,9 +576,10 @@ noise (Dataset)
 将单个 DataArray 及其独立变量展开为表格。
 
 - **数据源** — DataArray 的 `indep_datas` + `data`
-- **表头** — 独立变量列（按 indep_datas 顺序） → DataArray 自身的列
+- **表头** — 独立变量列（按 indep_datas 顺序） → DataArray 自身的列（Dependent 用 `variable_name` 命名，Independent 的 self 列也替换为 `variable_name`）
 - **行数** — 由 DataArray 的 `multi_dimension_spec` 决定
 - **列展开** — 同 BlockDataFrame，Vector/Matrix 列展开为标量子列
+- **可变表头** — 通过 `UpdateName(name)` 可刷新列标题而不重建行数据；`GetOrCreateDataFrame(name)` 在 name 变化时自动调用
 
 以 `Vout`（dependent, Scalar, freq × power = 2 × 2）为例：
 

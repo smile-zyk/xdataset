@@ -52,8 +52,6 @@ namespace xdataset
         const DataArray& GetOrCreateDataArray(const std::string& name) const;
         const DataFrame& GetOrCreateDataFrame() const;
 
-        std::string to_string(std::size_t max_display_rows = 32) const;
-
     private:
         DataArray CreateDataArray(const IndependentSpec& info) const;
 
