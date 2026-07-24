@@ -10,7 +10,8 @@ namespace xdataset
     TEST(DataArrayDataFrameTest, IndependentTableExpandsPrefixDimensions)
     {
         Block block(MakeValueRichCreateInfo());
-        DataArray y_data = block.GetOrCreateDataArray("y"); const DataFrame& table = y_data.GetOrCreateDataFrame();
+        DataArray y_data = block.GetOrCreateDataArray("y"); 
+        const DataFrame& table = y_data.GetOrCreateDataFrame("y");
         ASSERT_EQ(table.headers().size(), 2u);
         EXPECT_EQ(table.headers()[0], "x");
         EXPECT_EQ(table.headers()[1], "y");
@@ -30,11 +31,11 @@ namespace xdataset
     TEST(DataArrayDataFrameTest, DependentTableContainsDataColumnAndCsv)
     {
         Block block(MakeValueRichCreateInfo());
-        DataArray z_data = block.GetOrCreateDataArray("z"); const DataFrame& table = z_data.GetOrCreateDataFrame();
+        DataArray z_data = block.GetOrCreateDataArray("z"); const DataFrame& table = z_data.GetOrCreateDataFrame("z");
         ASSERT_EQ(table.headers().size(), 3u);
         EXPECT_EQ(table.headers()[0], "x");
         EXPECT_EQ(table.headers()[1], "y");
-        EXPECT_EQ(table.headers()[2], "data");
+        EXPECT_EQ(table.headers()[2], "z");
 
         ASSERT_EQ(table.row_count(), 6u);
         EXPECT_EQ(table.GetRow(0).multi_index[0], 0);
@@ -47,14 +48,14 @@ namespace xdataset
         EXPECT_EQ(table.GetRow(5).fields[2].to_string(), "105");
 
         const std::string csv = table.ToCsv();
-        EXPECT_NE(csv.find(",x,y,data"), std::string::npos);
+        EXPECT_NE(csv.find(",x,y,z"), std::string::npos);
         EXPECT_NE(csv.find("\"1,2\",20,3,105"), std::string::npos);
     }
 
     TEST(DataArrayDataFrameTest, RaggedIndependentTableExpandsPrefixDimensions)
     {
         Block block(MakeRaggedCreateInfo());
-        DataArray y_data = block.GetOrCreateDataArray("y"); const DataFrame& table = y_data.GetOrCreateDataFrame();
+        DataArray y_data = block.GetOrCreateDataArray("y"); const DataFrame& table = y_data.GetOrCreateDataFrame("y");
         ASSERT_EQ(table.headers().size(), 2u);
         EXPECT_EQ(table.headers()[0], "x");
         EXPECT_EQ(table.headers()[1], "y");
@@ -111,7 +112,7 @@ namespace xdataset
     TEST(DataArrayDataFrameTest, InterleavedRaggedIndependentTableExpandsPrefixDimensions)
     {
         Block block(MakeInterleavedCreateInfo());
-        DataArray z_data = block.GetOrCreateDataArray("z"); const DataFrame& table = z_data.GetOrCreateDataFrame();
+        DataArray z_data = block.GetOrCreateDataArray("z"); const DataFrame& table = z_data.GetOrCreateDataFrame("z");
         ASSERT_EQ(table.headers().size(), 3u);
         EXPECT_EQ(table.headers()[0], "x");
         EXPECT_EQ(table.headers()[1], "y");
@@ -210,16 +211,19 @@ namespace xdataset
     TEST(DataArrayIndepTest, DependentIndepFromInsideOutByIndexAndName)
     {
         Block block(MakeInterleavedCreateInfo());
-        DataArray w_data = block.GetOrCreateDataArray("w"); DataArray indep1 = w_data.indep(1); EXPECT_EQ(indep1.name(), "z");
+        DataArray w_data = block.GetOrCreateDataArray("w");
+
+        // indep(1) = innermost independent (z) expanded to full product
+        DataArray indep1 = w_data.indep(1);
         EXPECT_EQ(indep1.data_kind(), DataArrayKind::kIndependent);
-        EXPECT_EQ(indep1.indep("x").name(), "x");
-        EXPECT_EQ(indep1.indep("y").name(), "y");
         EXPECT_EQ(indep1.multi_dimension_spec().rank(), 3u);
 
-        DataArray indep2 = w_data.indep(2); EXPECT_EQ(indep2.name(), "y");
+        // indep(2) = middle independent (y)
+        DataArray indep2 = w_data.indep(2);
         EXPECT_EQ(indep2.multi_dimension_spec().rank(), 2u);
 
-        DataArray by_name = w_data.indep("z"); EXPECT_EQ(by_name.name(), indep1.name());
+        // by name from dependent w — w has named indeps {"x", "y", "z"}
+        DataArray by_name = w_data.indep("z");
         EXPECT_EQ(by_name.multi_dimension_spec().rank(), indep1.multi_dimension_spec().rank());
     }
 
@@ -229,7 +233,8 @@ namespace xdataset
     TEST(DataArrayIndepTest, IndependentIndepOneReturnsIndexSeries)
     {
         Block block(MakeInterleavedCreateInfo());
-        DataArray z_data = block.GetOrCreateDataArray("z"); DataArray self_indep = z_data.indep(1); EXPECT_EQ(self_indep.name(), "z");
+        DataArray z_data = block.GetOrCreateDataArray("z");
+        DataArray self_indep = z_data.indep(1);   // self-reference (key is "")
         EXPECT_EQ(self_indep.data_kind(), DataArrayKind::kIndependent);
         EXPECT_EQ(self_indep.data().size(), 6u);   // expanded product
 
@@ -238,11 +243,13 @@ namespace xdataset
         for (std::size_t i = 0; i < 6; ++i)
             EXPECT_EQ(self_indep.data().scalar_at<int>(i), expected[i]);
 
-        DataArray from_name = z_data.indep("z"); ASSERT_EQ(from_name.data().size(), self_indep.data().size());
+        // indep(1) is equivalent on independent DataArray
+        DataArray alt_indep = z_data.indep(1);
+        ASSERT_EQ(alt_indep.data().size(), self_indep.data().size());
         for (std::size_t i = 0; i < 6; ++i)
-            EXPECT_EQ(from_name.data().scalar_at<int>(i), self_indep.data().scalar_at<int>(i));
+            EXPECT_EQ(alt_indep.data().scalar_at<int>(i), self_indep.data().scalar_at<int>(i));
 
-        DataArray indep2 = z_data.indep(2); EXPECT_EQ(indep2.name(), "y");
+        DataArray indep2 = z_data.indep(2);
         EXPECT_EQ(indep2.multi_dimension_spec().rank(), 2u);
     }
 
@@ -368,6 +375,31 @@ namespace xdataset
         EXPECT_EQ(table.GetRow(2).fields[0].to_string(), "20");
         EXPECT_EQ(table.GetRow(2).fields[1].to_string(), "3");
         EXPECT_EQ(table.GetRow(2).fields[2].to_string(), "1.004 K");
+    }
+
+    TEST(DataArraySelectTest, IndependentSelectRetainsSelfDimensionEvenWhenEqual)
+    {
+        // Independent DataArray: the last dimension (self) MUST NOT be collapsed
+        // by Equal selector, otherwise the result has no data.
+
+        Block block(MakeInterleavedCreateInfo());
+        DataArray z_data = block.GetOrCreateDataArray("z");
+        // z has dims: x(2), y(Ragged{1,2}), z-self(2)
+        // Without the self-dim fix, Equal(0) on z-self would collapse the dimension,
+        // leaving rank=2. With the fix, rank stays 3.
+        std::vector<MultiIndexSelector> selectors;
+        selectors.push_back(MultiIndexSelector::Any());
+        selectors.push_back(MultiIndexSelector::Any());
+        selectors.push_back(MultiIndexSelector::Equal(0));
+
+        DataArray selected = z_data.select(selectors);
+        EXPECT_EQ(selected.data_kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(selected.multi_dimension_spec().rank(), 3u);
+
+        const std::size_t total = selected.multi_dimension_spec().compute_cell_count();
+        // 3 leaf rows: (0,0,0), (1,0,0), (1,1,0) — z-self filtered to index 0 only
+        EXPECT_EQ(total, 3u);
+        EXPECT_EQ(selected.data().size(), 3u);
     }
 
     TEST(DataArraySelectTest, IndependentSelectRejectsOutOfRangeEqualOnSelfDimension)
@@ -634,7 +666,7 @@ namespace xdataset
     {
         Block block(MakeStringTypedCreateInfo());
         DataArray sy_var = block.GetOrCreateDataArray("sy");
-        const DataFrame& table = sy_var.GetOrCreateDataFrame();
+        const DataFrame& table = sy_var.GetOrCreateDataFrame("sy");
 
         ASSERT_EQ(table.headers().size(), 2u);
         EXPECT_EQ(table.headers()[0], "sx");

@@ -293,6 +293,11 @@ namespace xdataset
         }
     }
 
+    void DataFrame::set_headers(std::vector<std::string> headers)
+    {
+        headers_ = std::move(headers);
+    }
+
     // =========================================================================
     // to_string -- human-readable ASCII table
     // =========================================================================
@@ -483,7 +488,10 @@ namespace xdataset
     // DataArrayDataFrame
     // =========================================================================
 
-    DataArrayDataFrame::DataArrayDataFrame(const DataArray& DataArray)
+    DataArrayDataFrame::DataArrayDataFrame(const DataArray& DataArray,
+                                           std::string variable_name)
+        : data_array_(&DataArray),
+          variable_name_(std::move(variable_name))
     {
         std::vector<std::pair<std::string, const DataSeries*>> indep_columns;
         std::vector<std::string> all_headers;
@@ -491,8 +499,9 @@ namespace xdataset
         indep_columns.reserve(DataArray.indep_datas().size());
         for (const auto& item : DataArray.indep_datas())
         {
-            indep_columns.push_back(std::make_pair(item.first, &item.second));
-            const std::vector<std::string> hdrs = ExpandHeadersForSeries(item.first, item.second);
+            const std::string& col_name = (item.first == DataArray::kSelf  && DataArray.data_kind() == DataArrayKind::kIndependent) ? variable_name_ : item.first;
+            indep_columns.push_back(std::make_pair(col_name, &item.second));
+            const std::vector<std::string> hdrs = ExpandHeadersForSeries(col_name, item.second);
             all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
         }
 
@@ -500,7 +509,7 @@ namespace xdataset
         if (DataArray.data_kind() == DataArrayKind::kDependent)
         {
             dep_series = &DataArray.data();
-            const std::vector<std::string> hdrs = ExpandHeadersForSeries("data", DataArray.data());
+            const std::vector<std::string> hdrs = ExpandHeadersForSeries(variable_name_, DataArray.data());
             all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
         }
 
@@ -548,6 +557,33 @@ namespace xdataset
                 return result;
             });
     }
+
+    void DataArrayDataFrame::UpdateName(std::string variable_name)
+    {
+        variable_name_ = std::move(variable_name);
+        rebuild_headers();
+    }
+
+    void DataArrayDataFrame::rebuild_headers()
+    {
+        std::vector<std::string> all_headers;
+
+        for (const auto& item : data_array_->indep_datas())
+        {
+            const std::string& col_name = (item.first == DataArray::kSelf) ? variable_name_ : item.first;
+            const std::vector<std::string> hdrs = ExpandHeadersForSeries(col_name, item.second);
+            all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
+        }
+
+        if (data_array_->data_kind() == DataArrayKind::kDependent)
+        {
+            const std::vector<std::string> hdrs = ExpandHeadersForSeries(variable_name_, data_array_->data());
+            all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
+        }
+
+        set_headers(std::move(all_headers));
+    }
+
     // =========================================================================
     // MeasurementDataFrame
     // =========================================================================

@@ -68,6 +68,10 @@ namespace xdataset
         void ConfigureStatic(std::vector<std::string> headers,
                              std::vector<DataFrameRow> rows);
 
+        /// Replace headers in-place (same count, only labels change).
+        /// Subclasses use this for on-the-fly header refresh (e.g. rename).
+        void set_headers(std::vector<std::string> headers);
+
     private:
         void EnsureChunkLoaded(Index chunk_idx) const;
 
@@ -97,7 +101,21 @@ namespace xdataset
     class XDATASET_API DataArrayDataFrame : public DataFrame
     {
     public:
-        explicit DataArrayDataFrame(const DataArray& variable);
+        /// @param variable      The DataArray to tabulate.
+        /// @param variable_name  Column header for dependent data (default "UnNamed").
+        explicit DataArrayDataFrame(const DataArray& variable,
+                                    std::string variable_name = "UnNamed");
+
+        /// Update the dependent column header without rebuilding rows.
+        void UpdateName(std::string variable_name);
+
+        const std::string& variable_name() const { return variable_name_; }
+
+    private:
+        void rebuild_headers();
+
+        const DataArray* data_array_;
+        std::string      variable_name_;
     };
 
     // =========================================================================

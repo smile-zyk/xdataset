@@ -109,7 +109,6 @@ namespace xdataset
     DataArray Block::CreateDataArray(const IndependentSpec& info) const
     {
         DataArrayCreateInfo vinfo;
-        vinfo.name = info.name;
         vinfo.kind = DataArrayKind::kIndependent;
 
         MultiDimensionSpec composed_multi_dim;
@@ -149,8 +148,8 @@ namespace xdataset
             vinfo.indep_datas.emplace(it->first, *prior_indeps[p]);
         }
 
-        // Self: raw.
-        vinfo.indep_datas.emplace(info.name, info.data);
+        // Self: raw, unnamed key.
+        vinfo.indep_datas.emplace(DataArray::kSelf, info.data);
         vinfo.multi_dimension_spec = composed_multi_dim;
         return DataArray(std::move(vinfo));
     }
@@ -176,7 +175,6 @@ namespace xdataset
         if (dit != dependent_spec_map_.end())
         {
             DataArrayCreateInfo vinfo;
-            vinfo.name = dit->second.name;
             vinfo.data = dit->second.data;
             vinfo.kind = DataArrayKind::kDependent;
 

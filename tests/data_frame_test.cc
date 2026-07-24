@@ -207,7 +207,7 @@ namespace xdataset
     {
         Block block(MakeRaggedCreateInfo());
         DataArray y = block.GetOrCreateDataArray("y");
-        const DataFrame& table = y.GetOrCreateDataFrame();
+        const DataFrame& table = y.GetOrCreateDataFrame("y");
 
         const std::string csv = table.ToCsv();
         EXPECT_NE(csv.find(",x,y"), std::string::npos);

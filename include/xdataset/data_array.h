@@ -21,7 +21,6 @@ namespace xdataset
 
     struct DataArrayCreateInfo
     {
-        std::string name;
         DataSeries data;
         tsl::ordered_map<std::string, DataSeries> indep_datas;
         MultiDimensionSpec multi_dimension_spec;
@@ -31,8 +30,8 @@ namespace xdataset
     class XDATASET_API DataArray
     {
     public:
-        /// Placeholder name for temporary / derived DataArrays.
-        static const char* kUnnamed;
+        /// Key used in indep_datas_ for the self-reference column of Independent DataArrays.
+        static const char* kSelf;
 
         explicit DataArray(const DataArrayCreateInfo& info);
         explicit DataArray(DataArrayCreateInfo&& info);
@@ -60,14 +59,7 @@ namespace xdataset
             return data_kind_;
         }
 
-        const std::string& name() const
-        {
-            return name_;
-        }
-
-        void set_name(const std::string& name);
-
-        const DataFrame& GetOrCreateDataFrame() const;
+        const DataFrame& GetOrCreateDataFrame(const std::string& variable_name = "data") const;
 
         std::string to_string(std::size_t max_display_rows = 32) const;
 
@@ -92,18 +84,16 @@ namespace xdataset
         DataArray select(const std::vector<MultiIndexSelector>& selectors) const;
 
         // Standalone independent variable (no prior independents).
+        // Self key in indep_datas_ is "".
         static DataArray CreateIndependent(
-            std::string name,
             DataSeries data);
 
-        // Dependent variable from existing independent DataArray objects.
+        // Dependent variable with named independent DataArray objects.
         static DataArray CreateDependent(
-            std::string name,
             DataSeries data,
-            const std::vector<const DataArray*>& indep_variables);
+            const std::vector<std::pair<std::string, const DataArray*>>& indep_variables);
 
     private:
-        std::string name_;
         DataSeries data_;
         tsl::ordered_map<std::string, DataSeries> indep_datas_;
         MultiDimensionSpec multi_dimension_spec_;

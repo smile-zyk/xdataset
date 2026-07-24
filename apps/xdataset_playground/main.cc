@@ -231,14 +231,14 @@ int main()
             auto w = block.GetOrCreateDataArray("w");           // dependent
             std::cout << "w.data_kind() = " << (w.data_kind() == DataArrayKind::kDependent ? "dependent" : "independent") << std::endl;
 
-            auto z_var = w.indep(1);                         // dependent w -> indep(1) = z
-            std::cout << "w.indep(1).name() = " << z_var.name() << ", rank = " << z_var.multi_dimension_spec().rank() << std::endl;
+            auto z_var = w.indep(1);
+            std::cout << "w.indep(1) rank = " << z_var.multi_dimension_spec().rank() << std::endl;
 
-            auto y_var = z_var.indep(2);                     // z -> indep(2) = y
-            std::cout << "z.indep(2).name() = " << y_var.name() << ", rank = " << y_var.multi_dimension_spec().rank() << std::endl;
+            auto y_var = z_var.indep(2);
+            std::cout << "z.indep(2) rank = " << y_var.multi_dimension_spec().rank() << std::endl;
 
-            auto by_name = w.indep("y");                     // by name
-            std::cout << "w.indep(\"y\").name() = " << by_name.name() << std::endl;
+            auto by_name = w.indep("y");
+            std::cout << "w.indep(\"y\") rank = " << by_name.multi_dimension_spec().rank() << std::endl;
 
             // grid model from indep(1)
             std::cout << "\nGrid from w.indep(1):" << std::endl;

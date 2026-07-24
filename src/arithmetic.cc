@@ -1652,12 +1652,6 @@ void validate_indeps_compatible(const DataArray& a, const DataArray& b,
     }
 }
 
-/// Build the result name for a binary DataArray op.
-inline std::string result_name(const DataArray&, const DataArray&,
-                               const char*) {
-    return DataArray::kUnnamed;
-}
-
 // =========================================================================
 //  Generic DataArray  vs  DataArray operator
 // =========================================================================
@@ -1676,7 +1670,6 @@ DataArray array_array_op(const DataArray& lhs, const DataArray& rhs,
 
     // --- assemble result DataArray -----------------------------------------
     DataArrayCreateInfo info;
-    info.name                = result_name(lhs, rhs, op_symbol);
     info.data                = std::move(result_ds);
     info.indep_datas         = lhs.indep_datas();         // inherit from lhs
     info.multi_dimension_spec = lhs.multi_dimension_spec(); // inherit from lhs
@@ -1724,7 +1717,6 @@ DataArray array_meas_op(const DataArray& lhs, const Measurement& rhs,
 
     // --- assemble result DataArray -----------------------------------------
     DataArrayCreateInfo info;
-    info.name                 = DataArray::kUnnamed;
     info.data                 = std::move(result_ds);
     info.indep_datas          = lhs.indep_datas();
     info.multi_dimension_spec = lhs.multi_dimension_spec();
@@ -1766,7 +1758,6 @@ DataArray meas_array_op(const Measurement& lhs, const DataArray& rhs,
     DataSeries result_ds = ds_meas_op(lhs, rhs.data());
 
     DataArrayCreateInfo info;
-    info.name                 = DataArray::kUnnamed;
     info.data                 = std::move(result_ds);
     info.indep_datas          = rhs.indep_datas();
     info.multi_dimension_spec = rhs.multi_dimension_spec();
@@ -1804,7 +1795,6 @@ DataArray pow(const DataArray& base, const Measurement& exp) {
     DataSeries result_ds = xdataset::pow(base.data(), exp);
 
     DataArrayCreateInfo info;
-    info.name                 = DataArray::kUnnamed;
     info.data                 = std::move(result_ds);
     info.indep_datas          = base.indep_datas();
     info.multi_dimension_spec = base.multi_dimension_spec();
@@ -1831,7 +1821,6 @@ DataArray pow(const Measurement& base, const DataArray& exponent) {
     DataSeries result_ds = xdataset::pow(base, exponent.data());
 
     DataArrayCreateInfo info;
-    info.name                 = DataArray::kUnnamed;
     info.data                 = std::move(result_ds);
     info.indep_datas          = exponent.indep_datas();
     info.multi_dimension_spec = exponent.multi_dimension_spec();
@@ -2036,7 +2025,6 @@ DataArray operator%(const Measurement& lhs, const DataArray& rhs) {
 
 DataArray operator-(const DataArray& lhs) {
     DataArrayCreateInfo info;
-    info.name                 = DataArray::kUnnamed;
     info.data                 = -lhs.data();
     info.indep_datas          = lhs.indep_datas();
     info.multi_dimension_spec = lhs.multi_dimension_spec();
@@ -2046,7 +2034,6 @@ DataArray operator-(const DataArray& lhs) {
 
 DataArray operator!(const DataArray& lhs) {
     DataArrayCreateInfo info;
-    info.name                 = DataArray::kUnnamed;
     info.data                 = !lhs.data();
     info.indep_datas          = lhs.indep_datas();
     info.multi_dimension_spec = lhs.multi_dimension_spec();
@@ -2056,7 +2043,6 @@ DataArray operator!(const DataArray& lhs) {
 
 DataArray operator~(const DataArray& lhs) {
     DataArrayCreateInfo info;
-    info.name                 = DataArray::kUnnamed;
     info.data                 = ~lhs.data();
     info.indep_datas          = lhs.indep_datas();
     info.multi_dimension_spec = lhs.multi_dimension_spec();

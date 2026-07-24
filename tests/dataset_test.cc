@@ -223,7 +223,6 @@ namespace xdataset
         ds.AddBlock("SP1", "SP", makeBlockInfo());
 
         const DataArray& da = ds.GetDataArray("SP1", "SP", "iv0");
-        EXPECT_EQ(da.name(), "iv0");
         EXPECT_EQ(da.data_kind(), DataArrayKind::kIndependent);
     }
 
@@ -265,7 +264,6 @@ namespace xdataset
         ds.AddBlock("SP1", "SP", makeBlockInfo());
 
         const DataArray& da = ds.GetDataArray("iv0");
-        EXPECT_EQ(da.name(), "iv0");
     }
 
     TEST(DatasetTest, GetDataArrayUniqueNameThrowsOnNotFound)
@@ -332,7 +330,6 @@ namespace xdataset
 
         Block& b = ds.GetBlock("SP1", "SP");
         const DataArray& da = b.GetOrCreateDataArray("iv0");
-        EXPECT_EQ(da.name(), "iv0");
     }
 
     // ========================================================================
