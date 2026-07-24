@@ -21,9 +21,14 @@ left to right direction
 package "xdataset" #FAFAFA {
 
     class Dataset {
-        + AddBlock(analysis, result_type, info)
-        + GetDataArray(analysis, result_type, name)
+        + AddBlock(path, info)
+        + RemoveBlock(path) / RemoveGroup(path)
+        + GetBlock(path)
+        + GetDataArray(block_path, array_name)
         + GetDataArray(name)
+        + GetBlockNames(group_path) / GetGroupNames(group_path)
+        + GetAllBlockPaths()
+        + block_count()
     }
 
     class Block {
@@ -136,7 +141,14 @@ package "xdataset" #FAFAFA {
         String
     }
 
-    Dataset "1" *-- "*" Block
+    class Group {
+        + subgroups: ordered_map<string, Group*>
+        + block: Block*
+    }
+
+    Dataset "1" *-- "1" Group : root
+    Group "1" *-- "*" Group : subgroups
+    Group "1" o-- "0..1" Block : block
     Block *-- "1..*" IndependentSpec
     Block *-- "*" DependentSpec
     IndependentSpec --> DataSeries : data
@@ -189,7 +201,7 @@ note right of DataArray : named variable\n← REL result
 note right of Block : independents + dependents
 
 [Block] --> [Dataset] : nest
-note right of Dataset : Analysis → ResultType → Block
+note right of Dataset : Group 树 → Block (叶子)
 @enduml
 ```
 
@@ -499,44 +511,52 @@ Block
 
 通过 `Block::GetOrCreateDataArray(name)` 可将 Spec 中的 DataSeries 组合为 `DataArray`（详见 [DataArray Generate](#generate)）。
 
+`Block` 本身不含路径信息——其在 Dataset 树中的位置由外部决定。例如 `AddBlock("simulation/SP1/SP", info)` 创建了一个以 `"SP"` 命名的 Block，其完整标识为路径 `"simulation/SP1/SP"`。Block 内部的 `name()` 为短名 `"SP"`。
+
 ### Dataset
 | 属性 | 类型 | 说明 |
 |------|------|------|
-| blocks | `ordered_map<Analysis, ordered_map<ResultType, Block>>` | 三层嵌套映射，按 Analysis → ResultType 两级键索引 Block |
+| name | `string` | Dataset 名称（如 `"noise"`） |
+| root | `Group` | 树根节点，可嵌套任意深度的 Group，Block 为叶子 |
 
-`Dataset` 是 xdataset 的顶层容器，将仿真数据按 Analysis（分析类型）和 ResultType（结果模式）两级命名空间组织，最终定位到 `Block`。每个 Block 代表一次完整仿真结果——其独立变量定义坐标轴，依赖变量挂载在该坐标空间上。通过 `GetDataArray` 可按路径获取带坐标的命名变量。
+`Dataset` 是 xdataset 的顶层容器，将仿真数据按树形命名空间组织，内部节点为 **Group**，叶子节点为 **Block**。路径以 `/` 分隔，每个路径段对应一层 Group，最后一段为 Block 名。中间 Group 在 `AddBlock` 时隐式创建。每个 Block 代表一次完整仿真结果——其独立变量定义坐标轴，依赖变量挂载在该坐标空间上。
 
-- **Analysis** — 仿真分析名称（如 `SP1`、`SP2`），对应一次仿真分析的顶层命名空间
-- **ResultType** — 结果类型（如 `SP`、`HB`），区分同一分析下的不同仿真模式
-- **Block** — 该 Analysis、ResultType 下的单次仿真结果，包含独立变量 Spec 与依赖变量 DataSeries
+- **Group** — 逻辑分组节点，可嵌套任意深度。不含数据，仅包含子 Group 和 Block 的映射
+- **Block** — 叶子节点，代表一次仿真结果，包含独立变量 Spec 与依赖变量 DataSeries
 
-典型结构如下：
+典型结构如下（树形，深度灵活）：
 
 ```text
 noise (Dataset)
-+-- SP1 (Analysis)
-|   +-- SP  (ResultType) -> Block "noise.SP1.SP"
-|   |   +-- freq  (Independent)
-|   |   +-- Vout   (Dependent)
-|   |   +-- gain   (Dependent)
-|   +-- HB  (ResultType) -> Block "noise.SP1.HB"
-|       +-- freq  (Independent)
-|       +-- Pout  (Dependent)
-+-- SP2 (Analysis)
-    +-- SP  (ResultType) -> Block "noise.SP2.SP"
-        +-- freq  (Independent)
-        +-- Vout   (Dependent)
++-- simulation/                   (Group)
+|   +-- SP1/                      (Group)
+|   |   +-- SP                    (Block)
+|   |   |   +-- freq  (Independent)
+|   |   |   +-- Vout  (Dependent)
+|   |   |   +-- gain  (Dependent)
+|   |   +-- HB                    (Block)
+|   |       +-- freq  (Independent)
+|   |       +-- Pout  (Dependent)
+|   +-- SP2/                      (Group)
+|       +-- SP                    (Block)
+|           +-- freq  (Independent)
+|           +-- Vout  (Dependent)
++-- summary/                      (Group)
+    +-- stats                     (Block)
+        +-- name  (Independent)
+        +-- min   (Dependent)
+        +-- max   (Dependent)
 ```
 
 #### GetDataArray
 
-从 Dataset 中按 Analysis → ResultType → DataArray 路径获取 `DataArray`，对应 REL 变量引用语法：
+从 Dataset 中按路径获取 `DataArray`。C++ API 使用 `/` 分隔 Group 层级，REL 语法使用 `.` 分隔，且用 `..` 表示全局唯一名快捷方式：
 
 | REL 语法 | C++ API | 说明 |
 |---|---|---|
-| `noise.SP1.SP.Vout` | `GetDataArray("SP1", "SP", "Vout")` | 完整路径 |
+| `noise.simulation.SP1.SP.Vout` | `GetDataArray("simulation/SP1/SP", "Vout")` | 完整路径 |
 | `noise..Vout` | `GetDataArray("Vout")` | Vout 在 Dataset 中唯一时的简写 |
-| `SP1.SP.Vout` | `GetDataArray("SP1", "SP", "Vout")` | 默认 Dataset 下省略 Dataset 名 |
+| `simulation.SP1.SP.Vout` | `GetDataArray("simulation/SP1/SP", "Vout")` | 默认 Dataset 下省略 Dataset 名 |
 | `Vout` | `GetDataArray("Vout")` | 默认 Dataset 下唯一变量 |
 
 ## DataFrame

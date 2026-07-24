@@ -11,15 +11,13 @@ namespace xdataset
     {
         using namespace block_fixtures;
 
-        // --------------------------------------------------------------------
-        // Helpers
-        // --------------------------------------------------------------------
-
-        BlockCreateInfo makeBlockInfo(std::size_t indep_count = 2,
-                                      std::size_t dep_count = 1)
+        BlockCreateInfo make_block_info(std::size_t indep_count = 2,
+                                        std::size_t dep_count = 1)
         {
-            BlockCreateInfo info;
+            std::size_t rows = 1;
+            for (std::size_t i = 0; i < indep_count; ++i) rows *= 2;
 
+            BlockCreateInfo info;
             for (std::size_t i = 0; i < indep_count; ++i)
             {
                 info.independent_specs.push_back(
@@ -27,14 +25,12 @@ namespace xdataset
                                     MakeScalarSeries(2),
                                     DimensionSpec::Regular(2)});
             }
-
             for (std::size_t j = 0; j < dep_count; ++j)
             {
                 info.dependent_specs.push_back(
                     DependentSpec{"dv" + std::to_string(j),
-                                  MakeScalarSeries(4)});
+                                  MakeScalarSeries(rows)});
             }
-
             return info;
         }
 
@@ -56,143 +52,170 @@ namespace xdataset
         EXPECT_EQ(named.name(), "other");
     }
 
+    TEST(DatasetTest, EmptyDatasetHasNoBlocks)
+    {
+        Dataset ds("noise");
+        EXPECT_EQ(ds.block_count(), 0u);
+        EXPECT_TRUE(ds.GetAllBlockPaths().empty());
+        EXPECT_TRUE(ds.GetBlockNames().empty());
+        EXPECT_TRUE(ds.GetGroupNames().empty());
+    }
+
     // ========================================================================
     // AddBlock
     // ========================================================================
 
-    TEST(DatasetTest, AddBlockCreatesAnalysisAndBlock)
+    TEST(DatasetTest, AddBlockWithPathCreatesBlock)
     {
         Dataset ds("noise");
-        Block& b = ds.AddBlock("SP1", "SP", makeBlockInfo());
+        Block& b = ds.AddBlock("SP1/SP", make_block_info());
 
-        EXPECT_EQ(b.name(), "noise.SP1.SP");
-        EXPECT_TRUE(ds.HasAnalysis("SP1"));
-        EXPECT_TRUE(ds.HasBlock("SP1", "SP"));
-        EXPECT_EQ(ds.analysis_count(), 1u);
+        EXPECT_EQ(b.name(), "SP1.SP");
+        EXPECT_TRUE(ds.HasBlock("SP1/SP"));
+        EXPECT_EQ(ds.block_count(), 1u);
+    }
+
+    TEST(DatasetTest, AddBlockTopLevel)
+    {
+        Dataset ds("noise");
+        ds.AddBlock("results", make_block_info());
+
+        EXPECT_EQ(ds.GetBlock("results").name(), "results");
+        EXPECT_TRUE(ds.HasBlock("results"));
+        EXPECT_EQ(ds.block_count(), 1u);
     }
 
     TEST(DatasetTest, AddBlockMoveOverload)
     {
         Dataset ds("noise");
-        BlockCreateInfo info = makeBlockInfo();
-
-        Block& b = ds.AddBlock("SP1", "SP", std::move(info));
-        EXPECT_EQ(b.name(), "noise.SP1.SP");
+        BlockCreateInfo info = make_block_info();
+        Block& b = ds.AddBlock("sim/SP", std::move(info));
+        EXPECT_EQ(b.name(), "sim.SP");
     }
 
-    TEST(DatasetTest, AddBlockDuplicateResultTypeThrows)
+    TEST(DatasetTest, AddBlockDuplicatePathThrows)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-
-        EXPECT_THROW(
-            { ds.AddBlock("SP1", "SP", makeBlockInfo()); },
-            std::invalid_argument);
+        ds.AddBlock("simulation/SP", make_block_info());
+        EXPECT_THROW({ ds.AddBlock("simulation/SP", make_block_info()); },
+                     std::invalid_argument);
     }
 
-    TEST(DatasetTest, AddBlockDifferentResultTypesSameAnalysis)
+    TEST(DatasetTest, AddBlockMultipleBlocksInSameGroup)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-        ds.AddBlock("SP1", "HB", makeBlockInfo());
+        ds.AddBlock("simulation/SP", make_block_info());
+        ds.AddBlock("simulation/HB", make_block_info());
 
-        EXPECT_TRUE(ds.HasBlock("SP1", "SP"));
-        EXPECT_TRUE(ds.HasBlock("SP1", "HB"));
-        EXPECT_EQ(ds.analysis_count(), 1u);
+        EXPECT_TRUE(ds.HasBlock("simulation/SP"));
+        EXPECT_TRUE(ds.HasBlock("simulation/HB"));
+        EXPECT_EQ(ds.block_count(), 2u);
     }
 
-    TEST(DatasetTest, AddBlockDifferentAnalysesSameResultType)
+    TEST(DatasetTest, AddBlockNestedCreatesIntermediateGroups)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-        ds.AddBlock("SP2", "SP", makeBlockInfo());
+        ds.AddBlock("a/b/c/d", make_block_info());
 
-        EXPECT_TRUE(ds.HasBlock("SP1", "SP"));
-        EXPECT_TRUE(ds.HasBlock("SP2", "SP"));
-        EXPECT_EQ(ds.analysis_count(), 2u);
+        EXPECT_TRUE(ds.HasGroup("a"));
+        EXPECT_TRUE(ds.HasGroup("a/b"));
+        EXPECT_TRUE(ds.HasGroup("a/b/c"));
+        EXPECT_TRUE(ds.HasBlock("a/b/c/d"));
+    }
+
+    TEST(DatasetTest, AddBlockCollisionWithGroupNameThrows)
+    {
+        Dataset ds("noise");
+        ds.AddBlock("a/b", make_block_info());
+        EXPECT_THROW({ ds.AddBlock("a/b/c", make_block_info()); },
+                     std::invalid_argument);
     }
 
     // ========================================================================
-    // RemoveBlock / RemoveAnalysis
+    // RemoveBlock / RemoveGroup
     // ========================================================================
 
     TEST(DatasetTest, RemoveBlockSucceeds)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-        ds.AddBlock("SP1", "HB", makeBlockInfo());
+        ds.AddBlock("simulation/SP", make_block_info());
+        ds.AddBlock("simulation/HB", make_block_info());
 
-        std::size_t removed = ds.RemoveBlock("SP1", "SP");
+        std::size_t removed = ds.RemoveBlock("simulation/SP");
         EXPECT_EQ(removed, 1u);
-        EXPECT_FALSE(ds.HasBlock("SP1", "SP"));
-        EXPECT_TRUE(ds.HasBlock("SP1", "HB"));
+        EXPECT_FALSE(ds.HasBlock("simulation/SP"));
+        EXPECT_TRUE(ds.HasBlock("simulation/HB"));
     }
 
-    TEST(DatasetTest, RemoveBlockOnMissingAnalysisReturnsZero)
+    TEST(DatasetTest, RemoveBlockMissingPathReturnsZero)
     {
         Dataset ds("noise");
-        EXPECT_EQ(ds.RemoveBlock("Nope", "SP"), 0u);
+        EXPECT_EQ(ds.RemoveBlock("nonexistent"), 0u);
     }
 
-    TEST(DatasetTest, RemoveBlockOnMissingResultTypeReturnsZero)
+    TEST(DatasetTest, RemoveBlockOnGroupNotBlockReturnsZero)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-
-        EXPECT_EQ(ds.RemoveBlock("SP1", "HB"), 0u);
+        ds.AddBlock("a/b", make_block_info());
+        EXPECT_EQ(ds.RemoveBlock("a"), 0u);
     }
 
-    TEST(DatasetTest, RemoveLastBlockCleansUpAnalysis)
+    TEST(DatasetTest, RemoveGroupClearsSubtree)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
+        ds.AddBlock("simulation/SP1/SP", make_block_info());
+        ds.AddBlock("simulation/SP1/HB", make_block_info());
+        ds.AddBlock("simulation/SP2/SP", make_block_info());
 
-        ds.RemoveBlock("SP1", "SP");
-        EXPECT_FALSE(ds.HasAnalysis("SP1"));
-        EXPECT_EQ(ds.analysis_count(), 0u);
+        std::size_t removed = ds.RemoveGroup("simulation/SP1");
+        EXPECT_EQ(removed, 2u);
+        EXPECT_FALSE(ds.HasGroup("simulation/SP1"));
+        EXPECT_TRUE(ds.HasBlock("simulation/SP2/SP"));
+        EXPECT_EQ(ds.block_count(), 1u);
     }
 
-    TEST(DatasetTest, RemoveAnalysisClearsAllBlocks)
+    TEST(DatasetTest, RemoveGroupMissingPathReturnsZero)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-        ds.AddBlock("SP1", "HB", makeBlockInfo());
-        ds.AddBlock("SP2", "SP", makeBlockInfo());
-
-        std::size_t removed = ds.RemoveAnalysis("SP1");
-        EXPECT_EQ(removed, 1u);
-        EXPECT_FALSE(ds.HasAnalysis("SP1"));
-        EXPECT_TRUE(ds.HasAnalysis("SP2"));
-        EXPECT_EQ(ds.analysis_count(), 1u);
+        EXPECT_EQ(ds.RemoveGroup("nonexistent"), 0u);
     }
 
-    TEST(DatasetTest, RemoveAnalysisOnMissingReturnsZero)
+    TEST(DatasetTest, RemoveGroupRootClearsAll)
     {
         Dataset ds("noise");
-        EXPECT_EQ(ds.RemoveAnalysis("Nope"), 0u);
+        ds.AddBlock("a", make_block_info());
+        ds.AddBlock("b/c", make_block_info());
+
+        std::size_t removed = ds.RemoveGroup("");
+        EXPECT_EQ(removed, 2u);
+        EXPECT_EQ(ds.block_count(), 0u);
     }
 
     // ========================================================================
-    // HasAnalysis / HasBlock / HasUniqueDataArray
+    // HasBlock / HasGroup / HasUniqueDataArray
     // ========================================================================
 
     TEST(DatasetTest, HasQueriesCorrect)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
+        ds.AddBlock("simulation/SP", make_block_info());
 
-        EXPECT_TRUE(ds.HasAnalysis("SP1"));
-        EXPECT_FALSE(ds.HasAnalysis("SP2"));
+        EXPECT_TRUE(ds.HasGroup("simulation"));
+        EXPECT_TRUE(ds.HasBlock("simulation/SP"));
+        EXPECT_FALSE(ds.HasBlock("simulation/HB"));
+        EXPECT_FALSE(ds.HasGroup("nonexistent"));
+    }
 
-        EXPECT_TRUE(ds.HasBlock("SP1", "SP"));
-        EXPECT_FALSE(ds.HasBlock("SP1", "HB"));
+    TEST(DatasetTest, HasGroupOnRootReturnsTrue)
+    {
+        Dataset ds("noise");
+        EXPECT_TRUE(ds.HasGroup(""));
     }
 
     TEST(DatasetTest, HasUniqueDataArrayTrue)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-
+        ds.AddBlock("simulation/SP", make_block_info());
         EXPECT_TRUE(ds.HasUniqueDataArray("iv0"));
         EXPECT_TRUE(ds.HasUniqueDataArray("dv0"));
     }
@@ -206,193 +229,187 @@ namespace xdataset
     TEST(DatasetTest, HasUniqueDataArrayFalseWhenMultiple)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-        ds.AddBlock("SP1", "HB", makeBlockInfo());
-
-        // "iv0" appears in both SP and HB, so not unique
+        ds.AddBlock("simulation/SP", make_block_info());
+        ds.AddBlock("simulation/HB", make_block_info());
         EXPECT_FALSE(ds.HasUniqueDataArray("iv0"));
     }
 
     // ========================================================================
-    // GetDataArray -- full path
+    // GetDataArray
     // ========================================================================
 
     TEST(DatasetTest, GetDataArrayFullPath)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
+        ds.AddBlock("simulation/SP", make_block_info());
 
-        const DataArray& da = ds.GetDataArray("SP1", "SP", "iv0");
+        const DataArray& da = ds.GetDataArray("simulation/SP", "iv0");
         EXPECT_EQ(da.data_kind(), DataArrayKind::kIndependent);
-    }
-
-    TEST(DatasetTest, GetDataArrayFullPathThrowsOnMissingAnalysis)
-    {
-        Dataset ds("noise");
-        EXPECT_THROW(
-            { ds.GetDataArray("Nope", "SP", "freq"); },
-            std::out_of_range);
     }
 
     TEST(DatasetTest, GetDataArrayFullPathThrowsOnMissingBlock)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-
-        EXPECT_THROW(
-            { ds.GetDataArray("SP1", "HB", "freq"); },
-            std::out_of_range);
+        EXPECT_THROW({ ds.GetDataArray("nonexistent", "freq"); },
+                     std::out_of_range);
     }
 
     TEST(DatasetTest, GetDataArrayFullPathThrowsOnMissingDataArray)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-
-        EXPECT_THROW(
-            { ds.GetDataArray("SP1", "SP", "nonexistent"); },
-            std::invalid_argument);
+        ds.AddBlock("simulation/SP", make_block_info());
+        EXPECT_THROW({ ds.GetDataArray("simulation/SP", "nonexistent"); },
+                     std::invalid_argument);
     }
-
-    // ========================================================================
-    // GetDataArray -- unique name shortcut
-    // ========================================================================
 
     TEST(DatasetTest, GetDataArrayUniqueNameShortcut)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-
+        ds.AddBlock("simulation/SP", make_block_info());
         const DataArray& da = ds.GetDataArray("iv0");
     }
 
     TEST(DatasetTest, GetDataArrayUniqueNameThrowsOnNotFound)
     {
         Dataset ds("noise");
-        EXPECT_THROW(
-            { ds.GetDataArray("nonexistent"); },
-            std::invalid_argument);
+        EXPECT_THROW({ ds.GetDataArray("nonexistent"); },
+                     std::invalid_argument);
     }
 
     TEST(DatasetTest, GetDataArrayUniqueNameThrowsOnAmbiguous)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-        ds.AddBlock("SP1", "HB", makeBlockInfo());
-
-        // "iv0" exists in both blocks
-        EXPECT_THROW(
-            { ds.GetDataArray("iv0"); },
-            std::invalid_argument);
+        ds.AddBlock("simulation/SP", make_block_info());
+        ds.AddBlock("simulation/HB", make_block_info());
+        EXPECT_THROW({ ds.GetDataArray("iv0"); }, std::invalid_argument);
     }
 
     // ========================================================================
-    // GetAnalysis / GetBlock -- const & mutable
+    // GetBlock
     // ========================================================================
-
-    TEST(DatasetTest, GetAnalysisConst)
-    {
-        Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-        ds.AddBlock("SP1", "HB", makeBlockInfo());
-
-        const Dataset& cds = ds;
-        const Dataset::ResultTypeMap& results = cds.GetAnalysis("SP1");
-        EXPECT_EQ(results.size(), 2u);
-    }
-
-    TEST(DatasetTest, GetAnalysisThrowsOnMissing)
-    {
-        Dataset ds("noise");
-        EXPECT_THROW({ ds.GetAnalysis("Nope"); }, std::out_of_range);
-    }
 
     TEST(DatasetTest, GetBlockConst)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
+        ds.AddBlock("simulation/SP", make_block_info());
 
         const Dataset& cds = ds;
-        const Block& b = cds.GetBlock("SP1", "SP");
-        EXPECT_EQ(b.name(), "noise.SP1.SP");
+        const Block& b = cds.GetBlock("simulation/SP");
+        EXPECT_EQ(b.name(), "simulation.SP");
     }
 
     TEST(DatasetTest, GetBlockThrowsOnMissing)
     {
         Dataset ds("noise");
-        EXPECT_THROW({ ds.GetBlock("Nope", "SP"); }, std::out_of_range);
+        EXPECT_THROW({ ds.GetBlock("nonexistent"); }, std::out_of_range);
     }
 
     TEST(DatasetTest, GetBlockMutableAllowsLazyDataArrayCreation)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
+        ds.AddBlock("simulation/SP", make_block_info());
 
-        Block& b = ds.GetBlock("SP1", "SP");
+        Block& b = ds.GetBlock("simulation/SP");
         const DataArray& da = b.GetOrCreateDataArray("iv0");
     }
 
     // ========================================================================
-    // GetAnalysisNames / GetDataArrayNames
+    // GetDataArrayNames
     // ========================================================================
-
-    TEST(DatasetTest, GetAnalysisNamesEmpty)
-    {
-        Dataset ds("noise");
-        EXPECT_TRUE(ds.GetAnalysisNames().empty());
-    }
-
-    TEST(DatasetTest, GetAnalysisNamesInsertionOrder)
-    {
-        Dataset ds("noise");
-        ds.AddBlock("SP2", "SP", makeBlockInfo());
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-        ds.AddBlock("SP3", "SP", makeBlockInfo());
-
-        auto names = ds.GetAnalysisNames();
-        ASSERT_EQ(names.size(), 3u);
-        EXPECT_EQ(names[0], "SP2");
-        EXPECT_EQ(names[1], "SP1");
-        EXPECT_EQ(names[2], "SP3");
-    }
 
     TEST(DatasetTest, GetDataArrayNames)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
+        ds.AddBlock("simulation/SP", make_block_info());
 
-        auto names = ds.GetDataArrayNames("SP1", "SP");
-        ASSERT_EQ(names.size(), 3u);  // iv0, iv1, dv0
+        std::vector<std::string> names = ds.GetDataArrayNames("simulation/SP");
+        ASSERT_EQ(names.size(), 3u);
         EXPECT_EQ(names[0], "iv0");
         EXPECT_EQ(names[1], "iv1");
         EXPECT_EQ(names[2], "dv0");
     }
 
-    TEST(DatasetTest, GetDataArrayNamesThrowsOnMissing)
+    TEST(DatasetTest, GetDataArrayNamesThrowsOnMissingBlock)
     {
         Dataset ds("noise");
-        EXPECT_THROW(
-            { ds.GetDataArrayNames("Nope", "SP"); },
-            std::invalid_argument);
+        EXPECT_THROW({ ds.GetDataArrayNames("nonexistent"); }, std::out_of_range);
     }
 
     // ========================================================================
-    // analysis_count
+    // GetBlockNames / GetGroupNames / GetAllBlockPaths
     // ========================================================================
 
-    TEST(DatasetTest, AnalysisCountEmpty)
+    TEST(DatasetTest, GetBlockNamesRoot)
     {
         Dataset ds("noise");
-        EXPECT_EQ(ds.analysis_count(), 0u);
+        ds.AddBlock("summary/stats", make_block_info());
+        ds.AddBlock("simulation/SP1/SP", make_block_info());
+        ds.AddBlock("simulation/SP1/HB", make_block_info());
+
+        EXPECT_TRUE(ds.GetBlockNames().empty());
+
+        auto names = ds.GetBlockNames("simulation/SP1");
+        ASSERT_EQ(names.size(), 2u);
+        EXPECT_EQ(names[0], "SP");
+        EXPECT_EQ(names[1], "HB");
     }
 
-    TEST(DatasetTest, AnalysisCountWithMultipleAnalyses)
+    TEST(DatasetTest, GetGroupNames)
     {
         Dataset ds("noise");
-        ds.AddBlock("SP1", "SP", makeBlockInfo());
-        ds.AddBlock("SP1", "HB", makeBlockInfo());
-        ds.AddBlock("SP2", "SP", makeBlockInfo());
+        ds.AddBlock("simulation/SP1/SP", make_block_info());
+        ds.AddBlock("summary/stats", make_block_info());
 
-        EXPECT_EQ(ds.analysis_count(), 2u);
+        auto names = ds.GetGroupNames();
+        ASSERT_EQ(names.size(), 2u);
+        EXPECT_EQ(names[0], "simulation");
+        EXPECT_EQ(names[1], "summary");
     }
-}
+
+    TEST(DatasetTest, GetGroupNamesEmptyForLeaf)
+    {
+        Dataset ds("noise");
+        ds.AddBlock("results", make_block_info());
+
+        auto names = ds.GetGroupNames("results");
+        EXPECT_TRUE(names.empty());
+    }
+
+    TEST(DatasetTest, GetBlockNamesThrowsOnMissing)
+    {
+        Dataset ds("noise");
+        EXPECT_THROW({ ds.GetBlockNames("nonexistent"); }, std::out_of_range);
+    }
+
+    TEST(DatasetTest, GetAllBlockPathsInsertionOrder)
+    {
+        Dataset ds("noise");
+        ds.AddBlock("b/block", make_block_info());
+        ds.AddBlock("a/block", make_block_info());
+
+        auto paths = ds.GetAllBlockPaths();
+        ASSERT_EQ(paths.size(), 2u);
+        EXPECT_EQ(paths[0], "b/block");
+        EXPECT_EQ(paths[1], "a/block");
+    }
+
+    // ========================================================================
+    // block_count
+    // ========================================================================
+
+    TEST(DatasetTest, BlockCountEmpty)
+    {
+        Dataset ds("noise");
+        EXPECT_EQ(ds.block_count(), 0u);
+    }
+
+    TEST(DatasetTest, BlockCountWithNestedBlocks)
+    {
+        Dataset ds("noise");
+        ds.AddBlock("a", make_block_info());
+        ds.AddBlock("b/c", make_block_info());
+        ds.AddBlock("b/d", make_block_info());
+
+        EXPECT_EQ(ds.block_count(), 3u);
+    }
+} // namespace xdataset

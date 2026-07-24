@@ -32,12 +32,27 @@ namespace xdataset
         std::vector<DependentSpec>   dependent_specs;
     };
 
+    // ========================================================================
+    // Block — leaf node in the Dataset tree
+    // ========================================================================
+    //
+    // A Block holds the independent variables (coordinate axes) and dependent
+    // variables (measurements) for one simulation result.  It is always a
+    // LEAF in the Dataset tree — Blocks do not contain other Blocks.
+    //
+    // Block.name() returns the short (leaf) name.
+    // The full path within the Dataset is determined by the tree structure,
+    // e.g. AddBlock("simulation/SP1/SP", info) → Block::name() == "SP",
+    // full path == "simulation/SP1/SP".
+    //
+    // ========================================================================
     class XDATASET_API Block
     {
     public:
         explicit Block(const BlockCreateInfo& info);
         explicit Block(BlockCreateInfo&& info);
 
+        /// Short (leaf) name, e.g. "SP" for path "simulation/SP1/SP".
         const std::string& name() const;
         void               set_name(std::string name);
 

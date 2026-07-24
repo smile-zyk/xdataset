@@ -1,53 +1,68 @@
 ﻿#ifndef DATASET_H
 #define DATASET_H
 
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
-
-#include <tsl/ordered_map.h>
 
 #include "block.h"
 #include "data_array.h"
 
-namespace xdataset 
+namespace xdataset
 {
+
+// =========================================================================
+// Group — internal node in the Dataset tree
+// =========================================================================
+//
+// When `block` is non-null, the Group is a leaf (holds a Block).
+// When `block` is null, the Group is a pure container for sub-groups.
+// Groups are created implicitly by Dataset::AddBlock().
+// =========================================================================
+
+struct XDATASET_API Group
+{
+    tsl::ordered_map<std::string, std::unique_ptr<Group>> subgroups;
+    std::unique_ptr<Block> block;
+
+    bool is_leaf()  const { return block != nullptr; }
+    bool is_empty() const { return subgroups.empty() && block == nullptr; }
+};
+
+// ========================================================================
     // ========================================================================
     // Dataset
     // ========================================================================
     //
-    // A Dataset models a named collection of Analyses.  Each Analysis may
-    // contain results from multiple simulation types (e.g. SP, HB, Transient).
+    // A Dataset is a tree-structured container.  Internal nodes are Groups
+    // (no data, just name → child mappings).  Leaf nodes are Blocks which
+    // hold the actual simulation data (independents + dependents).
     //
-    // Full hierarchical path:
+    // C++ API uses '/' as path separator; REL uses '.' for the tree and
+    // a final '.' to separate block name from data_array name:
     //
-    //    dataset . analysis . result_type . data_array
+    //    C++:  GetDataArray("simulation/SP1/SP", "Vout")
+    //    REL:  noise.simulation.SP1.SP.Vout
     //
-    // Example:  noise.SP1.SP.freq
+    //    noise            -- Dataset name
+    //    simulation/SP1   -- nested Groups (created implicitly by AddBlock)
+    //    SP               -- Block (leaf node, holds independents + dependents)
+    //    Vout             -- DataArray within the Block
     //
-    //    noise  -- Dataset name
-    //    SP1    -- Analysis name (e.g. a particular design variant)
-    //    SP     -- Simulation result type (e.g. S-parameter sweep)
-    //    freq   -- DataArray within the block  (independent / dependent var)
+    // Intermediate Groups are created on demand when AddBlock is called.
     //
-    // The (analysis, result_type) pair uniquely identifies one Block.
-    // The Block's own name is the full prefix:  "noise.SP1.SP".
+    // Shortcut: if `Vout` is a unique DataArray name across the entire
+    // Dataset, you can omit the block path:
     //
-    // Shortcut: if `freq` is a unique DataArray name across the entire
-    // Dataset, you can omit analysis and result type:
-    //
-    //    noise..freq   -- behaves like noise.*.*.freq
+    //    C++:  GetDataArray("Vout")
+    //    REL:  noise..Vout   -- matches *.*. ... .Vout (any block)
     //
     // ========================================================================
 
     class XDATASET_API Dataset
     {
     public:
-        /// result_type (e.g. "SP", "HB") -> Block
-        using ResultTypeMap = tsl::ordered_map<std::string, Block>;
-
-        /// analysis_name -> ResultTypeMap
-        using AnalysisMap = tsl::ordered_map<std::string, ResultTypeMap>;
-
         // --------------------------------------------------------------------
         // Construction
         // --------------------------------------------------------------------
@@ -63,106 +78,111 @@ namespace xdataset
         // Mutation
         // --------------------------------------------------------------------
 
-        /// Add a Block identified by (analysis_name, result_type).
+        /// Add a Block at `path`.  Intermediate Groups are created implicitly.
+        /// Block::name() is the path with `/` replaced by `.`.
         ///
-        /// The analysis is created if it does not yet exist.
-        /// Returns a reference to the inserted Block.
-        ///
-        /// Example:  AddBlock("SP1", "SP", info)
-        ///   -> creates Block "noise.SP1.SP" inside analysis "SP1".
-        Block& AddBlock(const std::string& analysis_name,
-                        const std::string& result_type,
+        /// Example:  AddBlock("simulation/SP1/SP", info) → Block "simulation.SP1.SP"
+        Block& AddBlock(const std::string& path,
                         const BlockCreateInfo& block_info);
 
-        Block& AddBlock(const std::string& analysis_name,
-                        const std::string& result_type,
+        Block& AddBlock(const std::string& path,
                         BlockCreateInfo&& block_info);
 
-        /// Remove an entire Analysis and every Block it contains.
-        /// Returns 1 if removed, 0 if the analysis did not exist.
-        std::size_t RemoveAnalysis(const std::string& analysis_name);
+        /// Remove a Block and return 1, or 0 if not found.  Empty parent
+        /// Groups are NOT automatically cleaned up.
+        std::size_t RemoveBlock(const std::string& path);
 
-        /// Remove the Block for a given (analysis_name, result_type).
-        /// If the owning Analysis becomes empty it is removed as well.
-        /// Returns 1 if removed, 0 if not found.
-        std::size_t RemoveBlock(const std::string& analysis_name,
-                                const std::string& result_type);
+        /// Remove a Group and all its descendants.  Returns the number
+        /// of Blocks removed.
+        std::size_t RemoveGroup(const std::string& path);
 
         // --------------------------------------------------------------------
         // Query
         // --------------------------------------------------------------------
 
-        bool HasAnalysis(const std::string& analysis_name) const;
+        /// True if a Block exists at `path`.
+        bool HasBlock(const std::string& path) const;
 
-        bool HasBlock(const std::string& analysis_name,
-                      const std::string& result_type) const;
+        /// True if a Group (or leaf Block) exists at `path`.
+        bool HasGroup(const std::string& path) const;
 
-        /// Returns true when `data_array_name` appears exactly once across
-        /// all blocks in the entire Dataset — the "..name" shortcut works.
+        /// True when `data_array_name` appears exactly once across all
+        /// Blocks in the entire Dataset.
         bool HasUniqueDataArray(const std::string& data_array_name) const;
 
         // --------------------------------------------------------------------
-        // Access — explicit path
+        // Access
         // --------------------------------------------------------------------
 
-        /// Full hierarchical access:  dataset.analysis.result_type.data_array
+        /// Full hierarchical access.
         ///
-        /// Example:  GetDataArray("SP1", "SP", "freq")  ->  noise.SP1.SP.freq
-        ///
-        /// Non-const because a Block may lazily create its DataArray cache.
-        const DataArray& GetDataArray(const std::string& analysis_name,
-                                      const std::string& result_type,
+        /// Example:  GetDataArray("simulation/SP1/SP", "freq")
+        const DataArray& GetDataArray(const std::string& block_path,
                                       const std::string& data_array_name);
 
-        /// Shortcut: look up a DataArray by its unique name alone.
-        ///
-        /// Throws std::invalid_argument if the name is not found or is not
-        /// unique.  Equivalent to noise..freq when `freq` is unambiguous.
+        /// Global unique-name shortcut.
+        /// Equivalent to `//data_array_name`.
         const DataArray& GetDataArray(const std::string& data_array_name);
 
-        /// All result-type blocks inside one Analysis (const).
-        const ResultTypeMap& GetAnalysis(
-            const std::string& analysis_name) const;
+        /// Const / mutable Block access by path.
+        const Block& GetBlock(const std::string& path) const;
+        Block&       GetBlock(const std::string& path);
 
-        /// Single Block by (analysis, result_type) (const).
-        const Block& GetBlock(const std::string& analysis_name,
-                              const std::string& result_type) const;
-
-        /// Mutable access — allows lazy DataArray creation inside Block
-        /// (via Block::GetOrCreateDataArray).
-        ResultTypeMap& GetAnalysis(const std::string& analysis_name);
-        Block&         GetBlock(const std::string& analysis_name,
-                                const std::string& result_type);
+        /// Ordered DataArray names within a specific Block
+        /// (independents first, then dependents, insertion order).
+        std::vector<std::string> GetDataArrayNames(
+            const std::string& block_path) const;
 
         // --------------------------------------------------------------------
         // Enumeration
         // --------------------------------------------------------------------
 
-        /// Ordered analysis names (insertion order).
-        std::vector<std::string> GetAnalysisNames() const;
+        /// Direct child Block names under `group_path` (root = "").
+        std::vector<std::string> GetBlockNames(
+            const std::string& group_path = "") const;
 
-        /// Ordered DataArray names within a specific Block
-        /// (independents first, then dependents, insertion order).
-        std::vector<std::string> GetDataArrayNames(
-            const std::string& analysis_name,
-            const std::string& result_type) const;
+        /// Direct child Group names under `group_path` (root = "").
+        std::vector<std::string> GetGroupNames(
+            const std::string& group_path = "") const;
+
+        /// All Block paths (recursive), insertion order.
+        std::vector<std::string> GetAllBlockPaths() const;
 
         // --------------------------------------------------------------------
         // Capacity
         // --------------------------------------------------------------------
 
-        std::size_t analysis_count() const { return analyses_.size(); }
+        /// Total number of Blocks in the Dataset.
+        std::size_t block_count() const;
 
     private:
-        /// Walk every Block in every Analysis looking for `data_array_name`.
-        ///
-        /// Returns {analysis_name, result_type} of the unique match.
-        /// Throws std::invalid_argument if zero or multiple matches exist.
-        std::pair<std::string, std::string> FindUniqueDataArray(
+        /// Navigate to the Group at `path` (const).  Returns nullptr if not found.
+        const Group* navigate(const std::string& path) const;
+
+        /// Navigate to the Group at `path` (mutable).  Returns nullptr if not found.
+        Group* navigate(const std::string& path);
+
+        /// Split "a/b/c" into ["a", "b", "c"].
+        static std::vector<std::string> split_path(const std::string& path);
+
+        /// Navigate, creating intermediate Groups as needed.
+        Group& navigate_or_create(const std::string& path);
+
+        /// Recursively collect Block names.
+        void collect_block_paths(const Group& group,
+                                 const std::string& prefix,
+                                 std::vector<std::string>& paths) const;
+
+        /// Recursively count Blocks.
+        std::size_t collect_block_count(const Group& group) const;
+
+        /// Walk the Group tree looking for `data_array_name`.
+        /// Returns the block path of the unique match.
+        std::string find_unique_data_array(
             const std::string& data_array_name) const;
 
         std::string name_;
-        AnalysisMap analyses_;
+        Group       root_;
     };
 }
 
