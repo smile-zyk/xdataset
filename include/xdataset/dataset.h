@@ -88,6 +88,9 @@ struct XDATASET_API Group
         Block& AddBlock(const std::string& path,
                         BlockCreateInfo&& block_info);
 
+        /// Add a pre-built Block.  Used by deserialization (HDF5 reader etc.).
+        Block& AddBlock(const std::string& path, Block block);
+
         /// Remove a Block and return 1, or 0 if not found.  Empty parent
         /// Groups are NOT automatically cleaned up.
         std::size_t RemoveBlock(const std::string& path);
@@ -155,15 +158,19 @@ struct XDATASET_API Group
         /// Total number of Blocks in the Dataset.
         std::size_t block_count() const;
 
+        // --------------------------------------------------------------------
+        // Utilities
+        // --------------------------------------------------------------------
+
+        /// Split a '/' path into segments.  "a/b/c" → ["a", "b", "c"].
+        static std::vector<std::string> SplitPath(const std::string& path);
+
     private:
         /// Navigate to the Group at `path` (const).  Returns nullptr if not found.
         const Group* navigate(const std::string& path) const;
 
         /// Navigate to the Group at `path` (mutable).  Returns nullptr if not found.
         Group* navigate(const std::string& path);
-
-        /// Split "a/b/c" into ["a", "b", "c"].
-        static std::vector<std::string> split_path(const std::string& path);
 
         /// Navigate, creating intermediate Groups as needed.
         Group& navigate_or_create(const std::string& path);

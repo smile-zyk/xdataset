@@ -1,4 +1,4 @@
-﻿#include "dataset.h"
+#include "dataset.h"
 
 #include <sstream>
 #include <stdexcept>
@@ -9,7 +9,7 @@ namespace xdataset
         : name_(std::move(name))
     {}
 
-    std::vector<std::string> Dataset::split_path(const std::string& path)
+    std::vector<std::string> Dataset::SplitPath(const std::string& path)
     {
         std::vector<std::string> parts;
         if (path.empty()) return parts;
@@ -22,7 +22,7 @@ namespace xdataset
 
     const Group* Dataset::navigate(const std::string& path) const
     {
-        auto parts = split_path(path);
+        auto parts = SplitPath(path);
         const Group* node = &root_;
         for (const auto& seg : parts)
         {
@@ -35,7 +35,7 @@ namespace xdataset
 
     Group* Dataset::navigate(const std::string& path)
     {
-        auto parts = split_path(path);
+        auto parts = SplitPath(path);
         Group* node = &root_;
         for (const auto& seg : parts)
         {
@@ -48,7 +48,7 @@ namespace xdataset
 
     Group& Dataset::navigate_or_create(const std::string& path)
     {
-        auto parts = split_path(path);
+        auto parts = SplitPath(path);
         if (parts.empty())
             throw std::invalid_argument("block path must not be empty");
         Group* node = &root_;
@@ -106,9 +106,20 @@ namespace xdataset
         return AddBlock(path, static_cast<const BlockCreateInfo&>(block_info));
     }
 
+    Block& Dataset::AddBlock(const std::string& path, Block block)
+    {
+        Group& leaf = navigate_or_create(path);
+        std::string name = path;
+        for (auto& ch : name)
+            if (ch == '/') ch = '.';
+        leaf.block = std::unique_ptr<Block>(new Block(std::move(block)));
+        leaf.block->set_name(name);
+        return *leaf.block;
+    }
+
     std::size_t Dataset::RemoveBlock(const std::string& path)
     {
-        auto parts = split_path(path);
+        auto parts = SplitPath(path);
         if (parts.empty()) return 0;
         Group* parent = &root_;
         for (std::size_t i = 0; i + 1 < parts.size(); ++i)
@@ -127,7 +138,7 @@ namespace xdataset
 
     std::size_t Dataset::RemoveGroup(const std::string& path)
     {
-        auto parts = split_path(path);
+        auto parts = SplitPath(path);
         if (parts.empty()) { std::size_t n = block_count(); root_.subgroups.clear(); return n; }
         const Group* target = navigate(path);
         if (!target) return 0;
