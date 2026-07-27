@@ -2611,6 +2611,58 @@ TEST(CombineTest, DtypePromotion)
     EXPECT_DOUBLE_EQ(result.data().scalar_at<double>(1), 2.0);
 }
 
+TEST(CombineTest, VectorDtypePromotionIntToReal)
+{
+    Eigen::VectorXi vi(2); vi << 1, 2;
+    Eigen::VectorXd vd(2); vd << 3.0, 4.0;
+    Measurement a(vi), b(vd);
+
+    DataArray result = Combine({a, b});
+
+    EXPECT_EQ(result.data().data_kind(), DataKind::kVector);
+    EXPECT_EQ(result.data().data_type(), DataType::kReal);
+    auto r0 = result.data().vector_at<double>(0);
+    auto r1 = result.data().vector_at<double>(1);
+    EXPECT_DOUBLE_EQ(r0(0), 1.0); EXPECT_DOUBLE_EQ(r0(1), 2.0);
+    EXPECT_DOUBLE_EQ(r1(0), 3.0); EXPECT_DOUBLE_EQ(r1(1), 4.0);
+}
+
+TEST(CombineTest, VectorDtypePromotionToComplex)
+{
+    Eigen::VectorXi vi(2); vi << 1, 2;
+    Eigen::VectorXd vd(2); vd << 3.0, 4.0;
+    using cd = std::complex<double>;
+    Eigen::VectorXcd vc(2); vc << cd(5, 1), cd(6, 2);
+    Measurement a(vi), b(vd), c(vc);
+
+    DataArray result = Combine({a, b, c});
+
+    EXPECT_EQ(result.data().data_kind(), DataKind::kVector);
+    EXPECT_EQ(result.data().data_type(), DataType::kComplex);
+    auto r0 = result.data().vector_at<cd>(0);
+    auto r1 = result.data().vector_at<cd>(1);
+    auto r2 = result.data().vector_at<cd>(2);
+    EXPECT_DOUBLE_EQ(r0(0).real(), 1.0); EXPECT_DOUBLE_EQ(r0(0).imag(), 0.0);
+    EXPECT_DOUBLE_EQ(r1(0).real(), 3.0); EXPECT_DOUBLE_EQ(r1(0).imag(), 0.0);
+    EXPECT_DOUBLE_EQ(r2(0).real(), 5.0); EXPECT_DOUBLE_EQ(r2(0).imag(), 1.0);
+}
+
+TEST(CombineTest, MatrixDtypePromotionIntToReal)
+{
+    Eigen::MatrixXi mi(2, 2); mi << 1, 2, 3, 4;
+    Eigen::MatrixXd md(2, 2); md << 5, 6, 7, 8;
+    Measurement a(mi), b(md);
+
+    DataArray result = Combine({a, b});
+
+    EXPECT_EQ(result.data().data_kind(), DataKind::kMatrix);
+    EXPECT_EQ(result.data().data_type(), DataType::kReal);
+    auto r0 = result.data().matrix_at<double>(0);
+    auto r1 = result.data().matrix_at<double>(1);
+    EXPECT_DOUBLE_EQ(r0(0, 0), 1.0); EXPECT_DOUBLE_EQ(r0(1, 1), 4.0);
+    EXPECT_DOUBLE_EQ(r1(0, 0), 5.0); EXPECT_DOUBLE_EQ(r1(1, 1), 8.0);
+}
+
 TEST(CombineTest, StringScalars)
 {
     Measurement a(std::string("x")), b(std::string("y"));

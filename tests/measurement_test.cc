@@ -113,7 +113,60 @@ TEST(CellTest, AppendStillThrowsOnCompleteMismatch) {
     // Vector DataSeries, trying to append a different-shaped vector → still throws.
     Eigen::VectorXd v(4); v << 1., 2., 3., 4.;
     DataSeries s = DataSeries::CreateVector<double>(3, 0);
-    EXPECT_THROW(s.append(Measurement(v)), std::bad_cast);
+    EXPECT_THROW(s.append(Measurement(v)), std::invalid_argument);
+}
+
+TEST(CellTest, AppendVectorIntToReal) {
+    Eigen::VectorXi vi(2); vi << 1, 2;
+    DataSeries s = DataSeries::CreateVector<double>(2, 0);
+    s.append(Measurement(vi));
+    auto row = s.vector_at<double>(0);
+    EXPECT_DOUBLE_EQ(row(0), 1.0);
+    EXPECT_DOUBLE_EQ(row(1), 2.0);
+}
+
+TEST(CellTest, AppendVectorIntToComplex) {
+    Eigen::VectorXi vi(2); vi << 3, 4;
+    DataSeries s(DataKind::kVector, DataType::kComplex, std::vector<Index>{2});
+    s.append(Measurement(vi));
+    auto row = s.vector_at<std::complex<double>>(0);
+    EXPECT_DOUBLE_EQ(row(0).real(), 3.0);
+    EXPECT_DOUBLE_EQ(row(1).imag(), 0.0);
+}
+
+TEST(CellTest, AppendVectorRealToComplex) {
+    Eigen::VectorXd vd(2); vd << 1.5, 2.5;
+    DataSeries s(DataKind::kVector, DataType::kComplex, std::vector<Index>{2});
+    s.append(Measurement(vd));
+    auto row = s.vector_at<std::complex<double>>(0);
+    EXPECT_DOUBLE_EQ(row(0).real(), 1.5);
+    EXPECT_DOUBLE_EQ(row(1).real(), 2.5);
+}
+
+TEST(CellTest, AppendMatrixIntToReal) {
+    Eigen::MatrixXi mi(2, 2); mi << 1, 2, 3, 4;
+    DataSeries s = DataSeries::CreateMatrix<double>(2, 2, 0);
+    s.append(Measurement(mi));
+    auto row = s.matrix_at<double>(0);
+    EXPECT_DOUBLE_EQ(row(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(row(0, 1), 2.0);
+    EXPECT_DOUBLE_EQ(row(1, 0), 3.0);
+    EXPECT_DOUBLE_EQ(row(1, 1), 4.0);
+}
+
+TEST(CellTest, AppendMatrixIntToComplex) {
+    Eigen::MatrixXi mi(2, 2); mi << 5, 6, 7, 8;
+    DataSeries s(DataKind::kMatrix, DataType::kComplex, std::vector<Index>{2, 2});
+    s.append(Measurement(mi));
+    auto row = s.matrix_at<std::complex<double>>(0);
+    EXPECT_DOUBLE_EQ(row(0, 0).real(), 5.0);
+    EXPECT_DOUBLE_EQ(row(1, 1).real(), 8.0);
+}
+
+TEST(CellTest, AppendVectorShapeMismatchThrows) {
+    Eigen::VectorXd vd(3); vd << 1., 2., 3.;
+    DataSeries s(DataKind::kVector, DataType::kComplex, std::vector<Index>{2});
+    EXPECT_THROW(s.append(Measurement(vd)), std::invalid_argument);
 }
 
 TEST(CellTest, AppendUnitMismatchThrows) {

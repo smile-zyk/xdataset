@@ -831,9 +831,10 @@ Result (Vector(2), rows=3):
 `Combine` 将 N 个 `Measurement` 组装为一个 `DataArray`，每个 `Measurement` 作为一行。
 
 **规则**：
-- 所有输入必须为 Scalar 或 Vector（Matrix 不支持）
-- Scalar 与 Vector 可以混合：Scalar 自动广播为 Vector
-- 相同 shape 的 Vector 必须 shape 一致
+- 支持 Scalar、Vector、Matrix
+- Scalar 可广播到更大 kind：Scalar → Vector（autofill 行），Scalar → Matrix（autofill 矩阵）
+- 相同 kind 的输入必须 shape 一致
+- DataType 按提升规则，允许 String；Unit 通过 `resolve_merge_unit` 推导
 - 结果为 `kDependent` 类型的 DataArray
 
 **API**：

@@ -2388,11 +2388,12 @@ DataArray Combine(const std::vector<Measurement>& values)
     if (values.empty())
         throw std::invalid_argument("combine: empty vector");
 
-    // ---- Canonicalise + unit validation ----------------------------------
+    // ---- Step 1: canonicalise + unit validation --------------------------
     auto mutable_values = values;
     Unit result_unit = resolve_merge_unit(mutable_values);
 
-    // ---- Determine result kind / shape / dtype ----------------------------
+    // ---- Step 2: determine result kind, shape, dtype ---------------------
+    // First non-Scalar determines the result kind & shape; Scalars broadcast.
     DataKind  result_kind  = DataKind::kScalar;
     DataType  result_dtype = mutable_values[0].data_type();
     std::vector<Index> result_shape;
@@ -2400,28 +2401,23 @@ DataArray Combine(const std::vector<Measurement>& values)
     for (std::size_t i = 0; i < mutable_values.size(); ++i)
     {
         const Measurement& m = mutable_values[i];
-        if (m.data_kind() != DataKind::kScalar)
+        result_dtype = promoted_merge_dtype(result_dtype, m.data_type());
+
+        if (m.data_kind() == DataKind::kScalar) continue;
+
+        if (result_kind == DataKind::kScalar)
         {
-            if (result_kind == DataKind::kScalar)
-            {
-                result_kind  = m.data_kind();
-                result_shape = m.shape();
-            }
-            else if (m.data_kind() != result_kind || m.shape() != result_shape)
-            {
-                throw std::invalid_argument(
-                    "combine: DataKind or DataShape mismatch among non-scalars");
-            }
+            result_kind  = m.data_kind();
+            result_shape = m.shape();
         }
-        else if (m.data_kind() == DataKind::kMatrix)
+        else if (m.data_kind() != result_kind || m.shape() != result_shape)
         {
             throw std::invalid_argument(
-                "combine: matrix measurements not supported");
+                "combine: DataKind or DataShape mismatch among non-scalars");
         }
-        result_dtype = promoted_merge_dtype(result_dtype, m.data_type());
     }
 
-    // ---- Create result DataSeries & append each Measurement ---------------
+    // ---- Step 3: create result & append each row -------------------------
     DataSeries result_series(result_kind, result_dtype, result_shape);
     result_series.set_unit(result_unit);
 

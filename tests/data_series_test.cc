@@ -390,7 +390,7 @@ TEST(VectorExceptionTest, AppendWrongWidthThrows) {
     vecs.resize(1);
     Eigen::Matrix<double, Eigen::Dynamic, 1> bad(5);
     bad.setZero();
-    EXPECT_THROW(vecs.append(Measurement(bad)), std::bad_cast);
+    EXPECT_THROW(vecs.append(Measurement(bad)), std::invalid_argument);
 }
 
 TEST(VectorExceptionTest, FromRowsMismatchedWidthThrows) {
@@ -581,7 +581,7 @@ TEST(MatrixExceptionTest, AppendWrongShapeThrows) {
     mats.resize(1);
     Eigen::MatrixXd bad(3, 3);
     bad.setZero();
-    EXPECT_THROW(mats.append(Measurement(bad)), std::bad_cast);
+    EXPECT_THROW(mats.append(Measurement(bad)), std::invalid_argument);
 }
 
 TEST(MatrixExceptionTest, FromRowsMismatchedShapeThrows) {
