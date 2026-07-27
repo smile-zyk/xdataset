@@ -754,7 +754,7 @@ Concat 和 Combine 不属于算术运算——它们不逐元素计算，而是�
 |---|---|---|
 | `Concat({Measurement...})` | `Measurement` | Shape 提升 |
 | `Concat({DataArray...})` | `DataArray` | 逐行调用 Measurement Concat；`indep_datas`、`multi_dimension_spec`、`kind` 继承第一个 DataArray |
-| `Combine({Measurement...})` | `DataArray` | 每 Measurement 作为一行 append 到 DataSeries；返回 `kDependent` DataArray |
+| `Combine({Measurement...})` | `DataArray` | 每 Measurement 作为一行 append 到 DataSeries；返回 `kIndependent` DataArray |
 
 ### DataType 推导
 
@@ -835,7 +835,7 @@ Result (Vector(2), rows=3):
 - Scalar 可广播到更大 kind：Scalar → Vector（autofill 行），Scalar → Matrix（autofill 矩阵）
 - 相同 kind 的输入必须 shape 一致
 - DataType 按提升规则，允许 String；Unit 通过 `resolve_merge_unit` 推导
-- 结果为 `kDependent` 类型的 DataArray
+- 结果为 `kIndependent` 类型的 DataArray
 
 **API**：
 

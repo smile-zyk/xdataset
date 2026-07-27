@@ -2424,10 +2424,7 @@ DataArray Combine(const std::vector<Measurement>& values)
     for (std::size_t i = 0; i < mutable_values.size(); ++i)
         result_series.append(mutable_values[i]);
 
-    DataArrayCreateInfo info;
-    info.data = std::move(result_series);
-    info.kind = DataArrayKind::kDependent;
-    return DataArray(info);
+    return DataArray::CreateIndependent(std::move(result_series));
 }
 
 }  // namespace xdataset
