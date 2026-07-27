@@ -219,6 +219,17 @@ namespace xdataset
     };
 
     // =========================================================================
+    // Concat — stack N Measurements with shape promotion
+    // =========================================================================
+    //
+    // All measurements must share the same DataKind and DataShape.
+    // DataType promotes: int → real → complex (string forbidden).
+    // Shape promotion:  scalar × N → vector(N), vector(W) × N → matrix(N, W).
+    // Matrix cannot be promoted further.
+
+    XDATASET_API Measurement Concat(const std::vector<Measurement>& values);
+
+    // =========================================================================
     // MeasurementFormatter -- boost::static_visitor that renders any stored
     //                         alternative to a human-readable string.
     // =========================================================================

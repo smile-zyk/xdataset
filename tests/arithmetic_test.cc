@@ -2336,3 +2336,153 @@ TEST(MeasDataArrayLogicalTest, Or)
     EXPECT_EQ(r.data().scalar_at<int>(1), 1);
     EXPECT_EQ(r.data_kind(), a.data_kind());
 }
+
+// =========================================================================
+// Concat -- Measurement
+// =========================================================================
+
+TEST(ConcatTest, ScalarToVector)
+{
+    Measurement a(1.0), b(2.0), c(3.0);
+    Measurement result = Concat(std::vector<Measurement>{a, b, c});
+
+    EXPECT_EQ(result.data_kind(), DataKind::kVector);
+    EXPECT_EQ(result.data_type(), DataType::kReal);
+    ASSERT_EQ(result.shape().size(), 1u);
+    EXPECT_EQ(result.shape()[0], 3);
+    EXPECT_DOUBLE_EQ(result.as_vector<double>()(0), 1.0);
+    EXPECT_DOUBLE_EQ(result.as_vector<double>()(1), 2.0);
+    EXPECT_DOUBLE_EQ(result.as_vector<double>()(2), 3.0);
+}
+
+TEST(ConcatTest, VectorToMatrix)
+{
+    Eigen::VectorXd v1(2); v1 << 1.0, 2.0;
+    Eigen::VectorXd v2(2); v2 << 3.0, 4.0;
+    Measurement a = Measurement::Vector(v1);
+    Measurement b = Measurement::Vector(v2);
+
+    Measurement result = Concat(std::vector<Measurement>{a, b});
+
+    EXPECT_EQ(result.data_kind(), DataKind::kMatrix);
+    EXPECT_EQ(result.data_type(), DataType::kReal);
+    ASSERT_EQ(result.shape().size(), 2u);
+    EXPECT_EQ(result.shape()[0], 2);
+    EXPECT_EQ(result.shape()[1], 2);
+    EXPECT_DOUBLE_EQ(result.as_matrix<double>()(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(result.as_matrix<double>()(0, 1), 2.0);
+    EXPECT_DOUBLE_EQ(result.as_matrix<double>()(1, 0), 3.0);
+    EXPECT_DOUBLE_EQ(result.as_matrix<double>()(1, 1), 4.0);
+}
+
+TEST(ConcatTest, DtypePromotionIntToReal)
+{
+    Measurement a(1), b(2.0);
+    Measurement result = Concat(std::vector<Measurement>{a, b});
+
+    EXPECT_EQ(result.data_type(), DataType::kReal);
+    EXPECT_DOUBLE_EQ(result.as_vector<double>()(0), 1.0);
+    EXPECT_DOUBLE_EQ(result.as_vector<double>()(1), 2.0);
+}
+
+TEST(ConcatTest, SingleElementNoop)
+{
+    Measurement a(42.0);
+    Measurement result = Concat(std::vector<Measurement>{a});
+    EXPECT_EQ(result.data_kind(), DataKind::kVector);
+    EXPECT_EQ(result.shape()[0], 1);
+}
+
+TEST(ConcatTest, MismatchedShapeThrows)
+{
+    Measurement a(1.0);
+    Measurement b = Measurement::Vector(Eigen::VectorXd(2));
+    EXPECT_THROW({ Concat(std::vector<Measurement>{a, b}); }, std::invalid_argument);
+}
+
+TEST(ConcatTest, MatrixConcatThrows)
+{
+    Measurement a = Measurement::Matrix(Eigen::MatrixXd(1, 1));
+    EXPECT_THROW({ Concat(std::vector<Measurement>{a, a}); }, std::invalid_argument);
+}
+
+TEST(ConcatTest, EmptyVectorThrows)
+{
+    std::vector<Measurement> empty;
+    EXPECT_THROW({ Concat(empty); }, std::invalid_argument);
+}
+
+TEST(ConcatTest, StringScalarToVector)
+{
+    Measurement a(std::string("x")), b(std::string("y")), c(std::string("z"));
+    Measurement result = Concat(std::vector<Measurement>{a, b, c});
+
+    EXPECT_EQ(result.data_kind(), DataKind::kVector);
+    EXPECT_EQ(result.data_type(), DataType::kString);
+    ASSERT_EQ(result.shape().size(), 1u);
+    EXPECT_EQ(result.shape()[0], 3);
+    EXPECT_EQ(result.as_vector<std::string>()(0), "x");
+    EXPECT_EQ(result.as_vector<std::string>()(1), "y");
+    EXPECT_EQ(result.as_vector<std::string>()(2), "z");
+}
+
+TEST(ConcatTest, StringMixedWithNumericThrows)
+{
+    Measurement a(std::string("x"));
+    Measurement b(1.0);
+    EXPECT_THROW({ Concat(std::vector<Measurement>{a, b}); }, std::invalid_argument);
+}
+
+// =========================================================================
+// Concat -- DataArray
+// =========================================================================
+
+TEST(DataArrayConcatTest, ScalarDataArraysToVector)
+{
+    auto a = DataArray::CreateIndependent(
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0}));
+    auto b = DataArray::CreateIndependent(
+        DataSeries::CreateScalarFromVector<double>({3.0, 4.0}));
+
+    DataArray result = Concat(std::vector<DataArray>{a, b});
+
+    EXPECT_EQ(result.data().data_kind(), DataKind::kVector);
+    EXPECT_EQ(result.data().data_shape()[0], 2);
+    EXPECT_EQ(result.data().size(), 2u);
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(0)(0), 1.0);
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(0)(1), 3.0);
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(1)(0), 2.0);
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(1)(1), 4.0);
+}
+
+TEST(DataArrayConcatTest, BroadcastSingleRow)
+{
+    auto a = DataArray::CreateIndependent(
+        DataSeries::CreateScalar<double>(1));
+    auto b = DataArray::CreateIndependent(
+        DataSeries::CreateScalarFromVector<double>({10.0, 20.0, 30.0}));
+
+    DataArray result = Concat(std::vector<DataArray>{a, b});
+
+    EXPECT_EQ(result.data().size(), 3u);
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(0)(0), 0.0);   // a default
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(0)(1), 10.0);  // b
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(2)(0), 0.0);   // a broadcast
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(2)(1), 30.0);  // b
+}
+
+TEST(DataArrayConcatTest, RowCountMismatchThrows)
+{
+    auto a = DataArray::CreateIndependent(
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0}));
+    auto b = DataArray::CreateIndependent(
+        DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0}));
+
+    EXPECT_THROW({ Concat(std::vector<DataArray>{a, b}); }, std::invalid_argument);
+}
+
+TEST(DataArrayConcatTest, EmptyThrows)
+{
+    std::vector<DataArray> empty;
+    EXPECT_THROW({ Concat(empty); }, std::invalid_argument);
+}

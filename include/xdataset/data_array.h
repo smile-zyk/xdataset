@@ -134,6 +134,16 @@ XDATASET_API DataArray pow(const Measurement& base, const DataArray& exponent);
 XDATASET_API DataArray pow(const DataArray& base, const DataArray& exponent);
 
 // =========================================================================
+// Concat — stack N DataArrays with shape promotion & row broadcast
+// =========================================================================
+//
+// Row counts must all match, or be 1 (broadcast).  Same shape-promotion /
+// dtype-promotion rules as Measurement Concat.  Result inherits spec from
+// the first non-broadcast entry.
+
+XDATASET_API DataArray Concat(const std::vector<DataArray>& values);
+
+// =========================================================================
 //  Comparison operators (result is Integer 0/1, dimensionless)
 // =========================================================================
 

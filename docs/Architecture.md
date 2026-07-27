@@ -646,6 +646,7 @@ Me 与 Da 的运算结果由以下四个步骤依次确定：**Measurement/DataA
 | `kBitwise` | `&` `\|` `^` | Integer | 无量纲 | 仅 Integer 操作数 |
 | `kShift` | `<<` `>>` | Integer | 继承左操作数 | 仅 Integer 操作数 |
 | `kPow` | `pow` | 按提升规则 | 继承底数 | 指数必须无量纲 |
+| `concat` | `Concat(...)` | 按提升规则 | 同量纲取任一方 | 将 N 个值堆叠为一个，DataKind 提升 |
 
 > 一元运算符 `-`（取负）保持操作数类型和单位；`!`（逻辑非）和 `~`（按位取反）返回 Integer 无量纲。
 
@@ -656,7 +657,9 @@ Me 与 Da 的运算结果由以下四个步骤依次确定：**Measurement/DataA
 | `Measurement op Measurement` | `Measurement` | -- |
 | `DataArray op DataArray` | `DataArray` | `data` 为逐行运算所得 DataSeries，`indep_datas`、`multi_dimension_spec`、`kind` 均继承 LHS |
 | `DataArray op Measurement` | `DataArray` | `data` 为 Measurement 广播到每行后的运算结果，`indep_datas`、`multi_dimension_spec`、`kind` 继承 DataArray 侧 |
-| `Measurement op DataArray` | `DataArray` | 同上，`indep_datas`、`multi_dimension_spec`、`kind` 继承 DataArray 侧
+| `Measurement op DataArray` | `DataArray` | 同上，`indep_datas`、`multi_dimension_spec`、`kind` 继承 DataArray 侧 |
+| `Concat({Measurement...})` | `Measurement` | Shape 提升 |
+| `Concat({DataArray...})` | `DataArray` | 逐行调用 Measurement Concat；`indep_datas`、`multi_dimension_spec`、`kind` 继承第一个 DataArray |
 
 ### DataType推导
 
@@ -743,3 +746,62 @@ Me 与 Da 的运算结果由以下四个步骤依次确定：**Measurement/DataA
 | 1,1 | 2.0 GHz | 20 | 10.0 W | 15.0 W |
 
 `result.spec = [Regular(2), Regular(2)]`，`indep` 继承自 Vout。
+
+### Concat
+
+`Concat` 将 N 个同构的 `Measurement`（或 `DataArray`）堆叠为一个，同时提升 DataKind：
+
+| 输入 | 输出 |
+|:---|:---|
+| N 个 Scalar | Vector(N) |
+| N 个 Vector(W) | Matrix(N, W) |
+| N 个 Matrix | 不支持（已到 Shape 上限） |
+
+**规则**：
+- 所有输入的 DataKind 和 DataShape 必须一致
+- DataType 按算术提升规则（int → real → complex），String 不允许与数值混合
+- Unit 不做推导，只检查同量纲（不 check value-level unit）
+- 每个位置的元素按原顺序排列
+
+**API**：
+
+```cpp
+Measurement r = Concat({m1, m2, m3});   // scalar → vector
+DataArray  r = Concat({da1, da2});       // per-row, single-row broadcast
+```
+
+**DataArray Concat 额外规则**：
+
+- 逐行调用 `Measurement Concat`
+- 行数可广播：如果某个 DataArray 只有 1 行，则广播到目标行数
+- 结果继承第一个 DataArray 的 `indep_datas`、`multi_dimension_spec`、`kind`
+
+**运算前：**
+
+Va (Scalar, rows=3):
+
+|  | Va |
+|:---|:---|
+| 0 | 1.0 V |
+| 1 | 2.0 V |
+| 2 | 3.0 V |
+
+Vb (Scalar, rows=1):
+
+|  | Vb |
+|:---|:---|
+| 0 | 0.0 V |
+
+Vb 只有 1 行，与 Va 行数不同但可广播。
+
+**运算后 (Concat({Va, Vb}))：**
+
+Result (Vector(2), rows=3):
+
+|  | result(1) | result(2) |
+|:---|:---|:---|
+| 0 | 1.0 V | 0.0 V |
+| 1 | 2.0 V | 0.0 V |
+| 2 | 3.0 V | 0.0 V |
+
+结果：一个 DataArray，Vector(2)，3 行。Vb 自动广播到 3 行。
