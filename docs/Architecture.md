@@ -646,11 +646,10 @@ Me 与 Da 的运算结果由以下四个步骤依次确定：**Measurement/DataA
 | `kBitwise` | `&` `\|` `^` | Integer | 无量纲 | 仅 Integer 操作数 |
 | `kShift` | `<<` `>>` | Integer | 继承左操作数 | 仅 Integer 操作数 |
 | `kPow` | `pow` | 按提升规则 | 继承底数 | 指数必须无量纲 |
-| `concat` | `Concat(...)` | 按提升规则 | 同量纲取任一方 | 将 N 个值堆叠为一个，DataKind 提升 |
 
 > 一元运算符 `-`（取负）保持操作数类型和单位；`!`（逻辑非）和 `~`（按位取反）返回 Integer 无量纲。
 
-四种组合决定了结果类型及 DataArray 各成员变量的取值：
+三种组合决定了结果类型及 DataArray 各成员变量的取值：
 
 | 表达式 | 结果 | 结果 DataArray 成员 |
 |---|---|---|
@@ -658,8 +657,6 @@ Me 与 Da 的运算结果由以下四个步骤依次确定：**Measurement/DataA
 | `DataArray op DataArray` | `DataArray` | `data` 为逐行运算所得 DataSeries，`indep_datas`、`multi_dimension_spec`、`kind` 均继承 LHS |
 | `DataArray op Measurement` | `DataArray` | `data` 为 Measurement 广播到每行后的运算结果，`indep_datas`、`multi_dimension_spec`、`kind` 继承 DataArray 侧 |
 | `Measurement op DataArray` | `DataArray` | 同上，`indep_datas`、`multi_dimension_spec`、`kind` 继承 DataArray 侧 |
-| `Concat({Measurement...})` | `Measurement` | Shape 提升 |
-| `Concat({DataArray...})` | `DataArray` | 逐行调用 Measurement Concat；`indep_datas`、`multi_dimension_spec`、`kind` 继承第一个 DataArray |
 
 ### DataType推导
 
@@ -747,6 +744,31 @@ Me 与 Da 的运算结果由以下四个步骤依次确定：**Measurement/DataA
 
 `result.spec = [Regular(2), Regular(2)]`，`indep` 继承自 Vout。
 
+## Data Merge
+
+Concat 和 Combine 不属于算术运算——它们不逐元素计算，而是将多个值**堆叠**或**装配**到一起。因此不涉及 `OpCategory`，DataType 允许 String，Unit 通过 `resolve_merge_unit` 统一处理。
+
+### 结果类型
+
+| 表达式 | 结果 | 结果 DataArray 成员 |
+|---|---|---|
+| `Concat({Measurement...})` | `Measurement` | Shape 提升 |
+| `Concat({DataArray...})` | `DataArray` | 逐行调用 Measurement Concat；`indep_datas`、`multi_dimension_spec`、`kind` 继承第一个 DataArray |
+| `Combine({Measurement...})` | `DataArray` | 每 Measurement 作为一行 append 到 DataSeries；返回 `kDependent` DataArray |
+
+### DataType 推导
+
+按提升规则（int → real → complex），额外允许 String（String 与数值混合时抛异常）。
+
+### Unit 推导：resolve_merge_unit
+
+与算术运算不同，`Concat` 和 `Combine` 共享同一个单位推导函数 `resolve_merge_unit`：
+
+1. **遍历所有输入，canonicalize 带量纲的条目** — 第一个非无量纲的条目确定目标基本 SI 单位（如 `GHz` → `1e9 Hz`），后续条目 canonicalize 到同一基本单位
+2. **无量纲条目打标** — 所有无量纲条目被标记为目标单位（如无单位 `12.0` 与 `GHz` concat 时被当作 `12.0 Hz`）
+3. **量纲冲突抛异常** — 如 `meter` 与 `sec` 混用
+4. **全部无量纲** — 结果也无量纲
+
 ### Concat
 
 `Concat` 将 N 个同构的 `Measurement`（或 `DataArray`）堆叠为一个，同时提升 DataKind：
@@ -759,8 +781,6 @@ Me 与 Da 的运算结果由以下四个步骤依次确定：**Measurement/DataA
 
 **规则**：
 - 所有输入的 DataKind 和 DataShape 必须一致
-- DataType 按算术提升规则（int → real → complex），String 不允许与数值混合
-- Unit 不做推导，只检查同量纲（不 check value-level unit）
 - 每个位置的元素按原顺序排列
 
 **API**：
@@ -805,3 +825,19 @@ Result (Vector(2), rows=3):
 | 2 | 3.0 V | 0.0 V |
 
 结果：一个 DataArray，Vector(2)，3 行。Vb 自动广播到 3 行。
+
+### Combine
+
+`Combine` 将 N 个 `Measurement` 组装为一个 `DataArray`，每个 `Measurement` 作为一行。
+
+**规则**：
+- 所有输入必须为 Scalar 或 Vector（Matrix 不支持）
+- Scalar 与 Vector 可以混合：Scalar 自动广播为 Vector
+- 相同 shape 的 Vector 必须 shape 一致
+- 结果为 `kDependent` 类型的 DataArray
+
+**API**：
+
+```cpp
+DataArray r = Combine({m1, m2, m3});
+```

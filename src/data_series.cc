@@ -200,9 +200,118 @@ void DataSeries::assign_from(const DataSeries& src, Index src_row, Index dst_row
 }
 
 void DataSeries::append(const Measurement& m) {
-    if (m.data_kind() != data_kind_ || m.data_type() != data_type_ || m.shape() != shape_) throw std::bad_cast();
+    // ---- Scalar → vector/matrix broadcast ---------------------------------
+    if (m.data_kind() == DataKind::kScalar && data_kind_ != DataKind::kScalar)
+    {
+        if (!unit_.has_dimension() && m.unit().has_dimension())
+            unit_ = m.unit();
 
-    // First non-dimensionless measurement sets the series' unit.
+        Index W = (data_kind_ == DataKind::kVector) ? shape_[0] : shape_[0] * shape_[1];
+
+        if (data_type_ == DataType::kString)
+        {
+            std::string sv = boost::get<std::string>(m.storage());
+            if (data_kind_ == DataKind::kVector)
+            {
+                Eigen::Tensor<std::string, 1> v(shape_[0]);
+                for (Index j = 0; j < shape_[0]; ++j) v(j) = sv;
+                append_vector(v);
+            }
+            else
+            {
+                Eigen::Tensor<std::string, 2> mtx(shape_[0], shape_[1]);
+                for (Index r = 0; r < shape_[0]; ++r)
+                    for (Index c = 0; c < shape_[1]; ++c)
+                        mtx(r, c) = sv;
+                append_matrix(mtx);
+            }
+        }
+        else
+        {
+            // Extract scalar, promoting as needed.
+            double             dr = (data_type_ == DataType::kReal || data_type_ == DataType::kComplex)
+                                    ? ((m.data_type() == DataType::kInteger)
+                                        ? static_cast<double>(boost::get<int>(m.storage()))
+                                        : boost::get<double>(m.storage()))
+                                    : 0;
+            int                iv = (data_type_ == DataType::kInteger)
+                                    ? boost::get<int>(m.storage()) : 0;
+            std::complex<double> cv = (data_type_ == DataType::kComplex)
+                                    ? ((m.data_type() == DataType::kComplex)
+                                        ? boost::get<std::complex<double>>(m.storage())
+                                        : std::complex<double>(dr, 0.0))
+                                    : std::complex<double>(0, 0);
+
+            if (data_kind_ == DataKind::kVector)
+            {
+                if (data_type_ == DataType::kReal)
+                {
+                    typename NumericVectorTypes<double>::OwnedType v(shape_[0]);
+                    for (Index j = 0; j < shape_[0]; ++j) v(j) = dr;
+                    append_vector<double>(v);
+                }
+                else if (data_type_ == DataType::kInteger)
+                {
+                    typename NumericVectorTypes<int>::OwnedType v(shape_[0]);
+                    for (Index j = 0; j < shape_[0]; ++j) v(j) = iv;
+                    append_vector<int>(v);
+                }
+                else
+                {
+                    typename NumericVectorTypes<std::complex<double>>::OwnedType v(shape_[0]);
+                    for (Index j = 0; j < shape_[0]; ++j) v(j) = cv;
+                    append_vector<std::complex<double>>(v);
+                }
+            }
+            else
+            {
+                if (data_type_ == DataType::kReal)
+                {
+                    typename NumericMatrixTypes<double>::OwnedType mtx(shape_[0], shape_[1]);
+                    mtx.setConstant(dr);
+                    append_matrix<double>(mtx);
+                }
+                else if (data_type_ == DataType::kInteger)
+                {
+                    typename NumericMatrixTypes<int>::OwnedType mtx(shape_[0], shape_[1]);
+                    mtx.setConstant(iv);
+                    append_matrix<int>(mtx);
+                }
+                else
+                {
+                    typename NumericMatrixTypes<std::complex<double>>::OwnedType mtx(shape_[0], shape_[1]);
+                    mtx.setConstant(cv);
+                    append_matrix<std::complex<double>>(mtx);
+                }
+            }
+        }
+        return;
+    }
+
+    // ---- Scalar DataSeries: allow type promotion (int→real→complex) --------
+    if (data_kind_ == DataKind::kScalar && m.data_kind() == DataKind::kScalar
+        && m.data_type() != data_type_)
+    {
+        if (data_type_ == DataType::kReal && m.data_type() == DataType::kInteger)
+            append_scalar(static_cast<double>(boost::get<int>(m.storage())));
+        else if (data_type_ == DataType::kComplex)
+        {
+            if (m.data_type() == DataType::kInteger)
+                append_scalar(std::complex<double>(static_cast<double>(boost::get<int>(m.storage())), 0.0));
+            else if (m.data_type() == DataType::kReal)
+                append_scalar(std::complex<double>(boost::get<double>(m.storage()), 0.0));
+            else
+                append_scalar(boost::get<std::complex<double>>(m.storage()));
+        }
+        else
+            throw std::bad_cast();
+        return;
+    }
+
+    // ---- Exact match -------------------------------------------------------
+    if (m.data_kind() != data_kind_ || m.data_type() != data_type_ || m.shape() != shape_)
+        throw std::bad_cast();
+
     if (!unit_.has_dimension() && m.unit().has_dimension()) {
         if (data_type_ == DataType::kString)
             throw std::invalid_argument("string series cannot have a named unit");

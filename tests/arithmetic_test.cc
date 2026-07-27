@@ -16,6 +16,7 @@ using xdataset::DataType;
 using xdataset::Index;
 using xdataset::Unit;
 using xdataset::DataArray;
+using xdataset::Combine;
 
 // ---------------------------------------------------------------------------
 
@@ -2462,13 +2463,14 @@ TEST(DataArrayConcatTest, BroadcastSingleRow)
     auto b = DataArray::CreateIndependent(
         DataSeries::CreateScalarFromVector<double>({10.0, 20.0, 30.0}));
 
-    DataArray result = Concat(std::vector<DataArray>{a, b});
+    // b first so its multi_dimension_spec (3 rows) is inherited
+    DataArray result = Concat(std::vector<DataArray>{b, a});
 
     EXPECT_EQ(result.data().size(), 3u);
-    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(0)(0), 0.0);   // a default
-    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(0)(1), 10.0);  // b
-    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(2)(0), 0.0);   // a broadcast
-    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(2)(1), 30.0);  // b
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(0)(0), 10.0);  // b
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(0)(1), 0.0);   // a default
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(2)(0), 30.0);  // b
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(2)(1), 0.0);   // a broadcast
 }
 
 TEST(DataArrayConcatTest, RowCountMismatchThrows)
@@ -2485,4 +2487,211 @@ TEST(DataArrayConcatTest, EmptyThrows)
 {
     std::vector<DataArray> empty;
     EXPECT_THROW({ Concat(empty); }, std::invalid_argument);
+}
+
+// =========================================================================
+// Concat -- string vector/matrix
+// =========================================================================
+
+TEST(ConcatTest, StringVectorToMatrix)
+{
+    Eigen::Tensor<std::string, 1> v1(2); v1(0) = "a"; v1(1) = "b";
+    Eigen::Tensor<std::string, 1> v2(2); v2(0) = "c"; v2(1) = "d";
+    Eigen::Tensor<std::string, 1> v3(2); v3(0) = "e"; v3(1) = "f";
+    Measurement mv1(v1), mv2(v2), mv3(v3);
+
+    Measurement result = xdataset::Concat(std::vector<Measurement>{mv1, mv2, mv3});
+
+    EXPECT_EQ(result.data_kind(), DataKind::kMatrix);
+    EXPECT_EQ(result.data_type(), DataType::kString);
+    ASSERT_EQ(result.shape().size(), 2u);
+    EXPECT_EQ(result.shape()[0], 3);
+    EXPECT_EQ(result.shape()[1], 2);
+    EXPECT_EQ(result.as_matrix<std::string>()(0, 0), "a");
+    EXPECT_EQ(result.as_matrix<std::string>()(0, 1), "b");
+    EXPECT_EQ(result.as_matrix<std::string>()(1, 0), "c");
+    EXPECT_EQ(result.as_matrix<std::string>()(1, 1), "d");
+    EXPECT_EQ(result.as_matrix<std::string>()(2, 0), "e");
+    EXPECT_EQ(result.as_matrix<std::string>()(2, 1), "f");
+}
+
+TEST(DataArrayConcatTest, StringScalarDataArraysToVector)
+{
+    auto a = DataArray::CreateIndependent(
+        DataSeries::CreateScalarFromVector(
+            std::vector<std::string>{"x", "y"}));
+    auto b = DataArray::CreateIndependent(
+        DataSeries::CreateScalarFromVector(
+            std::vector<std::string>{"z", "w"}));
+
+    DataArray result = xdataset::Concat(std::vector<DataArray>{a, b});
+
+    EXPECT_EQ(result.data().data_kind(), DataKind::kVector);
+    EXPECT_EQ(result.data().data_type(), DataType::kString);
+    EXPECT_EQ(result.data().size(), 2u);
+    EXPECT_EQ(result.data().vector_at<std::string>(0)(0), "x");
+    EXPECT_EQ(result.data().vector_at<std::string>(0)(1), "z");
+    EXPECT_EQ(result.data().vector_at<std::string>(1)(0), "y");
+    EXPECT_EQ(result.data().vector_at<std::string>(1)(1), "w");
+}
+
+TEST(DataArrayConcatTest, StringVectorDataArraysToMatrix)
+{
+    auto a = DataArray::CreateIndependent(
+        DataSeries::CreateVectorFromVector(2, std::vector<std::string>{"a", "b"}));
+    auto b = DataArray::CreateIndependent(
+        DataSeries::CreateVectorFromVector(2, std::vector<std::string>{"c", "d"}));
+
+    DataArray result = xdataset::Concat(std::vector<DataArray>{a, b});
+
+    EXPECT_EQ(result.data().data_kind(), DataKind::kMatrix);
+    EXPECT_EQ(result.data().data_type(), DataType::kString);
+    EXPECT_EQ(result.data().size(), 1u);
+    EXPECT_EQ(result.data().matrix_at<std::string>(0)(0, 0), "a");
+    EXPECT_EQ(result.data().matrix_at<std::string>(0)(0, 1), "b");
+    EXPECT_EQ(result.data().matrix_at<std::string>(0)(1, 0), "c");
+    EXPECT_EQ(result.data().matrix_at<std::string>(0)(1, 1), "d");
+}
+
+// =========================================================================
+// Combine
+// =========================================================================
+
+TEST(CombineTest, ScalarsToDataArray)
+{
+    Measurement a(1.0), b(2.0), c(3.0);
+    DataArray result = Combine({a, b, c});
+
+    EXPECT_EQ(result.data().data_kind(), DataKind::kScalar);
+    EXPECT_EQ(result.data().size(), 3u);
+    EXPECT_DOUBLE_EQ(result.data().scalar_at<double>(0), 1.0);
+    EXPECT_DOUBLE_EQ(result.data().scalar_at<double>(1), 2.0);
+    EXPECT_DOUBLE_EQ(result.data().scalar_at<double>(2), 3.0);
+}
+
+TEST(CombineTest, VectorAndScalarBroadcast)
+{
+    Eigen::VectorXd v1(2); v1 << 1.0, 2.0;
+    Eigen::VectorXd v2(2); v2 << 3.0, 4.0;
+    Measurement a(v1), b(v2);
+
+    DataArray result = Combine({a, b});
+
+    EXPECT_EQ(result.data().data_kind(), DataKind::kVector);
+    EXPECT_EQ(result.data().size(), 2u);
+    auto row0 = result.data().vector_at<double>(0);
+    auto row1 = result.data().vector_at<double>(1);
+    EXPECT_DOUBLE_EQ(row0(0), 1.0); EXPECT_DOUBLE_EQ(row0(1), 2.0);
+    EXPECT_DOUBLE_EQ(row1(0), 3.0); EXPECT_DOUBLE_EQ(row1(1), 4.0);
+}
+
+TEST(CombineTest, ScalarBroadcastToVector)
+{
+    Eigen::VectorXd v(2); v << 1.0, 2.0;
+    Measurement a(v);
+    Measurement b(10.0);  // scalar, broadcasts to [10, 10]
+
+    DataArray result = Combine({a, b});
+
+    EXPECT_EQ(result.data().data_kind(), DataKind::kVector);
+    EXPECT_EQ(result.data().size(), 2u);
+    auto row0 = result.data().vector_at<double>(0);
+    auto row1 = result.data().vector_at<double>(1);
+    EXPECT_DOUBLE_EQ(row0(0), 1.0); EXPECT_DOUBLE_EQ(row0(1), 2.0);
+    EXPECT_DOUBLE_EQ(row1(0), 10.0); EXPECT_DOUBLE_EQ(row1(1), 10.0);  // broadcast
+}
+
+TEST(CombineTest, DtypePromotion)
+{
+    Measurement a(1), b(2.0);
+    DataArray result = Combine({a, b});
+
+    EXPECT_EQ(result.data().data_type(), DataType::kReal);
+    EXPECT_DOUBLE_EQ(result.data().scalar_at<double>(0), 1.0);
+    EXPECT_DOUBLE_EQ(result.data().scalar_at<double>(1), 2.0);
+}
+
+TEST(CombineTest, StringScalars)
+{
+    Measurement a(std::string("x")), b(std::string("y"));
+    DataArray result = Combine({a, b});
+
+    EXPECT_EQ(result.data().data_kind(), DataKind::kScalar);
+    EXPECT_EQ(result.data().data_type(), DataType::kString);
+    EXPECT_EQ(result.data().size(), 2u);
+    EXPECT_EQ(result.data().scalar_at<std::string>(0), "x");
+    EXPECT_EQ(result.data().scalar_at<std::string>(1), "y");
+}
+
+TEST(CombineTest, ShapeMismatchThrows)
+{
+    Eigen::VectorXd v1(2); v1 << 1.0, 2.0;
+    Eigen::VectorXd v2(3); v2 << 1.0, 2.0, 3.0;
+    Measurement a(v1), b(v2);
+
+    EXPECT_THROW({ Combine({a, b}); }, std::invalid_argument);
+}
+
+TEST(CombineTest, EmptyThrows)
+{
+    EXPECT_THROW({ Combine({}); }, std::invalid_argument);
+}
+
+TEST(CombineTest, UnitCanonicalizeAndPromote)
+{
+    // 1 GHz + 12 (dimensionless) → canonicalized Hz values
+    Measurement a(1.0, Unit::parse("GHz"));
+    Measurement b(12.0);  // dimensionless, promoted to Hz
+
+    DataArray result = Combine(std::vector<Measurement>{a, b});
+
+    EXPECT_TRUE(result.data().unit().same_dimension(Unit::parse("Hz")));
+    EXPECT_DOUBLE_EQ(result.data().scalar_at<double>(0), 1e9);  // 1 GHz = 1e9 Hz
+    EXPECT_DOUBLE_EQ(result.data().scalar_at<double>(1), 12.0);
+}
+
+TEST(CombineTest, UnitMismatchThrows)
+{
+    Measurement a(1.0, Unit::parse("meter"));
+    Measurement b(1.0, Unit::parse("sec"));
+    EXPECT_THROW({ Combine({a, b}); }, std::invalid_argument);
+}
+
+TEST(ConcatTest, UnitCanonicalizeAndPromote)
+{
+    Measurement a(1.0, Unit::parse("GHz"));
+    Measurement b(12.0);  // dimensionless
+
+    Measurement result = Concat(std::vector<Measurement>{a, b});
+
+    EXPECT_TRUE(result.unit().same_dimension(Unit::parse("Hz")));
+    EXPECT_DOUBLE_EQ(result.as_vector<double>()(0), 1e9);
+    EXPECT_DOUBLE_EQ(result.as_vector<double>()(1), 12.0);
+}
+
+TEST(DataArrayConcatTest, UnitCanonicalize)
+{
+    auto ds_a = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
+    ds_a.set_unit(Unit::parse("GHz"));
+    auto a = DataArray::CreateIndependent(std::move(ds_a));
+
+    auto ds_b = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+    // b is dimensionless; DataArray already canonicalises at construction,
+    // so the result inherits the GHz unit and b's values are treated as dimensionless.
+    auto b = DataArray::CreateIndependent(std::move(ds_b));
+
+    DataArray result = Concat(std::vector<DataArray>{a, b});
+
+    EXPECT_TRUE(result.data().unit().same_dimension(Unit::parse("Hz")));
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(0)(0), 1e9);
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(0)(1), 10.0);
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(1)(0), 2e9);
+    EXPECT_DOUBLE_EQ(result.data().vector_at<double>(1)(1), 20.0);
+}
+
+TEST(ConcatTest, UnitMismatchThrows)
+{
+    Measurement a(1.0, Unit::parse("meter"));
+    Measurement b(1.0, Unit::parse("sec"));
+    EXPECT_THROW({ Concat(std::vector<Measurement>{a, b}); }, std::invalid_argument);
 }

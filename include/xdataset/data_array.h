@@ -144,6 +144,20 @@ XDATASET_API DataArray pow(const DataArray& base, const DataArray& exponent);
 XDATASET_API DataArray Concat(const std::vector<DataArray>& values);
 
 // =========================================================================
+// Combine — collect N Measurements into a single DataArray
+// =========================================================================
+//
+// Each Measurement becomes one row of the result DataSeries.  Non-scalar
+// measurements must share the same DataKind and DataShape; scalars are
+// broadcast to that shape (a scalar → fill entire vector/matrix).
+// Dtype promotes (int → real → complex, string only with string).
+//
+//   Combine({1.0, 2.0, 3.0})           → DataArray, Scalar, 3 rows
+//   Combine({Vector[1,2], Scalar(10)})  → DataArray, Vector(2), 2 rows
+
+XDATASET_API DataArray Combine(const std::vector<Measurement>& values);
+
+// =========================================================================
 //  Comparison operators (result is Integer 0/1, dimensionless)
 // =========================================================================
 

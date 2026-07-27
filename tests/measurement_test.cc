@@ -62,10 +62,58 @@ TEST(CellTest, AppendCellToSeries) {
     EXPECT_DOUBLE_EQ(s.scalar_at<double>(1), 3.5);
 }
 
-TEST(CellTest, AppendMismatchedCellThrows) {
+TEST(CellTest, AppendTypePromotionIntToReal) {
     Measurement int_cell = Measurement(10);
     DataSeries s = DataSeries::CreateScalar<double>(0);
-    EXPECT_THROW(s.append(int_cell), std::bad_cast);
+    // int→real promotion is now supported in append.
+    s.append(int_cell);
+    ASSERT_EQ(s.size(), 1u);
+    EXPECT_DOUBLE_EQ(s.scalar_at<double>(0), 10.0);
+}
+
+TEST(CellTest, AppendTypePromotionIntToComplex) {
+    Measurement int_cell = Measurement(10);
+    DataSeries s = DataSeries::CreateScalar<std::complex<double>>(0);
+    s.append(int_cell);
+    ASSERT_EQ(s.size(), 1u);
+    auto v = s.scalar_at<std::complex<double>>(0);
+    EXPECT_DOUBLE_EQ(v.real(), 10.0);
+    EXPECT_DOUBLE_EQ(v.imag(), 0.0);
+}
+
+TEST(CellTest, AppendTypePromotionRealToComplex) {
+    Measurement real_cell(3.5);
+    DataSeries s = DataSeries::CreateScalar<std::complex<double>>(0);
+    s.append(real_cell);
+    auto v = s.scalar_at<std::complex<double>>(0);
+    EXPECT_DOUBLE_EQ(v.real(), 3.5);
+    EXPECT_DOUBLE_EQ(v.imag(), 0.0);
+}
+
+TEST(CellTest, AppendScalarBroadcastToVector) {
+    DataSeries s = DataSeries::CreateVector<double>(3, 0);
+    s.append(Measurement(7.0));  // scalar → vector[7,7,7]
+    ASSERT_EQ(s.size(), 1u);
+    auto row = s.vector_at<double>(0);
+    EXPECT_DOUBLE_EQ(row(0), 7.0);
+    EXPECT_DOUBLE_EQ(row(1), 7.0);
+    EXPECT_DOUBLE_EQ(row(2), 7.0);
+}
+
+TEST(CellTest, AppendScalarBroadcastToVectorIntToReal) {
+    DataSeries s = DataSeries::CreateVector<double>(2, 0);
+    s.append(Measurement(5));  // int scalar → real vector[5,5]
+    ASSERT_EQ(s.size(), 1u);
+    auto row = s.vector_at<double>(0);
+    EXPECT_DOUBLE_EQ(row(0), 5.0);
+    EXPECT_DOUBLE_EQ(row(1), 5.0);
+}
+
+TEST(CellTest, AppendStillThrowsOnCompleteMismatch) {
+    // Vector DataSeries, trying to append a different-shaped vector → still throws.
+    Eigen::VectorXd v(4); v << 1., 2., 3., 4.;
+    DataSeries s = DataSeries::CreateVector<double>(3, 0);
+    EXPECT_THROW(s.append(Measurement(v)), std::bad_cast);
 }
 
 TEST(CellTest, AppendUnitMismatchThrows) {

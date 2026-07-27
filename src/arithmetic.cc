@@ -54,12 +54,12 @@ DataType promoted_dtype(DataType a, DataType b) {
     return DataType::kInteger;
 }
 
-// Concat uses the same dtype promotion except string→string is allowed.
-inline DataType promoted_concat_dtype(DataType a, DataType b)
+// Concat/Combine use the same dtype promotion except string→string is allowed.
+inline DataType promoted_merge_dtype(DataType a, DataType b)
 {
     if (a == DataType::kString && b == DataType::kString) return DataType::kString;
     if (a == DataType::kString || b == DataType::kString)
-        throw std::invalid_argument("concat: cannot mix string with numeric types");
+        throw std::invalid_argument("concat/combine: cannot mix string with numeric types");
     return promoted_dtype(a, b);
 }
 
@@ -2096,26 +2096,74 @@ std::complex<double> meas_to_complex_scalar(const Measurement& m, Index idx)
 
 } // anonymous namespace
 
+/// Resolve the result base unit for concat/combine.
+/// Canonicalises all non-dimensionless entries in-place; dimensionless
+/// entries are tagged with the target base unit.  Throws if non-dimless
+/// entries have incompatible base units.
+/// @return the target canonicalised unit (Unit() if all dimensionless)
+Unit resolve_merge_unit(std::vector<Measurement>& values)
+{
+    if (values.empty()) return Unit();
+
+    Unit target;
+    for (std::size_t i = 0; i < values.size(); ++i)
+    {
+        Measurement& m = values[i];
+        if (!m.unit().has_dimension()) continue;
+
+        if (!target.has_dimension())
+        {
+            target = m.unit().canonicalized();
+            m = m.canonicalized();
+        }
+        else if (!m.unit().same_dimension(target))
+        {
+            throw std::invalid_argument(
+                "concat/combine: unit dimension mismatch [" +
+                m.unit().to_string() + "] vs [" + target.to_string() + "]");
+        }
+        else
+        {
+            m = m.canonicalized();
+        }
+    }
+
+    // Tag dimensionless entries with target unit.
+    if (target.has_dimension())
+    {
+        for (std::size_t i = 0; i < values.size(); ++i)
+        {
+            if (!values[i].unit().has_dimension())
+                values[i].set_unit(target);
+        }
+    }
+
+    return target;
+}
+
 Measurement Concat(const std::vector<Measurement>& values)
 {
     if (values.empty())
         throw std::invalid_argument("concat: empty vector");
 
-    const Measurement& first = values[0];
+    auto mutable_values = values;
+    Unit result_unit = resolve_merge_unit(mutable_values);
+
+    const Measurement& first = mutable_values[0];
     DataKind  kind  = first.data_kind();
     DataType  dtype = first.data_type();
 
-    for (std::size_t i = 1; i < values.size(); ++i)
+    for (std::size_t i = 1; i < mutable_values.size(); ++i)
     {
-        const Measurement& m = values[i];
+        const Measurement& m = mutable_values[i];
         if (m.data_kind() != kind)
             throw std::invalid_argument("concat: DataKind mismatch");
         if (m.shape() != first.shape())
             throw std::invalid_argument("concat: DataShape mismatch");
-        dtype = promoted_concat_dtype(dtype, m.data_type());
+        dtype = promoted_merge_dtype(dtype, m.data_type());
     }
 
-    const Index N = static_cast<Index>(values.size());
+    const Index N = static_cast<Index>(mutable_values.size());
 
     if (kind == DataKind::kScalar)
     {
@@ -2123,52 +2171,64 @@ Measurement Concat(const std::vector<Measurement>& values)
         {
             Eigen::Tensor<std::string, 1> v(N);
             for (Index i = 0; i < N; ++i)
-                v(i) = values[static_cast<std::size_t>(i)].as_scalar<std::string>();
+                v(i) = mutable_values[static_cast<std::size_t>(i)].as_scalar<std::string>();
             return Measurement::Vector(v);
         }
         if (dtype == DataType::kInteger)
         {
             Eigen::VectorXi v(N);
             for (Index i = 0; i < N; ++i)
-                v(i) = values[static_cast<std::size_t>(i)].as_scalar<int>();
-            return Measurement::Vector(v);
+                v(i) = mutable_values[static_cast<std::size_t>(i)].as_scalar<int>();
+            return make_vector_int(v, result_unit);
         }
         if (dtype == DataType::kReal)
         {
             Eigen::VectorXd v(N);
             for (Index i = 0; i < N; ++i)
-                v(i) = meas_to_double_scalar(values[static_cast<std::size_t>(i)], 0);
-            return Measurement::Vector(v);
+                v(i) = meas_to_double_scalar(mutable_values[static_cast<std::size_t>(i)], 0);
+            return make_vector_real(v, result_unit);
         }
-        Eigen::VectorXcd v(N);
-        for (Index i = 0; i < N; ++i)
-            v(i) = meas_to_complex_scalar(values[static_cast<std::size_t>(i)], 0);
-        return Measurement::Vector(v);
+        {
+            Eigen::VectorXcd v(N);
+            for (Index i = 0; i < N; ++i)
+                v(i) = meas_to_complex_scalar(mutable_values[static_cast<std::size_t>(i)], 0);
+            return make_vector_cplx(v, result_unit);
+        }
     }
 
     if (kind == DataKind::kVector)
     {
         const Index W = first.shape()[0];
+        if (dtype == DataType::kString)
+        {
+            Eigen::Tensor<std::string, 2> m(N, W);
+            for (Index i = 0; i < N; ++i)
+                for (Index j = 0; j < W; ++j)
+                    m(i, j) = mutable_values[static_cast<std::size_t>(i)].as_vector<std::string>()(j);
+            return Measurement::Matrix(m);
+        }
         if (dtype == DataType::kInteger)
         {
             Eigen::MatrixXi m(N, W);
             for (Index i = 0; i < N; ++i)
-                m.row(i) = values[static_cast<std::size_t>(i)].as_vector<int>().transpose();
-            return Measurement::Matrix(m);
+                m.row(i) = mutable_values[static_cast<std::size_t>(i)].as_vector<int>().transpose();
+            return make_matrix_int(m, result_unit);
         }
         if (dtype == DataType::kReal)
         {
             Eigen::MatrixXd m(N, W);
             for (Index i = 0; i < N; ++i)
                 for (Index j = 0; j < W; ++j)
-                    m(i, j) = meas_to_double_scalar(values[static_cast<std::size_t>(i)], j);
-            return Measurement::Matrix(m);
+                    m(i, j) = meas_to_double_scalar(mutable_values[static_cast<std::size_t>(i)], j);
+            return make_matrix_real(m, result_unit);
         }
-        Eigen::MatrixXcd m(N, W);
-        for (Index i = 0; i < N; ++i)
-            for (Index j = 0; j < W; ++j)
-                m(i, j) = meas_to_complex_scalar(values[static_cast<std::size_t>(i)], j);
-        return Measurement::Matrix(m);
+        {
+            Eigen::MatrixXcd m(N, W);
+            for (Index i = 0; i < N; ++i)
+                for (Index j = 0; j < W; ++j)
+                    m(i, j) = meas_to_complex_scalar(mutable_values[static_cast<std::size_t>(i)], j);
+            return make_matrix_cplx(m, result_unit);
+        }
     }
 
     throw std::invalid_argument("concat: cannot promote matrix to higher kind");
@@ -2179,44 +2239,43 @@ DataArray Concat(const std::vector<DataArray>& values)
     if (values.empty())
         throw std::invalid_argument("concat: empty vector");
 
-    const DataArray& first = values[0];
-    std::size_t target_rows = static_cast<std::size_t>(first.data().size());
-
-    for (std::size_t i = 1; i < values.size(); ++i)
-    {
-        std::size_t r = static_cast<std::size_t>(values[i].data().size());
-        if (r != 1 && r != target_rows)
-        {
-            if (target_rows == 1)
-                target_rows = r;
-            else
-                throw std::invalid_argument("concat: row count mismatch (" +
-                    std::to_string(target_rows) + " vs " + std::to_string(r) + ")");
-        }
-    }
-
-    // Pick representative for spec inheritance: use the first DataArray,
-    // or if that one has only 1 row (ambiguous spec), find one with >1 row.
-    std::size_t rep_idx = 0;
-    for (std::size_t i = 0; i < values.size(); ++i)
-    {
-        if (static_cast<std::size_t>(values[i].data().size()) > 1)
-        { rep_idx = i; break; }
-    }
-
-    const DataArray& rep = values[rep_idx];
-    DataKind  result_kind  = rep.data().data_kind();
-    DataType  result_dtype = rep.data().data_type();
-    Unit      result_unit  = rep.data().unit();
+    const DataArray& rep   = values[0];
+    std::size_t target_rows = static_cast<std::size_t>(rep.data().size());
+    DataKind     result_kind  = rep.data().data_kind();
+    DataType     result_dtype = rep.data().data_type();
+    Unit         result_unit  = rep.data().unit();
 
     for (std::size_t i = 0; i < values.size(); ++i)
     {
         const DataArray& da = values[i];
+
+        // Row-count check (skip i==0, it's the reference itself).
+        if (i > 0)
+        {
+            std::size_t r = static_cast<std::size_t>(da.data().size());
+            if (r != 1 && r != target_rows)
+            {
+                if (target_rows == 1)
+                    target_rows = r;
+                else
+                    throw std::invalid_argument("concat: row count mismatch (" +
+                        std::to_string(target_rows) + " vs " + std::to_string(r) + ")");
+            }
+        }
+
         if (da.data().data_kind() != result_kind)
             throw std::invalid_argument("concat: DataKind mismatch across DataArrays");
         if (da.data().data_shape() != rep.data().data_shape())
             throw std::invalid_argument("concat: DataShape mismatch across DataArrays");
-        result_dtype = promoted_concat_dtype(result_dtype, da.data().data_type());
+        result_dtype = promoted_merge_dtype(result_dtype, da.data().data_type());
+
+        if (da.data().unit().has_dimension() && result_unit.has_dimension()
+            && !da.data().unit().same_dimension(result_unit))
+            throw std::invalid_argument(
+                "concat: unit dimension mismatch [" +
+                da.data().unit().to_string() + "] vs [" + result_unit.to_string() + "]");
+        if (!result_unit.has_dimension() && da.data().unit().has_dimension())
+            result_unit = da.data().unit();
     }
 
     DataSeries result_series;
@@ -2227,7 +2286,8 @@ DataArray Concat(const std::vector<DataArray>& values)
         if (result_kind == DataKind::kScalar)
             result_series = DataSeries::CreateVector<std::string>(N, target_rows, result_unit);
         else
-            throw std::invalid_argument("concat: string vector/matrix not supported");
+            result_series = DataSeries::CreateMatrix<std::string>(
+                N, rep.data().data_shape()[0], target_rows, result_unit);
     }
     else if (result_dtype == DataType::kInteger)
     {
@@ -2275,8 +2335,13 @@ DataArray Concat(const std::vector<DataArray>& values)
 
         if (result_dtype == DataType::kString)
         {
-            for (Index j = 0; j < N; ++j)
-                result_series.vector_at<std::string>(ri)(j) = merged.as_vector<std::string>()(j);
+            if (result_kind == DataKind::kScalar)
+                for (Index j = 0; j < N; ++j)
+                    result_series.vector_at<std::string>(ri)(j) = merged.as_vector<std::string>()(j);
+            else
+                for (Index jr = 0; jr < N; ++jr)
+                    for (Index jc = 0; jc < merged.shape()[1]; ++jc)
+                        result_series.matrix_at<std::string>(ri)(jr, jc) = merged.as_matrix<std::string>()(jr, jc);
         }
         else if (result_kind == DataKind::kScalar)
         {
@@ -2311,6 +2376,61 @@ DataArray Concat(const std::vector<DataArray>& values)
     info.indep_datas          = rep.indep_datas();
     info.multi_dimension_spec = rep.multi_dimension_spec();
     info.kind                 = rep.data_kind();
+    return DataArray(info);
+}
+
+// =========================================================================
+// Combine — collect N Measurements into a DataArray (one per row)
+// =========================================================================
+
+DataArray Combine(const std::vector<Measurement>& values)
+{
+    if (values.empty())
+        throw std::invalid_argument("combine: empty vector");
+
+    // ---- Canonicalise + unit validation ----------------------------------
+    auto mutable_values = values;
+    Unit result_unit = resolve_merge_unit(mutable_values);
+
+    // ---- Determine result kind / shape / dtype ----------------------------
+    DataKind  result_kind  = DataKind::kScalar;
+    DataType  result_dtype = mutable_values[0].data_type();
+    std::vector<Index> result_shape;
+
+    for (std::size_t i = 0; i < mutable_values.size(); ++i)
+    {
+        const Measurement& m = mutable_values[i];
+        if (m.data_kind() != DataKind::kScalar)
+        {
+            if (result_kind == DataKind::kScalar)
+            {
+                result_kind  = m.data_kind();
+                result_shape = m.shape();
+            }
+            else if (m.data_kind() != result_kind || m.shape() != result_shape)
+            {
+                throw std::invalid_argument(
+                    "combine: DataKind or DataShape mismatch among non-scalars");
+            }
+        }
+        else if (m.data_kind() == DataKind::kMatrix)
+        {
+            throw std::invalid_argument(
+                "combine: matrix measurements not supported");
+        }
+        result_dtype = promoted_merge_dtype(result_dtype, m.data_type());
+    }
+
+    // ---- Create result DataSeries & append each Measurement ---------------
+    DataSeries result_series(result_kind, result_dtype, result_shape);
+    result_series.set_unit(result_unit);
+
+    for (std::size_t i = 0; i < mutable_values.size(); ++i)
+        result_series.append(mutable_values[i]);
+
+    DataArrayCreateInfo info;
+    info.data = std::move(result_series);
+    info.kind = DataArrayKind::kDependent;
     return DataArray(info);
 }
 
