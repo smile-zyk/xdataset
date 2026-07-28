@@ -409,6 +409,172 @@ TEST(UnitTest, ToStringDefaultDoesNotCrash)
 }
 
 // =========================================================================
+//  to_string round-trip: derived SI units survive canonicalize
+// =========================================================================
+
+TEST(UnitTest, ToStringRoundTripSiemens)
+{
+    Unit u = Unit::parse("S").canonicalized();
+    EXPECT_EQ(u.to_string(), "S");
+    // Verify it can be parsed back
+    Unit u2 = Unit::parse(u.to_string());
+    EXPECT_EQ(u2.multiplier(), 1.0);
+    EXPECT_TRUE(u2.same_dimension(u));
+}
+
+TEST(UnitTest, ToStringRoundTripOhm)
+{
+    Unit u = Unit::parse("Ohm").canonicalized();
+    EXPECT_EQ(u.to_string(), "Ohm");
+    // Round-trip: parse the string back and verify
+    Unit u2 = Unit::parse(u.to_string());
+    EXPECT_EQ(u2.multiplier(), 1.0);
+    EXPECT_TRUE(u2.same_dimension(u));
+}
+
+TEST(UnitTest, ToStringRoundTripWatt)
+{
+    Unit u = Unit::parse("W").canonicalized();
+    EXPECT_EQ(u.to_string(), "W");
+    Unit u2 = Unit::parse(u.to_string());
+    EXPECT_EQ(u2.multiplier(), 1.0);
+    EXPECT_TRUE(u2.same_dimension(u));
+}
+
+TEST(UnitTest, ToStringRoundTripBasicUnits)
+{
+    // All base units in our vocabulary
+    EXPECT_EQ(Unit::parse("Hz").canonicalized().to_string(), "Hz");
+    EXPECT_EQ(Unit::parse("V").canonicalized().to_string(),   "V");
+    EXPECT_EQ(Unit::parse("A").canonicalized().to_string(),   "A");
+    EXPECT_EQ(Unit::parse("F").canonicalized().to_string(),   "F");
+    EXPECT_EQ(Unit::parse("H").canonicalized().to_string(),   "H");
+    EXPECT_EQ(Unit::parse("meter").canonicalized().to_string(), "meter");
+    EXPECT_EQ(Unit::parse("sec").canonicalized().to_string(),   "sec");
+}
+
+// =========================================================================
+//  to_string: canonicalized prefixed units → base REL name
+// =========================================================================
+
+TEST(UnitTest, ToStringCanonicalMHz)
+{
+    Unit u = Unit::parse("MHz").canonicalized();
+    EXPECT_EQ(u.to_string(), "Hz");
+    EXPECT_DOUBLE_EQ(u.multiplier(), 1.0);
+}
+
+TEST(UnitTest, ToStringCanonicalGHz)
+{
+    Unit u = Unit::parse("GHz").canonicalized();
+    EXPECT_EQ(u.to_string(), "Hz");
+}
+
+TEST(UnitTest, ToStringCanonicalkOhm)
+{
+    Unit u = Unit::parse("kOhm").canonicalized();
+    EXPECT_EQ(u.to_string(), "Ohm");
+}
+
+TEST(UnitTest, ToStringCanonicalkS)
+{
+    // kS (kilo-Siemens) → canonicalized → "S"
+    Unit u = Unit::parse("kS");
+    Unit c = u.canonicalized();
+    EXPECT_EQ(c.to_string(), "S");
+    EXPECT_DOUBLE_EQ(c.multiplier(), 1.0);
+}
+
+// =========================================================================
+//  to_string: non-canonical prefixed units retain their prefix
+// =========================================================================
+
+TEST(UnitTest, ToStringNonCanonicalMHz)
+{
+    Unit u = Unit::parse("MHz");
+    EXPECT_EQ(u.to_string(), "MHz");
+}
+
+TEST(UnitTest, ToStringNonCanonicalGHz)
+{
+    Unit u = Unit::parse("GHz");
+    EXPECT_EQ(u.to_string(), "GHz");
+}
+
+TEST(UnitTest, ToStringNonCanonicalmA)
+{
+    Unit u = Unit::parse("mA");
+    EXPECT_EQ(u.to_string(), "mA");
+}
+
+TEST(UnitTest, ToStringNonCanonicalGV)
+{
+    Unit u = Unit::parse("GV");
+    EXPECT_EQ(u.to_string(), "GV");  // not "kV", just exact prefix match
+}
+
+// =========================================================================
+//  to_string: aliases canonicalise to first registered name
+// =========================================================================
+
+TEST(UnitTest, ToStringAliasOhmsToOhm)
+{
+    Unit u = Unit::parse("Ohms").canonicalized();
+    EXPECT_EQ(u.to_string(), "Ohm");
+}
+
+TEST(UnitTest, ToStringAliasMetersToMeter)
+{
+    Unit u = Unit::parse("meters").canonicalized();
+    EXPECT_EQ(u.to_string(), "meter");
+}
+
+TEST(UnitTest, ToStringAliasMetreToMeter)
+{
+    Unit u = Unit::parse("metre").canonicalized();
+    EXPECT_EQ(u.to_string(), "meter");
+}
+
+// =========================================================================
+//  best_display with derived units
+// =========================================================================
+
+TEST(UnitTest, BestDisplayWattSmall)
+{
+    UnitScale s = Unit::parse("W").best_display(0.005);
+    EXPECT_NEAR(s.scale, 1000, 1e-9);
+    EXPECT_EQ(s.name, "mW");
+}
+
+TEST(UnitTest, BestDisplayWattLarge)
+{
+    UnitScale s = Unit::parse("W").best_display(5e6);
+    EXPECT_NEAR(s.scale, 1e-6, 1e-9);
+    EXPECT_EQ(s.name, "MW");
+}
+
+TEST(UnitTest, BestDisplayOhm)
+{
+    UnitScale s = Unit::parse("Ohm").best_display(4700);
+    EXPECT_NEAR(s.scale, 1e-3, 1e-9);
+    EXPECT_EQ(s.name, "KOhm");
+}
+
+TEST(UnitTest, BestDisplayHzNoScale)
+{
+    UnitScale s = Unit::parse("Hz").best_display(50);
+    EXPECT_DOUBLE_EQ(s.scale, 1.0);
+    EXPECT_EQ(s.name, "Hz");
+}
+
+TEST(UnitTest, BestDisplayHzToGHz)
+{
+    UnitScale s = Unit::parse("Hz").best_display(2.4e9);
+    EXPECT_NEAR(s.scale, 1e-9, 1e-9);
+    EXPECT_EQ(s.name, "GHz");
+}
+
+// =========================================================================
 //  equals / not-equals
 // =========================================================================
 

@@ -7,6 +7,7 @@
 #include "data_series.h"
 #include "dataset.h"
 #include "dimension_spec.h"
+#include "touchstone_io.h"
 
 #include <complex>
 #include <cstring>
@@ -32,7 +33,7 @@ void check_h5(herr_t status, const char* msg)
 }
 
 // -----------------------------------------------------------------------
-// Type mapping: xdataset DataType â†?HDF5 type id.
+// Type mapping: xdataset DataType ï¿½?HDF5 type id.
 // Caller must close the returned type with H5Tclose unless it's a native type.
 // -----------------------------------------------------------------------
 hid_t h5_type_from(DataType dtype)
@@ -235,7 +236,7 @@ void write_block(hid_t root_group, const std::string& block_path, const Block& b
     }
     // current is the leaf HDF5 group = the Block's home.
 
-    // Independent DataSeries â†?Datasets with dimension attributes
+    // Independent DataSeries ï¿½?Datasets with dimension attributes
     for (const auto& name : block.independents())
     {
         const IndependentSpec& spec = block.independent_spec(name);
@@ -245,7 +246,7 @@ void write_block(hid_t root_group, const std::string& block_path, const Block& b
         H5Dclose(dset);
     }
 
-    // Dependent DataSeries â†?Datasets
+    // Dependent DataSeries ï¿½?Datasets
     for (const auto& name : block.dependents())
     {
         const DependentSpec& spec = block.dependent_spec(name);
@@ -504,7 +505,7 @@ Block read_block(hid_t group, const std::string& block_name)
         int otype = H5Gget_objtype_by_idx(bg, i);
         if (otype != H5G_DATASET) continue;
 
-        // Check if this dataset has a dim_type attribute â†?independent
+        // Check if this dataset has a dim_type attribute ï¿½?independent
         hid_t dset = H5Dopen2(bg, oname.c_str(), H5P_DEFAULT);
         bool has_dim = H5Aexists(dset, "dim_type");
         H5Dclose(dset);
@@ -662,6 +663,8 @@ std::unique_ptr<IDatasetReader> DatasetIO::CreateReader(
 {
     if (format == "hdf5")
         return std::unique_ptr<IDatasetReader>(new Hdf5Reader(path));
+    if (format == "touchstone" || format == "snp")
+        return std::unique_ptr<IDatasetReader>(new TouchstoneReader(path));
     throw std::invalid_argument("unsupported format: " + format);
 }
 

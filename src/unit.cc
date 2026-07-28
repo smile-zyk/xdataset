@@ -149,10 +149,47 @@ namespace xdataset
             throw std::invalid_argument("Unrecognised unit token: '" + token + "'");
         }
 
+        // =========================================================================
+        //  Reverse mapping: llnl base_units string → REL unit name (no prefix)
+        // =========================================================================
+        //
+        //  For each entry in kUnitMap, we parse the llnl string, pull out its
+        //  base_units, and record the llnl to_string of those base_units as the
+        //  key.  For entries with a scale prefix (e.g. "GHz"), we strip the
+        //  prefix and only register the base name.  Predefined units (mil, cm,
+        //  etc.) whose llnl base is "m" are registered as that base.
+        //
+        //  Duplicate keys (Ohm/Ohms both → "ohm") keep the first REL name.
+
+        std::map<std::string, std::string> kBaseUnitRelName;
+
+        void add_reverse_base(const std::string& rel_name,
+                              const std::string& llnl_expr)
+        {
+            units::precise_unit pu = units::unit_from_string(llnl_expr);
+            if (units::isnan(pu)) return;
+
+            units::precise_unit base(pu.base_units().clear_e_flag());
+            std::string base_key = units::to_string(base);
+            if (base_key.empty()) return;
+
+            // first wins (aliases like Ohm/Ohms, meter/meters)
+            if (kBaseUnitRelName.find(base_key) == kBaseUnitRelName.end())
+                kBaseUnitRelName[base_key] = rel_name;
+        }
+
+        bool init_reverse_base_units()
+        {
+            for (const auto& kv : kUnitMap)
+                add_reverse_base(kv.first, kv.second);
+            return true;
+        }
+        const bool kReverseBaseUnitsReady = init_reverse_base_units();
+
     } // anonymous namespace
 
     // =========================================================================
-    //  Auto-scale helpers
+    //  Auto-scale helpers (also used as reverse-mult prefix table)
     // =========================================================================
 
     namespace {
@@ -165,13 +202,6 @@ namespace xdataset
         {1e3,   "K"},  {1e6,  "M"},   {1e9,  "G"},   {1e12, "T"},
     };
     const int kAutoScaleCount = sizeof(kAutoScales) / sizeof(kAutoScales[0]);
-
-    /// Rewrite a few llnl canonical names: "m"→"meter", "s"→"sec".
-    static std::string fix_base_name(const std::string& s) {
-        if (s == "m") return "meter";
-        if (s == "s") return "sec";
-        return s;
-    }
 
     }  // anonymous namespace
 
@@ -234,24 +264,43 @@ namespace xdataset
 
     std::string Unit::to_string() const
     {
-        return units::to_string(unit_);
+        // Step 1: canonicalise to base_units and get llnl string.
+        units::precise_unit base(unit_.base_units().clear_e_flag());
+        std::string base_key = units::to_string(base);
+
+        // Step 2: check if the base_units string maps to a REL base name.
+        auto rit = kBaseUnitRelName.find(base_key);
+        if (rit == kBaseUnitRelName.end())
+            return units::to_string(unit_);  // not in vocabulary — fallback
+
+        const std::string& rel_base = rit->second;
+
+        // Step 3: match the original multiplier to a kAutoScales prefix.
+        double orig_mult = unit_.multiplier();
+        const char* prefix = "";
+        for (int i = 0; i < kAutoScaleCount; ++i) {
+            if (kAutoScales[i].mult == orig_mult) {
+                prefix = kAutoScales[i].name;
+                break;
+            }
+        }
+        // If multiplier doesn't match any known prefix, fallback.
+        if (prefix[0] == '\0' && orig_mult != 1.0)
+            return units::to_string(unit_);
+
+        return std::string(prefix) + rel_base;
     }
 
     UnitScale Unit::best_display(double value) const
     {
         double mult = multiplier();
-        Unit base = canonicalized();
-        std::string base_str = units::to_string(base.unit_);
+        Unit base_u = canonicalized();
+        std::string base_str = base_u.to_string();
 
         // Don't auto-scale compound units (e.g. "m/s", "m^2").
         if (base_str.find_first_of("/*^") != std::string::npos)
             return {mult, base_str};
 
-        // Rewrite llnl names to REL display names ("m"→"meter", "s"→"sec").
-        base_str = fix_base_name(base_str);
-
-        // Try each scale factor from largest to smallest, pick the first
-        // one where the scaled value lands in [1, 1000).
         double best_mult = 1.0;
         for (int i = kAutoScaleCount - 1; i >= 0; --i) {
             double m = kAutoScales[i].mult;
@@ -263,12 +312,9 @@ namespace xdataset
             }
         }
 
-        if (best_mult == 1.0) {
-            std::string ds = fix_base_name(units::to_string(unit_));
-            return {mult, ds};
-        }
+        if (best_mult == 1.0)
+            return {mult, to_string()};
 
-        // Build display unit: "scale_prefix + base_str"
         const char* prefix = "";
         for (int i = 0; i < kAutoScaleCount; ++i) {
             if (kAutoScales[i].mult == best_mult) { prefix = kAutoScales[i].name; break; }

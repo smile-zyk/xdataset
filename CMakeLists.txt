@@ -48,6 +48,8 @@ set(XDATASET_SOURCES
 	src/unit.cc
 	src/dataset.cc
 	src/hdf5_io.cc
+	src/touchstone_io.cc
+	src/data_array_io.cc
 )
 
 add_library(xdataset SHARED ${XDATASET_SOURCES})
@@ -64,6 +66,7 @@ add_executable(xdataset_test
 	tests/unit_test.cc
 	tests/dataset_test.cc
 	tests/hdf5_io_test.cc
+	tests/touchstone_io_test.cc
 )
 
 add_executable(xdataset_playground
