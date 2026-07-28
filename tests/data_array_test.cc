@@ -227,30 +227,32 @@ namespace xdataset
         EXPECT_EQ(by_name.multi_dimension_spec().rank(), indep1.multi_dimension_spec().rank());
     }
 
-    // IndependentIndepOneReturnsIndexSeries ??indep(1) on an Independent returns
-    // a dimension-level index series (multi_index.back()).  For z (3rd indep, 3 dims
-    // U2 x J{1,2} x U2, 6 rows), the index cycles 0,1,0,1,0,1.
+    // IndependentIndepOneReturnsIndexSeries — indep(1) on an Independent
+    // returns a dimension-level index series {0, 1, ..., N-1} for the
+    // raw self-dimension data (un-expanded).
     TEST(DataArrayIndepTest, IndependentIndepOneReturnsIndexSeries)
     {
         Block block(MakeInterleavedCreateInfo());
         DataArray z_data = block.GetOrCreateDataArray("z");
-        DataArray self_indep = z_data.indep(1);   // self-reference (key is "")
+        // z has raw data {100.0, 200.0}, dims U2 x J{1,2} x U2.
+        DataArray self_indep = z_data.indep(1);   // self-reference → index series
         EXPECT_EQ(self_indep.data_kind(), DataArrayKind::kIndependent);
-        EXPECT_EQ(self_indep.data().size(), 6u);   // expanded product
+        EXPECT_EQ(self_indep.data().size(), 2u);   // index series for 2 raw entries
 
-        // Index series: last-dim cycle 0,1 repeating
-        const int expected[] = {0, 1, 0, 1, 0, 1};
-        for (std::size_t i = 0; i < 6; ++i)
-            EXPECT_EQ(self_indep.data().scalar_at<int>(i), expected[i]);
+        EXPECT_EQ(self_indep.data().scalar_at<int>(0), 0);
+        EXPECT_EQ(self_indep.data().scalar_at<int>(1), 1);
 
         // indep(1) is equivalent on independent DataArray
         DataArray alt_indep = z_data.indep(1);
         ASSERT_EQ(alt_indep.data().size(), self_indep.data().size());
-        for (std::size_t i = 0; i < 6; ++i)
-            EXPECT_EQ(alt_indep.data().scalar_at<int>(i), self_indep.data().scalar_at<int>(i));
+        for (std::size_t i = 0; i < 2; ++i)
+            EXPECT_EQ(alt_indep.data().scalar_at<int>(i),
+                      self_indep.data().scalar_at<int>(i));
 
+        // indep(2) = y (middle dimension, raw data {1.0, 2.0, 3.0})
         DataArray indep2 = z_data.indep(2);
         EXPECT_EQ(indep2.multi_dimension_spec().rank(), 2u);
+        EXPECT_EQ(indep2.data().size(), 3u);
     }
 
     TEST(DataArraySelectTest, DependentSelectReturnsCompleteVariable)
@@ -396,10 +398,9 @@ namespace xdataset
         EXPECT_EQ(selected.data_kind(), DataArrayKind::kIndependent);
         EXPECT_EQ(selected.multi_dimension_spec().rank(), 3u);
 
-        const std::size_t total = selected.multi_dimension_spec().compute_cell_count();
-        // 3 leaf rows: (0,0,0), (1,0,0), (1,1,0) — z-self filtered to index 0 only
-        EXPECT_EQ(total, 3u);
-        EXPECT_EQ(selected.data().size(), 3u);
+        // After Equal(0) on z-self: raw z data had 2 entries, only index 0 selected → 1 entry.
+        EXPECT_EQ(selected.data().size(), 1u);
+        EXPECT_DOUBLE_EQ(selected.data().scalar_at<double>(0), 100.0);
     }
 
     TEST(DataArraySelectTest, IndependentSelectRejectsOutOfRangeEqualOnSelfDimension)
@@ -432,11 +433,14 @@ namespace xdataset
     {
         DataArrayCreateInfo info;
         info.kind = DataArrayKind::kDependent;
-        info.data = DataSeries(DataKind::kVector, DataType::kReal, {3});
-        info.data.resize(2);
-        info.data.vector_at<double>(0) << 1.0, 2.0, 3.0;
-        info.data.vector_at<double>(1) << 4.0, 5.0, 6.0;
-        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        {
+            DataSeries ds(DataKind::kVector, DataType::kReal, {3});
+            ds.resize(2);
+            ds.vector_at<double>(0) << 1.0, 2.0, 3.0;
+            ds.vector_at<double>(1) << 4.0, 5.0, 6.0;
+            info.datas[DataArray::kSelf] = std::move(ds);
+        }
         info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray v(info);
@@ -459,13 +463,16 @@ namespace xdataset
     {
         DataArrayCreateInfo info;
         info.kind = DataArrayKind::kDependent;
-        info.data = DataSeries(DataKind::kMatrix, DataType::kInteger, {2, 3});
-        info.data.resize(2);
-        info.data.matrix_at<int>(0) << 1, 2, 3,
-                                      4, 5, 6;
-        info.data.matrix_at<int>(1) << 7, 8, 9,
-                                      10, 11, 12;
-        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        {
+            DataSeries ds(DataKind::kMatrix, DataType::kInteger, {2, 3});
+            ds.resize(2);
+            ds.matrix_at<int>(0) << 1, 2, 3,
+                                    4, 5, 6;
+            ds.matrix_at<int>(1) << 7, 8, 9,
+                                    10, 11, 12;
+            info.datas[DataArray::kSelf] = std::move(ds);
+        }
         info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray m(info);
@@ -485,8 +492,8 @@ namespace xdataset
     {
         DataArrayCreateInfo info;
         info.kind = DataArrayKind::kDependent;
-        info.data = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
-        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.datas[DataArray::kSelf] = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
         info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray s(info);
@@ -501,13 +508,16 @@ namespace xdataset
     {
         DataArrayCreateInfo info;
         info.kind = DataArrayKind::kDependent;
-        info.data = DataSeries(DataKind::kMatrix, DataType::kInteger, {2, 3});
-        info.data.resize(2);
-        info.data.matrix_at<int>(0) << 1, 2, 3,
-                                      4, 5, 6;
-        info.data.matrix_at<int>(1) << 7, 8, 9,
-                                      10, 11, 12;
-        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        {
+            DataSeries ds(DataKind::kMatrix, DataType::kInteger, {2, 3});
+            ds.resize(2);
+            ds.matrix_at<int>(0) << 1, 2, 3,
+                                    4, 5, 6;
+            ds.matrix_at<int>(1) << 7, 8, 9,
+                                    10, 11, 12;
+            info.datas[DataArray::kSelf] = std::move(ds);
+        }
         info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray m(info);
@@ -524,13 +534,16 @@ namespace xdataset
     {
         DataArrayCreateInfo info;
         info.kind = DataArrayKind::kDependent;
-        info.data = DataSeries(DataKind::kMatrix, DataType::kInteger, {2, 3});
-        info.data.resize(2);
-        info.data.matrix_at<int>(0) << 1, 2, 3,
-                                      4, 5, 6;
-        info.data.matrix_at<int>(1) << 7, 8, 9,
-                                      10, 11, 12;
-        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        {
+            DataSeries ds(DataKind::kMatrix, DataType::kInteger, {2, 3});
+            ds.resize(2);
+            ds.matrix_at<int>(0) << 1, 2, 3,
+                                    4, 5, 6;
+            ds.matrix_at<int>(1) << 7, 8, 9,
+                                    10, 11, 12;
+            info.datas[DataArray::kSelf] = std::move(ds);
+        }
         info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray m(info);
@@ -559,11 +572,14 @@ namespace xdataset
     {
         DataArrayCreateInfo info;
         info.kind = DataArrayKind::kDependent;
-        info.data = DataSeries(DataKind::kVector, DataType::kReal, {3});
-        info.data.resize(2);
-        info.data.vector_at<double>(0) << 1.0, 2.0, 3.0;
-        info.data.vector_at<double>(1) << 4.0, 5.0, 6.0;
-        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        {
+            DataSeries ds(DataKind::kVector, DataType::kReal, {3});
+            ds.resize(2);
+            ds.vector_at<double>(0) << 1.0, 2.0, 3.0;
+            ds.vector_at<double>(1) << 4.0, 5.0, 6.0;
+            info.datas[DataArray::kSelf] = std::move(ds);
+        }
         info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray v(info);
@@ -584,13 +600,16 @@ namespace xdataset
     {
         DataArrayCreateInfo info;
         info.kind = DataArrayKind::kDependent;
-        info.data = DataSeries(DataKind::kMatrix, DataType::kInteger, {2, 3});
-        info.data.resize(2);
-        info.data.matrix_at<int>(0) << 1, 2, 3,
-                                      4, 5, 6;
-        info.data.matrix_at<int>(1) << 7, 8, 9,
-                                      10, 11, 12;
-        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        {
+            DataSeries ds(DataKind::kMatrix, DataType::kInteger, {2, 3});
+            ds.resize(2);
+            ds.matrix_at<int>(0) << 1, 2, 3,
+                                    4, 5, 6;
+            ds.matrix_at<int>(1) << 7, 8, 9,
+                                    10, 11, 12;
+            info.datas[DataArray::kSelf] = std::move(ds);
+        }
         info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray m(info);
@@ -614,11 +633,14 @@ namespace xdataset
     {
         DataArrayCreateInfo info;
         info.kind = DataArrayKind::kDependent;
-        info.data = DataSeries(DataKind::kVector, DataType::kReal, {3});
-        info.data.resize(2);
-        info.data.vector_at<double>(0) << 1.0, 2.0, 3.0;
-        info.data.vector_at<double>(1) << 4.0, 5.0, 6.0;
-        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        {
+            DataSeries ds(DataKind::kVector, DataType::kReal, {3});
+            ds.resize(2);
+            ds.vector_at<double>(0) << 1.0, 2.0, 3.0;
+            ds.vector_at<double>(1) << 4.0, 5.0, 6.0;
+            info.datas[DataArray::kSelf] = std::move(ds);
+        }
         info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray v(info);
@@ -641,13 +663,16 @@ namespace xdataset
     {
         DataArrayCreateInfo info;
         info.kind = DataArrayKind::kDependent;
-        info.data = DataSeries(DataKind::kMatrix, DataType::kInteger, {2, 3});
-        info.data.resize(2);
-        info.data.matrix_at<int>(0) << 1, 2, 3,
-                                      4, 5, 6;
-        info.data.matrix_at<int>(1) << 7, 8, 9,
-                                      10, 11, 12;
-        info.indep_datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
+        {
+            DataSeries ds(DataKind::kMatrix, DataType::kInteger, {2, 3});
+            ds.resize(2);
+            ds.matrix_at<int>(0) << 1, 2, 3,
+                                    4, 5, 6;
+            ds.matrix_at<int>(1) << 7, 8, 9,
+                                    10, 11, 12;
+            info.datas[DataArray::kSelf] = std::move(ds);
+        }
         info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray m(info);

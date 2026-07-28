@@ -52,11 +52,12 @@ package "xdataset" #FAFAFA {
 
     class DataArray {
         - kind_: DataArrayKind
-        - data_: DataSeries
-        - indep_datas_: ordered_map<string, DataSeries>
+        - datas_: ordered_map<string, DataSeries>
         - multi_dimension_spec_: MultiDimensionSpec
         + {static} kSelf : const char*
+        + {static} Validate(info)
         + {static} CreateIndependent / CreateDependent
+        + datas() / data()
         + at(selectors)
         + select(selectors)
         + indep(index|name)
@@ -156,7 +157,7 @@ package "xdataset" #FAFAFA {
     DependentSpec --> DataSeries : data
     Block ..> DataArray : creates
     Block ..> DataFrame : creates
-    DataArray --> DataSeries : data
+    DataArray --> DataSeries : datas
     DataArray *-- MultiDimensionSpec
     DataArray --> DataArrayKind
     DataArray ..> DataFrame : creates
@@ -250,11 +251,13 @@ note right of Dataset : Group 树 → Block (叶子)
 | 属性 | 类型 | 说明 |
 |------|------|------|
 | kind | `kIndependent` / `kDependent` | 变量类型 |
-| data | `DataSeries` | 变量本身的依赖数据 |
-| indep_datas | `ordered_map<string, DataSeries>` | 独立变量数据，按插入顺序排列 |
+| datas | `ordered_map<string, DataSeries>` | 统一数据存储。最后一个 entry (key=`kSelf=""`) 是自身数据；前面的 entry 按 multi_dimension_spec 维度顺序存放独立变量数据 |
 | multi_dimension_spec | `MultiDimensionSpec` | 坐标空间结构 |
 
-`DataArray` 是 xdataset 的核心抽象，代表一个命名仿真变量。每个 DataArray 通过 `multi_dimension_spec` 绑定到坐标空间（如频率 × 功率的二维网格），通过 `indep_datas` 持有其独立变量的原始数据，通过 `data` 持有自身的测量值。`kind` 区分该变量是坐标轴（`kIndependent`）还是挂载在坐标空间上的观测结果（`kDependent`）。
+`DataArray` 是 xdataset 的核心抽象，代表一个命名仿真变量。所有数据统一存储在 `datas_` 中：最后一个 entry (key=`kSelf`) 是自身数据，前面的 entry 按维度顺序存放独立变量数据。`kind` 区分该变量是坐标轴（`kIndependent`）还是挂载在坐标空间上的观测结果（`kDependent`）。
+
+对于 **Independent**：`datas_` 有 `rank` 个 entry，最后一个既是 self data 也是最后一维的 indep data。
+对于 **Dependent**：`datas_` 有 `rank + 1` 个 entry，前 `rank` 个是独立变量数据，最后一个 `kSelf` 是自身依赖数据。`data()` 始终返回 `datas_` 的最后一个 entry。
 
 #### Generate
 
@@ -325,30 +328,30 @@ dim 0 (bias): Regular(2) -> [1.0V, 2.0V]
 
 #### DataArrayKind
 
-两种 DataArray 的区别在于 `indep_datas` 的内容和 `data` 的形状：
+两种 DataArray 的区别在于 `datas_` 的内容：
 
 **Independent**
 
-`indep_datas` 包含所有上游独立变量的原始 DataSeries 以及自身的原始 DataSeries。Self 列的 key 固定为 `DataArray::kSelf`（空字符串），表示自身引用。`data` 为自身数据展开到完整坐标空间行数后的副本（单维时等于原始）。`multi_dimension_spec` 的维数等于自身在所有独立变量中的序数（含自身）。
+`datas_` 的 entry 数等于 `multi_dimension_spec.rank()`，按维度顺序排列。每个 entry 对应一维的坐标数据。最后一个 entry (key=`kSelf=""`) 是自身数据，同时也是最后一维的 indep data。
 
 以 `power`（第二个独立变量，上游有 `freq`）为例：
 
 ```
-indep_datas = {"freq": raw(1GHz, 2GHz, 3GHz), "": raw(10, 20)}       // 上游原始 + self (kSelf="")
-data        = expand_to (3,2)  ->  {10, 20, 10, 20, 10, 20}            // 自身展开到 6 行
-spec        = [Regular(3), Regular(2)]
+datas_ = {"freq": {1GHz, 2GHz, 3GHz}, kSelf: {10, 20}}
+spec   = [Regular(3), Regular(2)]
+data() = {10, 20}
 ```
 
 **Dependent**
 
-`indep_datas` 仅包含所有上游独立变量的原始 DataSeries，不含自身。`data` 为依赖数据的原始 DataSeries，不展开。`multi_dimension_spec` 由所有独立变量的 DimensionSpec 共同决定。
+`datas_` 的 entry 数等于 `multi_dimension_spec.rank() + 1`。前 `rank` 个 entry 取自对应 Independent 的 `data()`，最后一个 `kSelf` 是自身依赖数据。
 
 以 `Vout`（依赖 `freq` 和 `power`）为例：
 
 ```
-indep_datas = {"freq": raw(1GHz, 2GHz, 3GHz), "power": raw(10, 20)}   // 仅独立变量，不含自身
-data        = DataSeries(...)                                            // 原始数据，不展开
-spec        = [Regular(3), Regular(2)]
+datas_ = {"freq": {1GHz, 2GHz, 3GHz}, "power": {10, 20}, kSelf: Vout values}
+spec   = [Regular(3), Regular(2)]
+data() = Vout values
 ```
 
 
@@ -452,9 +455,11 @@ REL `()` 取值时使用 1-based 索引，`S(1, ::)` 取矩阵第一行全部列
 
 #### indep
 
-从 Dependent DataArray 中提取其某个独立变量的坐标轴，返回一个新的 Independent DataArray。位于该变量之后的维度被截断。
+从 DataArray 中提取某个独立变量的坐标轴，返回一个新的 Independent DataArray。位于该变量之后的维度被截断，数据以原始维度形式存储（不展开）。
 
 `indep` 接受独立变量名或 1-based 索引。索引从内向外计数（1 = 最内层维度），即 `indep(1)` 等价于 `indep("temp")`，`indep(2)` 等价于 `indep("freq")`。
+
+> **对 Independent 调用 `indep(1)` 返回索引序列** — 由于自身数据以原始维度存储且本身就是最后一维，直接返回自身没有意义。因此 `indep(1)` 生成 `{0, 1, ..., N-1}` 的整数索引序列代替原始数据。
 
 以三维 Dependent（bias x freq x temp）为例：
 
@@ -595,8 +600,8 @@ noise (Dataset)
 
 将单个 DataArray 及其独立变量展开为表格。
 
-- **数据源** — DataArray 的 `indep_datas` + `data`
-- **表头** — 独立变量列（按 indep_datas 顺序） → DataArray 自身的列（Dependent 用 `variable_name` 命名，Independent 的 self 列也替换为 `variable_name`）
+- **数据源** — DataArray 的 `datas_`（最后一个 kSelf 为自身数据，前 rank 个为独立变量维度数据）
+- **表头** — 独立变量列（按 datas_ 顺序，Independent 的 kSelf 列也作为独立变量列） → DataArray 自身的列（仅 Dependent 有，用 `variable_name` 命名）
 - **行数** — 由 DataArray 的 `multi_dimension_spec` 决定
 - **列展开** — 同 BlockDataFrame，Vector/Matrix 列展开为标量子列
 - **可变表头** — 通过 `UpdateName(name)` 可刷新列标题而不重建行数据；`GetOrCreateDataFrame(name)` 在 name 变化时自动调用
@@ -654,9 +659,9 @@ Me 与 Da 的运算结果由以下四个步骤依次确定：**Measurement/DataA
 | 表达式 | 结果 | 结果 DataArray 成员 |
 |---|---|---|
 | `Measurement op Measurement` | `Measurement` | -- |
-| `DataArray op DataArray` | `DataArray` | `data` 为逐行运算所得 DataSeries，`indep_datas`、`multi_dimension_spec`、`kind` 均继承 LHS |
-| `DataArray op Measurement` | `DataArray` | `data` 为 Measurement 广播到每行后的运算结果，`indep_datas`、`multi_dimension_spec`、`kind` 继承 DataArray 侧 |
-| `Measurement op DataArray` | `DataArray` | 同上，`indep_datas`、`multi_dimension_spec`、`kind` 继承 DataArray 侧 |
+|| `DataArray op DataArray` | `DataArray` | 继承 LHS 的 `datas`（indep 维度数据不变），`kSelf` 替换为逐行运算所得 DataSeries；`multi_dimension_spec`、`kind` 均继承 LHS |
+|| `DataArray op Measurement` | `DataArray` | 继承 DataArray 侧的 `datas`，`kSelf` 替换为 Measurement 广播到每行后的运算结果；`multi_dimension_spec`、`kind` 继承 |
+|| `Measurement op DataArray` | `DataArray` | 同上，`datas`、`multi_dimension_spec`、`kind` 继承 DataArray 侧 |
 
 ### DataType推导
 
@@ -753,7 +758,7 @@ Concat 和 Combine 不属于算术运算——它们不逐元素计算，而是�
 | 表达式 | 结果 | 结果 DataArray 成员 |
 |---|---|---|
 | `Concat({Measurement...})` | `Measurement` | Shape 提升 |
-| `Concat({DataArray...})` | `DataArray` | 逐行调用 Measurement Concat；`indep_datas`、`multi_dimension_spec`、`kind` 继承第一个 DataArray |
+| `Concat({DataArray...})` | `DataArray` | 逐行调用 Measurement Concat；`datas`（indep 维度数据不变，`kSelf` 替换为合并结果）、`multi_dimension_spec`、`kind` 继承第一个 DataArray |
 | `Combine({Measurement...})` | `DataArray` | 每 Measurement 作为一行 append 到 DataSeries；返回 `kIndependent` DataArray |
 
 ### DataType 推导
@@ -794,7 +799,7 @@ DataArray  r = Concat({da1, da2});       // per-row, single-row broadcast
 
 - 逐行调用 `Measurement Concat`
 - 行数可广播：如果某个 DataArray 只有 1 行，则广播到目标行数
-- 结果继承第一个 DataArray 的 `indep_datas`、`multi_dimension_spec`、`kind`
+- 结果继承第一个 DataArray 的 `datas`（indep 维度数据不变，`kSelf` 替换为合并结果）、`multi_dimension_spec`、`kind`
 
 **运算前：**
 

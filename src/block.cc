@@ -112,7 +112,6 @@ namespace xdataset
         vinfo.kind = DataArrayKind::kIndependent;
 
         MultiDimensionSpec composed_multi_dim;
-        std::vector<const DataSeries*> prior_indeps;
         bool found = false;
 
         for (const auto& kv : independent_spec_map_)
@@ -125,31 +124,15 @@ namespace xdataset
                 found = true;
                 break;
             }
-            prior_indeps.push_back(&iv.data);
+            // Prior independents stored raw (no expansion needed).
+            vinfo.datas.emplace(kv.first, iv.data);
         }
 
         if (!found)
             throw std::invalid_argument("independent DataArray not found in block ordering: " + info.name);
 
-        // Expand own data to the full cartesian product.
-        DataSeries expanded = DataSeries(info.data.data_kind(), info.data.data_type(), info.data.data_shape());
-        composed_multi_dim.for_each_leaf_row(
-            [&](const MultiDimensionSpec::LeafRow& lr)
-            {
-                expanded.append_from(info.data, lr.dimension_row_indices.back());
-            });
-        vinfo.data = std::move(expanded);
-
-        // Prior independents stay raw.
-        for (std::size_t p = 0; p < prior_indeps.size(); ++p)
-        {
-            auto it = independent_spec_map_.begin();
-            std::advance(it, static_cast<std::ptrdiff_t>(p));
-            vinfo.indep_datas.emplace(it->first, *prior_indeps[p]);
-        }
-
-        // Self: raw, unnamed key.
-        vinfo.indep_datas.emplace(DataArray::kSelf, info.data);
+        // Self data stored raw (kSelf always last).
+        vinfo.datas.emplace(DataArray::kSelf, info.data);
         vinfo.multi_dimension_spec = composed_multi_dim;
         return DataArray(std::move(vinfo));
     }
@@ -175,7 +158,6 @@ namespace xdataset
         if (dit != dependent_spec_map_.end())
         {
             DataArrayCreateInfo vinfo;
-            vinfo.data = dit->second.data;
             vinfo.kind = DataArrayKind::kDependent;
 
             MultiDimensionSpec multi_dim;
@@ -183,8 +165,9 @@ namespace xdataset
             {
                 const DimensionSpec& dim = kv.second.dimension;
                 multi_dim.add_dimension(dim);
-                vinfo.indep_datas.emplace(kv.first, kv.second.data);
+                vinfo.datas.emplace(kv.first, kv.second.data);
             }
+            vinfo.datas.emplace(DataArray::kSelf, dit->second.data);
             vinfo.multi_dimension_spec = multi_dim;
 
             std::unique_ptr<DataArray> var(new DataArray(std::move(vinfo)));

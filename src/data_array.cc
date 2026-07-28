@@ -14,53 +14,84 @@ namespace xdataset
 
     const char* DataArray::kSelf = "";
 
+    namespace
+    {
+
+        /// Shared validation logic (assumes datas are already canonicalized).
+        void validate_datas_internal(const tsl::ordered_map<std::string, DataSeries>& datas,
+                                     const MultiDimensionSpec&                    multi_dimension_spec,
+                                     DataArrayKind                                kind)
+        {
+            if (datas.empty())
+                throw std::invalid_argument("DataArray: datas must not be empty");
+
+            if (datas.rbegin()->first != DataArray::kSelf)
+                throw std::invalid_argument(
+                    "DataArray: last entry of datas must have key kSelf (empty string)");
+
+            const std::size_t rank = multi_dimension_spec.rank();
+
+            if (kind == DataArrayKind::kIndependent)
+            {
+                if (datas.size() != rank)
+                    throw std::invalid_argument(
+                        "DataArray: Independent datas count " + std::to_string(datas.size()) +
+                        " must equal multi_dimension_spec rank " + std::to_string(rank));
+            }
+            else
+            {
+                if (datas.size() != rank + 1)
+                    throw std::invalid_argument(
+                        "DataArray: Dependent datas count " + std::to_string(datas.size()) +
+                        " must equal rank + 1 (" + std::to_string(rank + 1) + ")");
+
+                if (!multi_dimension_spec.empty())
+                {
+                    const std::size_t expected = multi_dimension_spec.compute_cell_count();
+                    if (datas.rbegin()->second.size() != static_cast<Index>(expected))
+                    {
+                        throw std::invalid_argument(
+                            "DataArray: dependent data size " +
+                            std::to_string(datas.rbegin()->second.size()) +
+                            " does not match multi_dimension_spec cell count " +
+                            std::to_string(expected));
+                    }
+                }
+            }
+        }
+
+    } // anonymous namespace
+
+    void DataArray::Validate(const DataArrayCreateInfo& info)
+    {
+        validate_datas_internal(info.datas, info.multi_dimension_spec, info.kind);
+    }
+
     DataArray::DataArray(const DataArrayCreateInfo& info)
-        : data_(info.data),
-          indep_datas_(info.indep_datas),
+        : datas_(info.datas),
           multi_dimension_spec_(info.multi_dimension_spec),
           data_kind_(info.kind)
     {
-        data_.canonicalize();
-        for (auto it = indep_datas_.begin(); it != indep_datas_.end(); ++it)
+        // Canonicalize then validate.  validate() canonicalizes its own copy
+        // of the datas, so the member is handled independently.
+        for (auto it = datas_.begin(); it != datas_.end(); ++it)
             it.value().canonicalize();
-
-        if (!multi_dimension_spec_.empty())
-        {
-            const std::size_t expected = multi_dimension_spec_.compute_cell_count();
-            if (data_.size() != static_cast<Index>(expected))
-            {
-                throw std::invalid_argument(
-                    "DataArray data size " + std::to_string(data_.size()) +
-                    " does not match multi_dimension_spec cell count " + std::to_string(expected));
-            }
-        }
+        validate_datas_internal(datas_, multi_dimension_spec_, data_kind_);
     }
 
     DataArray::DataArray(DataArrayCreateInfo&& info)
-        : data_(std::move(info.data)),
-          indep_datas_(std::move(info.indep_datas)),
+        : datas_(std::move(info.datas)),
           multi_dimension_spec_(std::move(info.multi_dimension_spec)),
           data_kind_(info.kind)
     {
-        data_.canonicalize();
-        for (auto it = indep_datas_.begin(); it != indep_datas_.end(); ++it)
+        // info.datas has been moved; canonicalize and validate datas_ directly.
+        for (auto it = datas_.begin(); it != datas_.end(); ++it)
             it.value().canonicalize();
-
-        if (!multi_dimension_spec_.empty())
-        {
-            const std::size_t expected = multi_dimension_spec_.compute_cell_count();
-            if (data_.size() != static_cast<Index>(expected))
-            {
-                throw std::invalid_argument(
-                    "DataArray data size " + std::to_string(data_.size()) +
-                    " does not match multi_dimension_spec cell count " + std::to_string(expected));
-            }
-        }
+        validate_datas_internal(datas_, multi_dimension_spec_, data_kind_);
     }
 
     DataArray::DataArray(const DataArray& other)
-        : data_(other.data_),
-          indep_datas_(other.indep_datas_),
+        : datas_(other.datas_),
           multi_dimension_spec_(other.multi_dimension_spec_),
           data_kind_(other.data_kind_)
     {
@@ -71,8 +102,7 @@ namespace xdataset
     {
         if (this != &other)
         {
-            data_ = other.data_;
-            indep_datas_ = other.indep_datas_;
+            datas_ = other.datas_;
             multi_dimension_spec_ = other.multi_dimension_spec_;
             data_kind_ = other.data_kind_;
             data_frame_cache_.reset();
@@ -80,12 +110,35 @@ namespace xdataset
         return *this;
     }
 
+    tsl::ordered_map<std::string, DataSeries> DataArray::indep_datas() const
+    {
+        tsl::ordered_map<std::string, DataSeries> result;
+        const std::size_t rank = multi_dimension_spec_.rank();
+        std::size_t i = 0;
+        for (const auto& item : datas_)
+        {
+            // Dependent: stop after rank entries (exclude kSelf).
+            if (data_kind_ == DataArrayKind::kDependent && i >= rank)
+                break;
+            result.emplace(item.first, item.second);
+            ++i;
+        }
+        return result;
+    }
+
     std::vector<std::string> DataArray::indep_names() const
     {
         std::vector<std::string> names;
-        names.reserve(indep_datas_.size());
-        for (const auto& item : indep_datas_)
+        const std::size_t rank = multi_dimension_spec_.rank();
+        names.reserve(rank);
+        std::size_t i = 0;
+        for (const auto& item : datas_)
+        {
+            if (data_kind_ == DataArrayKind::kDependent && i >= rank)
+                break;
             names.push_back(item.first);
+            ++i;
+        }
         return names;
     }
 
@@ -109,22 +162,42 @@ namespace xdataset
         if (index <= 0)
             throw std::invalid_argument("indep_data index must be 1-based and greater than 0");
 
-        const std::size_t count = indep_datas_.size();
-        if (static_cast<std::size_t>(index) > count)
+        const std::size_t rank = multi_dimension_spec_.rank();
+        if (static_cast<std::size_t>(index) > rank)
             throw std::out_of_range("indep_data index out of range");
 
-        // index=1 -> last column, index=count -> first column
-        const std::size_t target = count - static_cast<std::size_t>(index);
-        auto it = indep_datas_.begin();
+        // index=1 -> last indep entry, index=rank -> first indep entry
+        const std::size_t target = rank - static_cast<std::size_t>(index);
+        auto it = datas_.begin();
         std::advance(it, static_cast<std::ptrdiff_t>(target));
         return it->second;
     }
 
     const DataSeries& DataArray::indep_data(const std::string& name) const
     {
-        auto it = indep_datas_.find(name);
-        if (it == indep_datas_.end())
+        if (data_kind_ == DataArrayKind::kDependent && name == kSelf)
+            throw std::invalid_argument(
+                "indep_data: kSelf is not an independent variable for Dependent DataArray");
+
+        auto it = datas_.find(name);
+        if (it == datas_.end())
             throw std::invalid_argument("indep_data name not found: " + name);
+
+        // For Dependent, verify the entry is within the first rank entries.
+        if (data_kind_ == DataArrayKind::kDependent)
+        {
+            const std::size_t rank = multi_dimension_spec_.rank();
+            std::size_t pos = 0;
+            for (auto dit = datas_.begin(); dit != datas_.end(); ++dit, ++pos)
+            {
+                if (dit->first == name)
+                    break;
+            }
+            if (pos >= rank)
+                throw std::invalid_argument(
+                    "indep_data: '" + name + "' is not an independent variable");
+        }
+
         return it->second;
     }
 
@@ -133,80 +206,71 @@ namespace xdataset
         if (index <= 0)
             throw std::invalid_argument("indep index must be 1-based and greater than 0");
 
-        const std::size_t count = indep_datas_.size();
-        if (static_cast<std::size_t>(index) > count)
+        const std::size_t rank = multi_dimension_spec_.rank();
+        if (static_cast<std::size_t>(index) > rank)
             throw std::out_of_range("indep index out of range");
 
-        // index=1 -> last column, index=count -> first column
-        const std::size_t target = count - static_cast<std::size_t>(index);
-        const bool        is_self = (data_kind_ == DataArrayKind::kIndependent) && (target == count - 1);
+        // index=1 -> last indep entry, index=rank -> first indep entry
+        const std::size_t target = rank - static_cast<std::size_t>(index);
 
-        // Build prefix dimensions first (needed for compute_cell_count).
-        std::vector<DimensionSpec> prefix_dims;
-        DataArrayCreateInfo         info;
+        DataArrayCreateInfo info;
         info.kind = DataArrayKind::kIndependent;
 
+        // Copy first (target+1) entries from datas_ — raw dimension data, no
+        // expansion needed.  The last copied entry becomes kSelf.  When the
+        // source is Independent and the last entry is the self-dimension,
+        // generate an index series (0, 1, ...) instead of copying the data.
         std::size_t pos = 0;
-        for (const auto& item : indep_datas_)
+        for (const auto& item : datas_)
         {
-            if (pos <= target)
+            if (pos > target)
+                break;
+
+            const bool is_self_entry = (pos == target);
+            const bool generate_index =
+                is_self_entry && (data_kind_ == DataArrayKind::kIndependent);
+
+            if (generate_index)
             {
-                info.indep_datas.emplace(item.first, item.second);
-                prefix_dims.push_back(multi_dimension_spec_.dims()[pos]);
+                const DataSeries& raw = item.second;
+                DataSeries idx =
+                    DataSeries::CreateScalar<int>(raw.size(), Unit(), 0);
+                for (Index i = 0; i < raw.size(); ++i)
+                    idx.scalar_at<int>(i) = static_cast<int>(i);
+                info.datas.emplace(kSelf, std::move(idx));
             }
+            else if (is_self_entry)
+                info.datas.emplace(kSelf, item.second);
+            else
+                info.datas.emplace(item.first, item.second);
             ++pos;
         }
 
+        // Build result multi_dimension_spec from prefix dimensions.
         MultiDimensionSpec result_spec;
-        for (const auto& d : prefix_dims)
-            result_spec.add_dimension(d);
-        const std::size_t total_rows = result_spec.compute_cell_count();
-
-        // Generate index series for the target column.
-        if (is_self)
-        {
-            // Self: index = multi_index.back() for each leaf row.
-            DataSeries idx = DataSeries::CreateScalar<int>(total_rows, Unit(), 0);
-            result_spec.for_each_leaf_row(
-                [&](const MultiDimensionSpec::LeafRow& lr)
-                {
-                    idx.scalar_at<int>(lr.row_flat) =
-                        static_cast<int>(lr.multi_index.back());
-                });
-            info.data = std::move(idx);
-        }
-        else
-        {
-            // Expand raw data to the full cartesian product of result_spec.
-            // Self entry is the last in indep_datas (raw, un-expanded).
-            const DataSeries& raw = info.indep_datas.rbegin()->second;
-            DataSeries expanded = DataSeries(raw.data_kind(), raw.data_type(), raw.data_shape());
-            result_spec.for_each_leaf_row(
-                [&](const MultiDimensionSpec::LeafRow& lr)
-                {
-                    expanded.append_from(raw, lr.dimension_row_indices.back());
-                });
-            info.data = std::move(expanded);
-        }
-
+        for (std::size_t i = 0; i <= target; ++i)
+            result_spec.add_dimension(multi_dimension_spec_.dims()[i]);
         info.multi_dimension_spec = result_spec;
+
         return DataArray(std::move(info));
     }
 
     DataArray DataArray::indep(const std::string& name) const
     {
         if (name.empty())
-        {
             throw std::invalid_argument("indep name must not be empty");
-        }
 
         std::size_t pos = 0;
-        for (const auto& item : indep_datas_)
+        for (const auto& item : datas_)
         {
+            // For Dependent, stop at rank (exclude kSelf).
+            if (data_kind_ == DataArrayKind::kDependent && pos >= multi_dimension_spec_.rank())
+                break;
+
             if (item.first == name)
             {
-                const std::size_t indep_count = indep_datas_.size();
-                const Index index_1_based = static_cast<Index>(indep_count - pos);
+                const std::size_t rank = multi_dimension_spec_.rank();
+                const Index index_1_based = static_cast<Index>(rank - pos);
                 return indep(index_1_based);
             }
             ++pos;
@@ -235,19 +299,19 @@ namespace xdataset
 
         DataArrayCreateInfo info;
         info.kind = data_kind_;
-        info.indep_datas = indep_datas_;
+        info.datas = datas_;
         info.multi_dimension_spec = multi_dimension_spec_;
 
         if (data().data_kind() == DataKind::kVector)
         {
             const std::vector<Index> selected = padded[0].resolve(data().data_shape()[0]);
-            info.data = data().at(selected);
+            info.datas[kSelf] = data().at(selected);
             return DataArray(std::move(info));
         }
 
         const std::vector<Index> selected_rows = padded[0].resolve(data().data_shape()[0]);
         const std::vector<Index> selected_cols = padded[1].resolve(data().data_shape()[1]);
-        info.data = data().at(selected_rows, selected_cols);
+        info.datas[kSelf] = data().at(selected_rows, selected_cols);
         return DataArray(std::move(info));
     }
 
@@ -403,27 +467,38 @@ namespace xdataset
         DataArrayCreateInfo info;
         info.kind = data_kind_;
         info.multi_dimension_spec = selected_multi_dim;
-        DataSeries selected_data = DataSeries(data().data_kind(), data().data_type(), data().data_shape());
-        for (const Index& source_row : selected_row_indices)
-        {
-            selected_data.append_from(data(), source_row);
-        }
-        info.data = std::move(selected_data);
 
-        for (std::size_t source_dim_idx = 0; source_dim_idx < rank; ++source_dim_idx)
+        // Iterate datas_ in order and select from each entry.
+        // Independent: each position maps 1:1 to a dimension.
+        // Dependent:   first rank positions are indep dims; last (kSelf) is
+        //              the expanded dependent data, selected by flat index.
+        std::size_t idx = 0;
+        for (auto it = datas_.begin(); it != datas_.end(); ++it, ++idx)
         {
-            if (!is_dim_retain[source_dim_idx])
+            const bool is_self = (idx == datas_.size() - 1);   // kSelf entry
+
+            if (is_self && data_kind_ == DataArrayKind::kDependent)
             {
-                continue;
+                // Dependent kSelf: select by flat row indices.
+                DataSeries sel(data().data_kind(), data().data_type(), data().data_shape());
+                for (Index r : selected_row_indices)
+                    sel.append_from(data(), r);
+                info.datas.emplace(kSelf, std::move(sel));
             }
-
-            const auto& source_rows = selection_info[static_cast<Index>(source_dim_idx)].source_rows;
-
-            const std::string& indep_name = std::next(indep_datas_.begin(), source_dim_idx)->first;
-            const DataSeries& indep_series = indep_datas_.at(indep_name);
-            for (Index source_row : source_rows)
+            else
             {
-                info.indep_datas[indep_name].append_from(indep_series, source_row);
+                // Dimension data (Independent all entries, Dependent first rank).
+                if (!is_dim_retain[idx])
+                    continue;
+
+                const auto& src_rows = selection_info[static_cast<Index>(idx)].source_rows;
+                const DataSeries& src_series = it->second;
+                DataSeries sel(src_series.data_kind(), src_series.data_type(), src_series.data_shape());
+                for (Index r : src_rows)
+                    sel.append_from(src_series, r);
+
+                std::string key = is_self ? std::string(kSelf) : it->first;
+                info.datas.emplace(std::move(key), std::move(sel));
             }
         }
 
@@ -437,8 +512,7 @@ namespace xdataset
     {
         const std::size_t size = data.size();
         DataArrayCreateInfo vinfo;
-        vinfo.indep_datas[DataArray::kSelf] = data;   // self (unnamed, last key)
-        vinfo.data = std::move(data);              // expanded = self for single-dim
+        vinfo.datas[kSelf] = std::move(data);
         vinfo.multi_dimension_spec = MultiDimensionSpec().add_regular(size);
         vinfo.kind = DataArrayKind::kIndependent;
         return DataArray(std::move(vinfo));
@@ -454,7 +528,6 @@ namespace xdataset
                 "CreateDependent: indep_variables must not be empty");
         }
 
-        tsl::ordered_map<std::string, DataSeries> indep_datas;
         MultiDimensionSpec spec;
 
         for (const auto& item : indep_variables)
@@ -472,8 +545,6 @@ namespace xdataset
                     "CreateDependent: DataArray is not an independent DataArray");
             }
 
-            indep_datas[var_name] = var->data();
-
             const std::vector<DimensionSpec>& dims = var->multi_dimension_spec().dims();
             if (dims.empty())
             {
@@ -484,8 +555,13 @@ namespace xdataset
         }
 
         DataArrayCreateInfo vinfo;
-        vinfo.data = std::move(data);
-        vinfo.indep_datas = std::move(indep_datas);
+        // Collect indep variable data first (ordered by insertion into spec).
+        for (const auto& item : indep_variables)
+        {
+            vinfo.datas[item.first] = item.second->data();
+        }
+        // Self data (dependent) goes last.
+        vinfo.datas[kSelf] = std::move(data);
         vinfo.multi_dimension_spec = std::move(spec);
         vinfo.kind = DataArrayKind::kDependent;
         return DataArray(std::move(vinfo));

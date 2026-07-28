@@ -117,7 +117,7 @@ namespace xdataset
         ASSERT_EQ(y_data.multi_dimension_spec().dims().size(), 2u);
         EXPECT_EQ(y_data.multi_dimension_spec().dims()[0].regular_size(), 2);
         EXPECT_EQ(y_data.multi_dimension_spec().dims()[1].regular_size(), 3);
-        EXPECT_EQ(y_data.data().size(), 6u);   // expanded: 2*3
+        EXPECT_EQ(y_data.data().size(), 3u);   // raw: last-dim size
     }
 
     TEST(BlockVariableCacheTest, BuildsDependentVariableFromDescriptor)
@@ -163,7 +163,7 @@ namespace xdataset
         EXPECT_EQ(z_data.multi_dimension_spec().dims()[1].ragged_sizes()[0], 1);
         EXPECT_EQ(z_data.multi_dimension_spec().dims()[1].ragged_sizes()[1], 2);
         EXPECT_EQ(z_data.multi_dimension_spec().dims()[2].regular_size(), 2);
-        EXPECT_EQ(z_data.data().size(), 6u);   // expanded: 2*3 [Ragged 1+2=3 rows * 2]
+        EXPECT_EQ(z_data.data().size(), 2u);   // raw: last-dim size
     }
 
     TEST(BlockDataFrameTest, AggregatesAllVariablesIntoOneTable)

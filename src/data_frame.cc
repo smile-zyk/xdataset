@@ -488,35 +488,64 @@ namespace xdataset
     // DataArrayDataFrame
     // =========================================================================
 
-    DataArrayDataFrame::DataArrayDataFrame(const DataArray& DataArray,
+    DataArrayDataFrame::DataArrayDataFrame(const DataArray& dataArray,
                                            std::string variable_name)
-        : data_array_(&DataArray),
+        : data_array_(&dataArray),
           variable_name_(std::move(variable_name))
     {
-        std::vector<std::pair<std::string, const DataSeries*>> indep_columns;
-        std::vector<std::string> all_headers;
-
-        indep_columns.reserve(DataArray.indep_datas().size());
-        for (const auto& item : DataArray.indep_datas())
-        {
-            const std::string& col_name = (item.first == DataArray::kSelf  && DataArray.data_kind() == DataArrayKind::kIndependent) ? variable_name_ : item.first;
-            indep_columns.push_back(std::make_pair(col_name, &item.second));
-            const std::vector<std::string> hdrs = ExpandHeadersForSeries(col_name, item.second);
-            all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
-        }
-
-        const DataSeries* dep_series = nullptr;
-        if (DataArray.data_kind() == DataArrayKind::kDependent)
-        {
-            dep_series = &DataArray.data();
-            const std::vector<std::string> hdrs = ExpandHeadersForSeries(variable_name_, DataArray.data());
-            all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
-        }
-
-        const MultiDimensionSpec& spec = DataArray.multi_dimension_spec();
+        const MultiDimensionSpec& spec = dataArray.multi_dimension_spec();
         if (spec.empty())
             throw std::logic_error("DataArray table view requires non-empty dimensions");
-        if (indep_columns.size() != spec.rank())
+
+        const std::size_t rank = spec.rank();
+
+        // Collect all columns: iterate datas() and classify each entry.
+        std::vector<std::pair<std::string, const DataSeries*>> indep_columns;
+        const DataSeries* dep_series = nullptr;
+        std::vector<std::string> all_headers;
+
+        std::size_t pos = 0;
+        for (const auto& item : dataArray.datas())
+        {
+            const bool is_self = (item.first == DataArray::kSelf);
+            std::string col_name;
+
+            if (is_self)
+            {
+                col_name = variable_name_;
+                if (dataArray.data_kind() == DataArrayKind::kDependent)
+                {
+                    // kSelf is the dependent data column.
+                    dep_series = &item.second;
+                }
+                else
+                {
+                    // Independent: kSelf is also an indep dimension column.
+                    indep_columns.push_back(std::make_pair(col_name, &item.second));
+                }
+            }
+            else
+            {
+                col_name = item.first;
+                indep_columns.push_back(std::make_pair(col_name, &item.second));
+            }
+
+            if (!is_self || dataArray.data_kind() != DataArrayKind::kDependent)
+            {
+                const std::vector<std::string> hdrs = ExpandHeadersForSeries(col_name, item.second);
+                all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
+            }
+            ++pos;
+        }
+
+        // Add dependent column headers last (after indep columns).
+        if (dep_series != nullptr)
+        {
+            const std::vector<std::string> hdrs = ExpandHeadersForSeries(variable_name_, *dep_series);
+            all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
+        }
+
+        if (indep_columns.size() != rank)
             throw std::logic_error("independent columns count must match MultiDimensionSpec rank");
 
         const std::size_t total_rows   = spec.compute_cell_count();
@@ -568,9 +597,17 @@ namespace xdataset
     {
         std::vector<std::string> all_headers;
 
-        for (const auto& item : data_array_->indep_datas())
+        for (const auto& item : data_array_->datas())
         {
-            const std::string& col_name = (item.first == DataArray::kSelf) ? variable_name_ : item.first;
+            const bool is_self = (item.first == DataArray::kSelf);
+            std::string col_name = is_self ? variable_name_ : item.first;
+
+            if (is_self && data_array_->data_kind() == DataArrayKind::kDependent)
+            {
+                // Dependent kSelf column: add after indep columns.
+                continue;
+            }
+
             const std::vector<std::string> hdrs = ExpandHeadersForSeries(col_name, item.second);
             all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
         }

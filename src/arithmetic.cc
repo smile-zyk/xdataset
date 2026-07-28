@@ -1593,14 +1593,12 @@ DataSeries pow(const DataSeries& base, const DataSeries& exponent) {
 //
 //  Thin wrappers that:
 //    1. Validate MultiDimensionSpec compatibility (same rank, dims, sizes).
-//    2. Validate indep_datas have the same count of independents.
+//    2. Validate independent variable sets are compatible (same count of indep names).
 //    3. Delegate to the corresponding DataSeries operator (Sec.3).
-//    4. Assemble the result DataArray: name = placeholder, data = result DS,
-//       indep_datas / multi_dimension_spec / kind = inherited from lhs.
+//    4. Assemble the result DataArray: inherit datas from lhs, replace kSelf with result.
 //
 //  The template array_array_op encapsulates the boilerplate shared by all
-//  four operators (the only differences are the DataSeries-level op, the
-//  same-dimension-required flag, and the int-div->real flag).
+//  operators.
 
 namespace {
 
@@ -1679,10 +1677,10 @@ DataArray array_array_op(const DataArray& lhs, const DataArray& rhs,
 
     // --- assemble result DataArray -----------------------------------------
     DataArrayCreateInfo info;
-    info.data                = std::move(result_ds);
-    info.indep_datas         = lhs.indep_datas();         // inherit from lhs
+    info.datas               = lhs.datas();               // inherit indep + self from lhs
+    info.datas[DataArray::kSelf] = std::move(result_ds);   // replace self with result
     info.multi_dimension_spec = lhs.multi_dimension_spec(); // inherit from lhs
-    info.kind                = lhs.data_kind();                // inherit from lhs
+    info.kind                 = lhs.data_kind();             // inherit from lhs
     return DataArray(std::move(info));
 }
 
@@ -1726,8 +1724,8 @@ DataArray array_meas_op(const DataArray& lhs, const Measurement& rhs,
 
     // --- assemble result DataArray -----------------------------------------
     DataArrayCreateInfo info;
-    info.data                 = std::move(result_ds);
-    info.indep_datas          = lhs.indep_datas();
+    info.datas                 = lhs.datas();
+    info.datas[DataArray::kSelf] = std::move(result_ds);
     info.multi_dimension_spec = lhs.multi_dimension_spec();
     info.kind                 = lhs.data_kind();
     return DataArray(std::move(info));
@@ -1767,8 +1765,8 @@ DataArray meas_array_op(const Measurement& lhs, const DataArray& rhs,
     DataSeries result_ds = ds_meas_op(lhs, rhs.data());
 
     DataArrayCreateInfo info;
-    info.data                 = std::move(result_ds);
-    info.indep_datas          = rhs.indep_datas();
+    info.datas                 = rhs.datas();
+    info.datas[DataArray::kSelf] = std::move(result_ds);
     info.multi_dimension_spec = rhs.multi_dimension_spec();
     info.kind                 = rhs.data_kind();
     return DataArray(std::move(info));
@@ -1804,8 +1802,8 @@ DataArray pow(const DataArray& base, const Measurement& exp) {
     DataSeries result_ds = xdataset::pow(base.data(), exp);
 
     DataArrayCreateInfo info;
-    info.data                 = std::move(result_ds);
-    info.indep_datas          = base.indep_datas();
+    info.datas                 = base.datas();
+    info.datas[DataArray::kSelf] = std::move(result_ds);
     info.multi_dimension_spec = base.multi_dimension_spec();
     info.kind                 = base.data_kind();
     return DataArray(std::move(info));
@@ -1830,8 +1828,8 @@ DataArray pow(const Measurement& base, const DataArray& exponent) {
     DataSeries result_ds = xdataset::pow(base, exponent.data());
 
     DataArrayCreateInfo info;
-    info.data                 = std::move(result_ds);
-    info.indep_datas          = exponent.indep_datas();
+    info.datas                 = exponent.datas();
+    info.datas[DataArray::kSelf] = std::move(result_ds);
     info.multi_dimension_spec = exponent.multi_dimension_spec();
     info.kind                 = exponent.data_kind();
     return DataArray(std::move(info));
@@ -2034,8 +2032,8 @@ DataArray operator%(const Measurement& lhs, const DataArray& rhs) {
 
 DataArray operator-(const DataArray& lhs) {
     DataArrayCreateInfo info;
-    info.data                 = -lhs.data();
-    info.indep_datas          = lhs.indep_datas();
+    info.datas                 = lhs.datas();
+    info.datas[DataArray::kSelf] = -lhs.data();
     info.multi_dimension_spec = lhs.multi_dimension_spec();
     info.kind                 = lhs.data_kind();
     return DataArray(std::move(info));
@@ -2043,8 +2041,8 @@ DataArray operator-(const DataArray& lhs) {
 
 DataArray operator!(const DataArray& lhs) {
     DataArrayCreateInfo info;
-    info.data                 = !lhs.data();
-    info.indep_datas          = lhs.indep_datas();
+    info.datas                 = lhs.datas();
+    info.datas[DataArray::kSelf] = !lhs.data();
     info.multi_dimension_spec = lhs.multi_dimension_spec();
     info.kind                 = lhs.data_kind();
     return DataArray(std::move(info));
@@ -2052,8 +2050,8 @@ DataArray operator!(const DataArray& lhs) {
 
 DataArray operator~(const DataArray& lhs) {
     DataArrayCreateInfo info;
-    info.data                 = ~lhs.data();
-    info.indep_datas          = lhs.indep_datas();
+    info.datas                 = lhs.datas();
+    info.datas[DataArray::kSelf] = ~lhs.data();
     info.multi_dimension_spec = lhs.multi_dimension_spec();
     info.kind                 = lhs.data_kind();
     return DataArray(std::move(info));
@@ -2372,8 +2370,8 @@ DataArray Concat(const std::vector<DataArray>& values)
     }
 
     DataArrayCreateInfo info;
-    info.data                 = std::move(result_series);
-    info.indep_datas          = rep.indep_datas();
+    info.datas                 = rep.datas();
+    info.datas[DataArray::kSelf] = std::move(result_series);
     info.multi_dimension_spec = rep.multi_dimension_spec();
     info.kind                 = rep.data_kind();
     return DataArray(info);
