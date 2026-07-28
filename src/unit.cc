@@ -312,8 +312,10 @@ namespace xdataset
             }
         }
 
+        // to_string() already includes the unit prefix (e.g. "MHz"),
+        // so we must not multiply by `mult` a second time.
         if (best_mult == 1.0)
-            return {mult, to_string()};
+            return {1.0, to_string()};
 
         const char* prefix = "";
         for (int i = 0; i < kAutoScaleCount; ++i) {

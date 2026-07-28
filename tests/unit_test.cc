@@ -574,6 +574,17 @@ TEST(UnitTest, BestDisplayHzToGHz)
     EXPECT_EQ(s.name, "GHz");
 }
 
+// When the unit already has a prefix (e.g. "MHz") and the value doesn't
+// trigger further auto-scaling, the scale must be 1.0 — the display name
+// returned by to_string() already includes the prefix.
+TEST(UnitTest, BestDisplayPrefixUnitNoFurtherScale)
+{
+    // 1.23e12 MHz → stays in MHz, no further auto-scaling possible.
+    UnitScale s = Unit::parse("MHz").best_display(1.23e12);
+    EXPECT_DOUBLE_EQ(s.scale, 1.0);
+    EXPECT_EQ(s.name, "MHz");
+}
+
 // =========================================================================
 //  equals / not-equals
 // =========================================================================
