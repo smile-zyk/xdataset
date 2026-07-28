@@ -247,7 +247,7 @@ void DataSeries::append(const Measurement& m)
 
     // ---- Step 3: element-level append -------------------------------------
 
-    // --- 3a. Broadcast: scalar Measurement → vector/matrix DataSeries ------
+    // --- 3a. Broadcast: scalar Measurement -> vector/matrix DataSeries ------
     if (is_broadcast)
     {
         if (data_type_ == DataType::kString)
@@ -361,7 +361,7 @@ void DataSeries::append(const Measurement& m)
                 demote_msg += ") to Scalar DataSeries(dtype=";
                 demote_msg += (data_type_ == DataType::kReal ? "Real" : data_type_ == DataType::kInteger ? "Integer"
                                : data_type_ == DataType::kComplex ? "Complex" : "String");
-                demote_msg += "); only int→real/complex is supported";
+                demote_msg += "); only int->real/complex is supported";
                 throw std::invalid_argument(demote_msg);
             }
         }
@@ -399,7 +399,7 @@ void DataSeries::append(const Measurement& m)
                 demote_msg += ") to Vector DataSeries(dtype=";
                 demote_msg += (data_type_ == DataType::kReal ? "Real" : data_type_ == DataType::kInteger ? "Integer"
                                : data_type_ == DataType::kComplex ? "Complex" : "String");
-                demote_msg += "); only int→real/complex is supported";
+                demote_msg += "); only int->real/complex is supported";
                 throw std::invalid_argument(demote_msg);
             }
         }
@@ -442,7 +442,7 @@ void DataSeries::append(const Measurement& m)
                 demote_msg += ") to Matrix DataSeries(dtype=";
                 demote_msg += (data_type_ == DataType::kReal ? "Real" : data_type_ == DataType::kInteger ? "Integer"
                                : data_type_ == DataType::kComplex ? "Complex" : "String");
-                demote_msg += "); only int→real/complex is supported";
+                demote_msg += "); only int->real/complex is supported";
                 throw std::invalid_argument(demote_msg);
             }
         }

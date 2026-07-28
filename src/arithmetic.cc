@@ -1535,6 +1535,8 @@ DataSeries pow(const Measurement& base, const DataSeries& exponent) {
 
     auto res_kind  = promoted_kind(base_c.data_kind(), exp_c.data_kind());
     auto res_dtype = promoted_dtype(base_c.data_type(), exp_c.data_type());
+    // std::pow always returns double, so the result is never Integer.
+    if (res_dtype == DataType::kInteger) res_dtype = DataType::kReal;
     DataSeries result(res_kind, res_dtype, ds_meas_result_shape(exp_c, base_c));
 
     // Unit: dimensionless exponent preserves the base unit (same as Measurement::pow).
@@ -1574,6 +1576,8 @@ DataSeries pow(const DataSeries& base, const DataSeries& exponent) {
 
     auto res_kind  = promoted_kind(a.data_kind(), e.data_kind());
     auto res_dtype = promoted_dtype(a.data_type(), e.data_type());
+    // std::pow always returns double, so the result is never Integer.
+    if (res_dtype == DataType::kInteger) res_dtype = DataType::kReal;
     DataSeries result(res_kind, res_dtype, ds_ds_result_shape(a, e));
 
     // Unit: dimensionless exponent preserves the base unit (same as Measurement::pow).
