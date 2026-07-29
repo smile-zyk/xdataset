@@ -222,3 +222,5 @@ __marimo__/
 .streamlit/secrets.toml
 
 .vscode/
+LNA_Design.h5
+build_no_test/

@@ -6,34 +6,26 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 project(xdataset)
 
+option(BUILD_XDATASET_TEST "Build xdataset unit tests" ON)
+
 find_package(Eigen3 3.3 CONFIG REQUIRED)
-find_package(GTest CONFIG REQUIRED)
 find_package(Boost 1.72 CONFIG REQUIRED)
 find_package(tsl-ordered-map CONFIG REQUIRED)
 find_package(llnl-units CONFIG REQUIRED)
 
-# HDF5: when HDF5_ROOT is set (preset/env), use manual import; otherwise try vcpkg find_package
-if(HDF5_ROOT OR DEFINED ENV{HDF5_ROOT})
-    if(NOT HDF5_ROOT)
-        set(HDF5_ROOT "$ENV{HDF5_ROOT}")
-    endif()
-    add_library(hdf5_imported SHARED IMPORTED)
-    set_target_properties(hdf5_imported PROPERTIES
-        IMPORTED_LOCATION "${HDF5_ROOT}/bin/libhdf5-320.dll"
-        IMPORTED_IMPLIB "${HDF5_ROOT}/lib/libhdf5.dll.a"
-        INTERFACE_INCLUDE_DIRECTORIES "${HDF5_ROOT}/include"
-    )
-    set(HDF5_TARGET hdf5_imported)
-    message(STATUS "HDF5: using system package at ${HDF5_ROOT}")
-else()
-    find_package(hdf5 CONFIG REQUIRED)
-    set(HDF5_TARGET hdf5::hdf5)
-    message(STATUS "HDF5: using vcpkg package")
+# HDF5: prefer Homebrew/system HDF5 via HDF5_ROOT hint, fall back to CMake's FindHDF5
+if(HDF5_ROOT)
+    set(HDF5_ROOT_HINT HINTS "${HDF5_ROOT}")
+elseif(DEFINED ENV{HDF5_ROOT})
+    set(HDF5_ROOT_HINT HINTS "$ENV{HDF5_ROOT}")
+elseif(APPLE)
+    # Auto-detect Homebrew HDF5 on macOS
+    set(HDF5_ROOT_HINT HINTS "/opt/homebrew/opt/hdf5" "/usr/local/opt/hdf5")
 endif()
 
-include(GoogleTest)
-
-enable_testing()
+find_package(HDF5 REQUIRED COMPONENTS C)
+set(HDF5_TARGET hdf5::hdf5)
+message(STATUS "HDF5: found at ${HDF5_ROOT} (version ${HDF5_VERSION})")
 
 set(XDATASET_SOURCES
 	src/dimension_spec.cc
@@ -57,32 +49,38 @@ set(XDATASET_SOURCES
 add_library(xdataset SHARED ${XDATASET_SOURCES})
 target_compile_definitions(xdataset PRIVATE XDATASET_BUILD_DLL)
 
-add_executable(xdataset_test
-	tests/data_series_test.cc
-	tests/measurement_test.cc
-	tests/arithmetic_test.cc
-	tests/multi_dimension_test.cc
-	tests/block_test.cc
-	tests/data_array_test.cc
-	tests/data_frame_test.cc
-	tests/unit_test.cc
-	tests/dataset_test.cc
-	tests/hdf5_io_test.cc
-	tests/touchstone_io_test.cc
-	tests/value_test.cc
-	tests/operation_test.cc
-)
+if(BUILD_XDATASET_TEST)
+    find_package(GTest CONFIG REQUIRED)
+    include(GoogleTest)
+    enable_testing()
+
+    add_executable(xdataset_test
+        tests/data_series_test.cc
+        tests/measurement_test.cc
+        tests/arithmetic_test.cc
+        tests/multi_dimension_test.cc
+        tests/block_test.cc
+        tests/data_array_test.cc
+        tests/data_frame_test.cc
+        tests/unit_test.cc
+        tests/dataset_test.cc
+        tests/hdf5_io_test.cc
+        tests/touchstone_io_test.cc
+        tests/value_test.cc
+        tests/operation_test.cc
+    )
+
+    target_include_directories(xdataset_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(xdataset_test PRIVATE xdataset GTest::gtest_main)
+    gtest_discover_tests(xdataset_test)
+endif()
 
 add_executable(xdataset_playground
-	apps/xdataset_playground/main.cc
+    apps/xdataset_playground/main.cc
 )
 
 target_include_directories(xdataset PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
-target_include_directories(xdataset_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(xdataset_playground PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(xdataset PUBLIC Eigen3::Eigen Boost::headers tsl::ordered_map llnl-units::units ${HDF5_TARGET})
-target_link_libraries(xdataset_test PRIVATE xdataset GTest::gtest_main)
 target_link_libraries(xdataset_playground PRIVATE xdataset)
-
-gtest_discover_tests(xdataset_test)

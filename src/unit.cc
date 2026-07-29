@@ -161,30 +161,29 @@ namespace xdataset
         //
         //  Duplicate keys (Ohm/Ohms both → "ohm") keep the first REL name.
 
-        std::map<std::string, std::string> kBaseUnitRelName;
-
-        void add_reverse_base(const std::string& rel_name,
-                              const std::string& llnl_expr)
+        std::map<std::string, std::string>& get_base_unit_rel_name()
         {
-            units::precise_unit pu = units::unit_from_string(llnl_expr);
-            if (units::isnan(pu)) return;
+            static std::map<std::string, std::string> map;
+            static bool initialized = false;
+            if (!initialized)
+            {
+                initialized = true;
+                for (const auto& kv : kUnitMap)
+                {
+                    units::precise_unit pu = units::unit_from_string(kv.second);
+                    if (units::isnan(pu)) continue;
 
-            units::precise_unit base(pu.base_units().clear_e_flag());
-            std::string base_key = units::to_string(base);
-            if (base_key.empty()) return;
+                    units::precise_unit base(pu.base_units().clear_e_flag());
+                    std::string base_key = units::to_string(base);
+                    if (base_key.empty()) continue;
 
-            // first wins (aliases like Ohm/Ohms, meter/meters)
-            if (kBaseUnitRelName.find(base_key) == kBaseUnitRelName.end())
-                kBaseUnitRelName[base_key] = rel_name;
+                    // first wins (aliases like Ohm/Ohms, meter/meters)
+                    if (map.find(base_key) == map.end())
+                        map[base_key] = kv.first;
+                }
+            }
+            return map;
         }
-
-        bool init_reverse_base_units()
-        {
-            for (const auto& kv : kUnitMap)
-                add_reverse_base(kv.first, kv.second);
-            return true;
-        }
-        const bool kReverseBaseUnitsReady = init_reverse_base_units();
 
     } // anonymous namespace
 
@@ -269,8 +268,9 @@ namespace xdataset
         std::string base_key = units::to_string(base);
 
         // Step 2: check if the base_units string maps to a REL base name.
-        auto rit = kBaseUnitRelName.find(base_key);
-        if (rit == kBaseUnitRelName.end())
+        auto& rel_map = get_base_unit_rel_name();
+        auto rit = rel_map.find(base_key);
+        if (rit == rel_map.end())
             return units::to_string(unit_);  // not in vocabulary — fallback
 
         const std::string& rel_base = rit->second;

@@ -60,7 +60,8 @@
             "inherits": "base-clang",
             "cacheVariables": {
                 "VCPKG_TARGET_TRIPLET" : "arm64-osx",
-                "VCPKG_HOST_TRIPLET" : "arm64-osx"
+                "VCPKG_HOST_TRIPLET" : "arm64-osx",
+                "HDF5_ROOT": "/opt/homebrew/opt/hdf5"
             },
             "condition": {
                 "type": "equals",
