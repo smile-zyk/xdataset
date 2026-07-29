@@ -20,6 +20,12 @@ namespace xdataset
     class MeasurementDataFrame;
 
     // =========================================================================
+    // Null -- sentinel value for Measurement null scalars
+    // =========================================================================
+
+    struct Null {};
+
+    // =========================================================================
     // Measurement -- a single named value with units (scalar | vector | matrix)
     // =========================================================================
     //
@@ -58,6 +64,8 @@ namespace xdataset
             int,
             std::complex<double>,
             std::string,
+            bool,                           // DataType::kBoolean
+            Null,                           // DataType::kNull
 
             // --- DataKind::kVector ---
             Eigen::VectorXd,                // DataType::kReal
@@ -100,6 +108,8 @@ namespace xdataset
         static Measurement Integer(int value);
         static Measurement Complex(std::complex<double> value);
         static Measurement String(std::string value);
+        static Measurement Boolean(bool value);
+        static Measurement NullVal();
         /// @}
 
         /// @{
@@ -124,7 +134,13 @@ namespace xdataset
         DataType data_type() const { return data_type_; }
         const std::vector<Index>& shape() const { return shape_; }
         const Unit& unit() const { return unit_; }
-        void set_unit(const Unit& u) { unit_ = u; }
+        void set_unit(const Unit& u) {
+            if (data_type_ == DataType::kBoolean || data_type_ == DataType::kNull) {
+                if (u.has_dimension())
+                    throw std::invalid_argument("Boolean and Null measurements cannot have a unit");
+            }
+            unit_ = u;
+        }
 
         /// True when the stored value is not the default-constructed zero.
         bool has_value() const;
@@ -243,6 +259,8 @@ namespace xdataset
         std::string operator()(int v) const;
         std::string operator()(const std::complex<double>& v) const;
         std::string operator()(const std::string& v) const;
+        std::string operator()(bool v) const;
+        std::string operator()(const Null&) const;
 
         std::string operator()(const Eigen::VectorXd& v) const;
         std::string operator()(const Eigen::VectorXi& v) const;
@@ -273,6 +291,8 @@ namespace xdataset
         void operator()(int)                       { kind = DataKind::kScalar;  dtype = DataType::kInteger; }
         void operator()(const std::complex<double>&){ kind = DataKind::kScalar;  dtype = DataType::kComplex; }
         void operator()(const std::string&)         { kind = DataKind::kScalar;  dtype = DataType::kString;  }
+        void operator()(bool)                       { kind = DataKind::kScalar;  dtype = DataType::kBoolean; }
+        void operator()(const Null&)                { kind = DataKind::kScalar;  dtype = DataType::kNull;    }
 
         void operator()(const Eigen::VectorXd&)             { kind = DataKind::kVector; dtype = DataType::kReal;    }
         void operator()(const Eigen::VectorXi&)             { kind = DataKind::kVector; dtype = DataType::kInteger; }

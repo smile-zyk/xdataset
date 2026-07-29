@@ -650,7 +650,7 @@ Me 与 Da 的运算结果由以下四个步骤依次确定：**Measurement/DataA
 | `kLogical` | `&&` `\|\|` | Integer 0/1 | 无量纲 | 非零为真 |
 | `kBitwise` | `&` `\|` `^` | Integer | 无量纲 | 仅 Integer 操作数 |
 | `kShift` | `<<` `>>` | Integer | 继承左操作数 | 仅 Integer 操作数 |
-| `kPow` | `pow` | 按提升规则 | 继承底数 | 指数必须无量纲 |
+| `kPow` | `pow` | 至少 Real（`std::pow` 语义） | 继承底数 | 指数必须无量纲 |
 
 > 一元运算符 `-`（取负）保持操作数类型和单位；`!`（逻辑非）和 `~`（按位取反）返回 Integer 无量纲。
 
@@ -670,7 +670,7 @@ Me 与 Da 的运算结果由以下四个步骤依次确定：**Measurement/DataA
 - **kAddSub / kMul / kMod** — 按提升规则: Integer → Real → Complex
 - **kDiv** — 同提升规则，但 `Integer / Integer` 强制提升为 `Real`
 - **kCompare / kLogical / kBitwise / kShift** — 结果始终为 `Integer`
-- **kPow** — 按提升规则
+- **kPow** — 同提升规则，但至少 Real（`std::pow` 语义）
 
 提升规则矩阵：
 

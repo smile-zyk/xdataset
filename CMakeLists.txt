@@ -44,6 +44,8 @@ set(XDATASET_SOURCES
 	src/data_frame.cc
 	src/data_series.cc
 	src/arithmetic.cc
+	src/value.cc
+	src/operation.cc
 	src/measurement.cc
 	src/unit.cc
 	src/dataset.cc
@@ -67,6 +69,8 @@ add_executable(xdataset_test
 	tests/dataset_test.cc
 	tests/hdf5_io_test.cc
 	tests/touchstone_io_test.cc
+	tests/value_test.cc
+	tests/operation_test.cc
 )
 
 add_executable(xdataset_playground

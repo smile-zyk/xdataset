@@ -32,7 +32,9 @@ namespace xdataset
         kReal,
         kInteger,
         kComplex,
-        kString
+        kString,
+        kBoolean,
+        kNull
     };
 }
 

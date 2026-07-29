@@ -33,6 +33,7 @@ namespace xdataset
                     case DataType::kInteger: shape_.push_back(boost::get<Eigen::VectorXi>(storage_).size());            break;
                     case DataType::kComplex: shape_.push_back(boost::get<Eigen::VectorXcd>(storage_).size());           break;
                     case DataType::kString:  shape_.push_back(boost::get<Eigen::Tensor<std::string, 1>>(storage_).dimension(0)); break;
+                    default: break;  // kBoolean/kNull are scalar-only
                 }
                 break;
 
@@ -63,6 +64,7 @@ namespace xdataset
                         shape_.push_back(t.dimension(0)); shape_.push_back(t.dimension(1));
                         break;
                     }
+                    default: break;  // kBoolean/kNull are scalar-only
                 }
                 break;
         }
@@ -118,6 +120,24 @@ namespace xdataset
         m.storage_ = value;
         m.data_kind_    = DataKind::kScalar;
         m.data_type_   = DataType::kString;
+        return m;
+    }
+
+    Measurement Measurement::Boolean(bool value)
+    {
+        Measurement m;
+        m.storage_ = value;
+        m.data_kind_    = DataKind::kScalar;
+        m.data_type_   = DataType::kBoolean;
+        return m;
+    }
+
+    Measurement Measurement::NullVal()
+    {
+        Measurement m;
+        m.storage_ = Null();
+        m.data_kind_    = DataKind::kScalar;
+        m.data_type_   = DataType::kNull;
         return m;
     }
 
@@ -236,6 +256,7 @@ namespace xdataset
             case DataType::kInteger: return Measurement(boost::get<Eigen::VectorXi>(storage_)(i), unit_);
             case DataType::kComplex: return Measurement(boost::get<Eigen::VectorXcd>(storage_)(i), unit_);
             case DataType::kString:  return Measurement(boost::get<Eigen::Tensor<std::string, 1>>(storage_)(i), unit_);
+            default: break;  // kBoolean/kNull are scalar-only
         }
         throw std::logic_error("unsupported dtype");
     }
@@ -250,6 +271,7 @@ namespace xdataset
             case DataType::kInteger: return Measurement(boost::get<Eigen::MatrixXi>(storage_)(r, c), unit_);
             case DataType::kComplex: return Measurement(boost::get<Eigen::MatrixXcd>(storage_)(r, c), unit_);
             case DataType::kString:  return Measurement(boost::get<Eigen::Tensor<std::string, 2>>(storage_)(r, c), unit_);
+            default: break;  // kBoolean/kNull are scalar-only
         }
         throw std::logic_error("unsupported dtype");
     }
@@ -303,6 +325,18 @@ namespace xdataset
     std::string MeasurementFormatter::operator()(const std::string& v) const
     {
         return v;
+    }
+
+    std::string MeasurementFormatter::operator()(bool v) const
+    {
+        (void)unit_;   // boolean never carries a unit
+        return v ? "TRUE" : "FALSE";
+    }
+
+    std::string MeasurementFormatter::operator()(const Null&) const
+    {
+        (void)unit_;   // null never carries a unit
+        return "NULL";
     }
 
     // -- vector --------------------------------------------------------------
@@ -456,7 +490,9 @@ namespace xdataset
 // =========================================================================
 
 Measurement Measurement::canonicalized() const {
-    if (data_type_ == DataType::kString) {
+    if (data_type_ == DataType::kString ||
+        data_type_ == DataType::kBoolean ||
+        data_type_ == DataType::kNull) {
         Measurement result(*this);
         result.unit_ = unit_.canonicalized();
         return result;
