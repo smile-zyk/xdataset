@@ -43,7 +43,7 @@ DataType Value::data_type() const {
     return as_array().data().data_type();
 }
 
-std::vector<Index> Value::shape() const {
+DataShape Value::shape() const {
     if (is_meas()) return as_meas().shape();
     return as_array().data().data_shape();
 }
@@ -56,6 +56,11 @@ const Unit& Value::unit() const {
 Index Value::rows() const {
     if (is_meas()) return 1;
     return static_cast<Index>(as_array().data().size());
+}
+
+Index Value::element_count() const {
+    if (is_meas()) return as_meas().element_count();
+    return as_array().element_count();
 }
 
 }  // namespace xdataset

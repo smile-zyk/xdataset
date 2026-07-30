@@ -1,4 +1,4 @@
-﻿#include "multi_dimension_spec.h"
+#include "multi_dimension_spec.h"
 
 #include <gtest/gtest.h>
 

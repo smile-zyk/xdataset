@@ -228,7 +228,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, StaticSmallTableNoTruncation)
     {
-        // 3 rows, max_display_rows=10 â†’ all rows shown, no ellipsis
+        // 3 rows, max_display_rows=10 â†?all rows shown, no ellipsis
         std::vector<DataFrameRow> rows;
         for (int i = 0; i < 3; ++i)
         {
@@ -265,7 +265,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, StaticTruncatedHeadOnly)
     {
-        // 10 rows, max_display_rows=6 â†’ head-only truncation
+        // 10 rows, max_display_rows=6 â†?head-only truncation
         // rows 0-5 shown, then ellipsis, then footer
         std::vector<DataFrameRow> rows;
         for (int i = 0; i < 10; ++i)
@@ -297,7 +297,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, TruncationFooterPlural)
     {
-        // 10 rows, max_display_rows=6 â†’ 4 rows omitted (plural)
+        // 10 rows, max_display_rows=6 â†?4 rows omitted (plural)
         std::vector<DataFrameRow> rows;
         for (int i = 0; i < 10; ++i)
         {
@@ -316,7 +316,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, TruncationFooterSingular)
     {
-        // 9 rows, max_display_rows=8 â†’ 1 row omitted (singular)
+        // 9 rows, max_display_rows=8 â†?1 row omitted (singular)
         std::vector<DataFrameRow> rows;
         for (int i = 0; i < 9; ++i)
         {
@@ -335,7 +335,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, ExactFitNoTruncation)
     {
-        // 6 rows, max_display_rows=6 â†’ exact fit, no truncation
+        // 6 rows, max_display_rows=6 â†?exact fit, no truncation
         std::vector<DataFrameRow> rows;
         for (int i = 0; i < 6; ++i)
         {
@@ -380,7 +380,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, DefaultParameterIs32)
     {
-        // Only 10 rows â€” default 32 should show all without truncation
+        // Only 10 rows â€?default 32 should show all without truncation
         std::vector<DataFrameRow> rows;
         for (int i = 0; i < 10; ++i)
         {
@@ -422,7 +422,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, FromBlockTruncated)
     {
-        // 2Ã—3Ã—4 = 24 rows, max_display_rows=8 â†’ truncation
+        // 2Ã—3Ã—4 = 24 rows, max_display_rows=8 â†?truncation
         Block block(MakeThreeDimMultiDepCreateInfo());
         const DataFrame& table = block.GetOrCreateDataFrame();
 

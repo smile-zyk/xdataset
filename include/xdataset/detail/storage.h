@@ -60,9 +60,9 @@ struct DataTypeOf<std::string> {
 
 template <typename T>
 struct NumericVectorTypes {
-    typedef Eigen::Matrix<T, Eigen::Dynamic, 1> OwnedType;
-    typedef Eigen::Map<OwnedType> MapType;
-    typedef Eigen::Map<const OwnedType> ConstMapType;
+    typedef Eigen::Matrix<T, 1, Eigen::Dynamic> OwnedType;       // RowVector
+    typedef Eigen::Map<OwnedType, Eigen::RowMajor> MapType;
+    typedef Eigen::Map<const OwnedType, Eigen::RowMajor> ConstMapType;
 };
 
 template <typename T>

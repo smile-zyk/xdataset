@@ -77,6 +77,12 @@ namespace xdataset
             return data_kind_;
         }
 
+        /// Number of elements per cell: delegates to data().element_count()
+        Index element_count() const
+        {
+            return data().element_count();
+        }
+
         const DataFrame& GetOrCreateDataFrame(const std::string& variable_name = "data") const;
 
         /// Full unified data map. The last entry is always kSelf.

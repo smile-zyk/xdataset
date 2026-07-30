@@ -398,7 +398,7 @@ TEST(DataSeriesMeasArithTest, AddMeasurementStringThrows)
 TEST(DataSeriesMeasArithTest, AddScalarDSToVectorMeasurement)
 {
     auto s = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
-    Eigen::VectorXd v(3); v << 10.0, 20.0, 30.0;
+    Eigen::RowVectorXd v(3); v << 10.0, 20.0, 30.0;
     Measurement m(v);
     DataSeries r = s + m;
     // Scalar DS + Vector Meas -> Vector DataSeries
@@ -676,7 +676,7 @@ TEST(MeasArithTest, AddStringThrows)
 
 TEST(MeasArithTest, AddScalarToVector)
 {
-    Eigen::VectorXd v(3); v << 1.0, 2.0, 3.0;
+    Eigen::RowVectorXd v(3); v << 1.0, 2.0, 3.0;
     Measurement vec(v);
     Measurement s(10.0);
     Measurement r = s + vec;
@@ -689,7 +689,7 @@ TEST(MeasArithTest, AddScalarToVector)
 
 TEST(MeasArithTest, AddScalarToMatrix)
 {
-    Eigen::MatrixXd m(2, 2); m << 1.0, 2.0, 3.0, 4.0;
+    xdataset::MatrixXRd m(2, 2); m << 1.0, 2.0, 3.0, 4.0;
     Measurement mat(m);
     Measurement s(10.0);
     Measurement r = s + mat;
@@ -701,8 +701,8 @@ TEST(MeasArithTest, AddScalarToMatrix)
 
 TEST(MeasArithTest, AddVectorToVector)
 {
-    Eigen::VectorXd a(2); a << 1.0, 2.0;
-    Eigen::VectorXd b(2); b << 3.0, 4.0;
+    Eigen::RowVectorXd a(2); a << 1.0, 2.0;
+    Eigen::RowVectorXd b(2); b << 3.0, 4.0;
     Measurement r = Measurement(a) + Measurement(b);
     EXPECT_EQ(r.data_kind(), DataKind::kVector);
     auto rv = r.as_vector<double>();
@@ -723,7 +723,7 @@ TEST(MeasArithTest, SubtractScalar)
 
 TEST(MeasArithTest, SubtractScalarFromVector)
 {
-    Eigen::VectorXd v(3); v << 10.0, 20.0, 30.0;
+    Eigen::RowVectorXd v(3); v << 10.0, 20.0, 30.0;
     Measurement vec(v), s(5.0);
     Measurement r = vec - s;
     auto rv = r.as_vector<double>();
@@ -772,7 +772,7 @@ TEST(MeasArithTest, MultiplyVoltAmpereYieldsWatt)
 
 TEST(MeasArithTest, MultiplyScalarToVector)
 {
-    Eigen::VectorXd v(2); v << 2.0, 3.0;
+    Eigen::RowVectorXd v(2); v << 2.0, 3.0;
     Measurement vec(v), s(10.0);
     Measurement r = s * vec;
     auto rv = r.as_vector<double>();
@@ -871,7 +871,7 @@ TEST(MeasPowTest, PowRealNegative)
 
 TEST(MeasPowTest, PowVector)
 {
-    Eigen::VectorXd v(3); v << 2.0, 3.0, 4.0;
+    Eigen::RowVectorXd v(3); v << 2.0, 3.0, 4.0;
     Measurement r = xdataset::pow(Measurement(v), Measurement(2));
     EXPECT_EQ(r.data_kind(), DataKind::kVector);
     auto rv = r.as_vector<double>();
@@ -882,7 +882,7 @@ TEST(MeasPowTest, PowVector)
 
 TEST(MeasPowTest, PowMatrix)
 {
-    Eigen::MatrixXd m(2, 2); m << 2.0, 3.0, 4.0, 5.0;
+    xdataset::MatrixXRd m(2, 2); m << 2.0, 3.0, 4.0, 5.0;
     Measurement r = xdataset::pow(Measurement(m), Measurement(2));
     EXPECT_EQ(r.data_kind(), DataKind::kMatrix);
     auto rm = r.as_matrix<double>();
@@ -942,7 +942,7 @@ TEST(MeasPowMeasTest, PowMeasExponentMustNotBeString)
 TEST(MeasPowMeasTest, PowMeasBroadcastScalarToVector)
 {
     Measurement base(2.0);
-    Eigen::VectorXd ev(3); ev << 1.0, 2.0, 3.0;
+    Eigen::RowVectorXd ev(3); ev << 1.0, 2.0, 3.0;
     Measurement exp(ev);
     Measurement r = xdataset::pow(base, exp);
     EXPECT_EQ(r.data_kind(), DataKind::kVector);
@@ -954,7 +954,7 @@ TEST(MeasPowMeasTest, PowMeasBroadcastScalarToVector)
 
 TEST(MeasPowMeasTest, PowMeasBroadcastVectorToScalar)
 {
-    Eigen::VectorXd bv(3); bv << 2.0, 3.0, 4.0;
+    Eigen::RowVectorXd bv(3); bv << 2.0, 3.0, 4.0;
     Measurement base(bv);
     Measurement exp(2);
     Measurement r = xdataset::pow(base, exp);
@@ -1088,7 +1088,7 @@ TEST(DataSeriesArithTest, VectorDSPlusScalarMeasurementYieldsVector)
 TEST(DataSeriesArithTest, ScalarDSPlusMatrixMeasurementYieldsMatrix)
 {
     auto scalars = DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
-    Eigen::MatrixXd m(2, 2); m << 1.0, 2.0, 3.0, 4.0;
+    xdataset::MatrixXRd m(2, 2); m << 1.0, 2.0, 3.0, 4.0;
     Measurement mat_meas(m);
     DataSeries r = scalars + mat_meas;
     EXPECT_EQ(r.data_kind(), DataKind::kMatrix);
@@ -1249,7 +1249,7 @@ TEST(DataSeriesPowTest, PowMeasurementVectorExponent)
     // base: scalar series {2.0, 3.0}, dimensionless
     auto base = DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
     // exponent: Vector([1.0, 2.0, 3.0])
-    Measurement exp(Eigen::VectorXd{{1.0, 2.0, 3.0}});
+    Measurement exp(Eigen::RowVectorXd{{1.0, 2.0, 3.0}});
     DataSeries r = xdataset::pow(base, exp);
     EXPECT_EQ(r.data_kind(), DataKind::kVector);
     EXPECT_EQ(r.size(), 2u);
@@ -1264,7 +1264,7 @@ TEST(DataSeriesPowTest, PowMeasurementVectorExponent)
 TEST(DataSeriesPowTest, PowMeasurementMatrixExponent)
 {
     auto base = DataSeries::CreateScalarFromVector<double>({2.0});
-    Eigen::MatrixXd m(2, 2); m << 1.0, 2.0, 3.0, 4.0;
+    xdataset::MatrixXRd m(2, 2); m << 1.0, 2.0, 3.0, 4.0;
     Measurement exp(m);
     DataSeries r = xdataset::pow(base, exp);
     EXPECT_EQ(r.data_kind(), DataKind::kMatrix);
@@ -1432,7 +1432,7 @@ TEST(DataArrayPowTest, PowArrayWithUnit)
 TEST(DataArrayPowTest, PowMeasurementNonScalar)
 {
     auto a = DataArray::CreateIndependent(DataSeries::CreateScalarFromVector<double>({2.0, 3.0}));
-    Measurement exp(Eigen::VectorXd{{1.0, 2.0, 3.0}});
+    Measurement exp(Eigen::RowVectorXd{{1.0, 2.0, 3.0}});
     auto r = xdataset::pow(a, exp);
     EXPECT_EQ(r.data().data_kind(), DataKind::kVector);
     EXPECT_EQ(r.data().size(), 2u);
@@ -1803,8 +1803,8 @@ TEST(MeasCmpTest, CmpMixedIntReal)
 
 TEST(MeasCmpTest, CmpVector)
 {
-    Eigen::VectorXd a(3); a << 1.0, 2.0, 3.0;
-    Eigen::VectorXd b(3); b << 1.0, 4.0, 3.0;
+    Eigen::RowVectorXd a(3); a << 1.0, 2.0, 3.0;
+    Eigen::RowVectorXd b(3); b << 1.0, 4.0, 3.0;
     Measurement r = Measurement(a) < Measurement(b);
     EXPECT_EQ(r.data_kind(), DataKind::kVector);
     auto rv = r.as_vector<int>();
@@ -1847,8 +1847,8 @@ TEST(MeasLogicalTest, OrScalar)
 
 TEST(MeasLogicalTest, AndVector)
 {
-    Eigen::VectorXd a(2); a << 1.0, 0.0;
-    Eigen::VectorXd b(2); b << 1.0, 1.0;
+    Eigen::RowVectorXd a(2); a << 1.0, 0.0;
+    Eigen::RowVectorXd b(2); b << 1.0, 1.0;
     Measurement r = Measurement(a) && Measurement(b);
     auto rv = r.as_vector<int>();
     EXPECT_EQ(rv(0), 1);
@@ -1949,7 +1949,7 @@ TEST(MeasUnaryTest, NegatePreservesUnit)
 
 TEST(MeasUnaryTest, NegateVector)
 {
-    Eigen::VectorXd v(2); v << 1.0, -2.0;
+    Eigen::RowVectorXd v(2); v << 1.0, -2.0;
     Measurement r = -Measurement(v);
     auto rv = r.as_vector<double>();
     EXPECT_DOUBLE_EQ(rv(0), -1.0);
@@ -1966,7 +1966,7 @@ TEST(MeasUnaryTest, LogicalNotScalar)
 
 TEST(MeasUnaryTest, LogicalNotVector)
 {
-    Eigen::VectorXd v(3); v << 1.0, 0.0, 3.0;
+    Eigen::RowVectorXd v(3); v << 1.0, 0.0, 3.0;
     Measurement r = !Measurement(v);
     EXPECT_EQ(r.data_type(), DataType::kInteger);
     auto rv = r.as_vector<int>();
@@ -2358,8 +2358,8 @@ TEST(ConcatTest, ScalarToVector)
 
 TEST(ConcatTest, VectorToMatrix)
 {
-    Eigen::VectorXd v1(2); v1 << 1.0, 2.0;
-    Eigen::VectorXd v2(2); v2 << 3.0, 4.0;
+    Eigen::RowVectorXd v1(2); v1 << 1.0, 2.0;
+    Eigen::RowVectorXd v2(2); v2 << 3.0, 4.0;
     Measurement a = Measurement::Vector(v1);
     Measurement b = Measurement::Vector(v2);
 
@@ -2397,13 +2397,13 @@ TEST(ConcatTest, SingleElementNoop)
 TEST(ConcatTest, MismatchedShapeThrows)
 {
     Measurement a(1.0);
-    Measurement b = Measurement::Vector(Eigen::VectorXd(2));
+    Measurement b = Measurement::Vector(Eigen::RowVectorXd(2));
     EXPECT_THROW({ Concat(std::vector<Measurement>{a, b}); }, std::invalid_argument);
 }
 
 TEST(ConcatTest, MatrixConcatThrows)
 {
-    Measurement a = Measurement::Matrix(Eigen::MatrixXd(1, 1));
+    Measurement a = Measurement::Matrix(xdataset::MatrixXRd(1, 1));
     EXPECT_THROW({ Concat(std::vector<Measurement>{a, a}); }, std::invalid_argument);
 }
 
@@ -2571,8 +2571,8 @@ TEST(CombineTest, ScalarsToDataArray)
 
 TEST(CombineTest, VectorAndScalarBroadcast)
 {
-    Eigen::VectorXd v1(2); v1 << 1.0, 2.0;
-    Eigen::VectorXd v2(2); v2 << 3.0, 4.0;
+    Eigen::RowVectorXd v1(2); v1 << 1.0, 2.0;
+    Eigen::RowVectorXd v2(2); v2 << 3.0, 4.0;
     Measurement a(v1), b(v2);
 
     DataArray result = Combine({a, b});
@@ -2587,7 +2587,7 @@ TEST(CombineTest, VectorAndScalarBroadcast)
 
 TEST(CombineTest, ScalarBroadcastToVector)
 {
-    Eigen::VectorXd v(2); v << 1.0, 2.0;
+    Eigen::RowVectorXd v(2); v << 1.0, 2.0;
     Measurement a(v);
     Measurement b(10.0);  // scalar, broadcasts to [10, 10]
 
@@ -2613,8 +2613,8 @@ TEST(CombineTest, DtypePromotion)
 
 TEST(CombineTest, VectorDtypePromotionIntToReal)
 {
-    Eigen::VectorXi vi(2); vi << 1, 2;
-    Eigen::VectorXd vd(2); vd << 3.0, 4.0;
+    Eigen::RowVectorXi vi(2); vi << 1, 2;
+    Eigen::RowVectorXd vd(2); vd << 3.0, 4.0;
     Measurement a(vi), b(vd);
 
     DataArray result = Combine({a, b});
@@ -2629,10 +2629,10 @@ TEST(CombineTest, VectorDtypePromotionIntToReal)
 
 TEST(CombineTest, VectorDtypePromotionToComplex)
 {
-    Eigen::VectorXi vi(2); vi << 1, 2;
-    Eigen::VectorXd vd(2); vd << 3.0, 4.0;
+    Eigen::RowVectorXi vi(2); vi << 1, 2;
+    Eigen::RowVectorXd vd(2); vd << 3.0, 4.0;
     using cd = std::complex<double>;
-    Eigen::VectorXcd vc(2); vc << cd(5, 1), cd(6, 2);
+    Eigen::RowVectorXcd vc(2); vc << cd(5, 1), cd(6, 2);
     Measurement a(vi), b(vd), c(vc);
 
     DataArray result = Combine({a, b, c});
@@ -2649,8 +2649,8 @@ TEST(CombineTest, VectorDtypePromotionToComplex)
 
 TEST(CombineTest, MatrixDtypePromotionIntToReal)
 {
-    Eigen::MatrixXi mi(2, 2); mi << 1, 2, 3, 4;
-    Eigen::MatrixXd md(2, 2); md << 5, 6, 7, 8;
+    xdataset::MatrixXRi mi(2, 2); mi << 1, 2, 3, 4;
+    xdataset::MatrixXRd md(2, 2); md << 5, 6, 7, 8;
     Measurement a(mi), b(md);
 
     DataArray result = Combine({a, b});
@@ -2677,8 +2677,8 @@ TEST(CombineTest, StringScalars)
 
 TEST(CombineTest, ShapeMismatchThrows)
 {
-    Eigen::VectorXd v1(2); v1 << 1.0, 2.0;
-    Eigen::VectorXd v2(3); v2 << 1.0, 2.0, 3.0;
+    Eigen::RowVectorXd v1(2); v1 << 1.0, 2.0;
+    Eigen::RowVectorXd v2(3); v2 << 1.0, 2.0, 3.0;
     Measurement a(v1), b(v2);
 
     EXPECT_THROW({ Combine({a, b}); }, std::invalid_argument);
@@ -2691,7 +2691,7 @@ TEST(CombineTest, EmptyThrows)
 
 TEST(CombineTest, UnitCanonicalizeAndPromote)
 {
-    // 1 GHz + 12 (dimensionless) → canonicalized Hz values
+    // 1 GHz + 12 (dimensionless) -> canonicalized Hz values
     Measurement a(1.0, Unit::parse("GHz"));
     Measurement b(12.0);  // dimensionless, promoted to Hz
 

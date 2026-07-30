@@ -44,9 +44,10 @@ public:
     // ---- Metadata (unified for both types) ----------------------------------------
     DataKind           data_kind() const;
     DataType           data_type() const;
-    std::vector<Index> shape() const;
+    DataShape          shape() const;
     const Unit&        unit() const;
     Index              rows() const;   // Measurement = 1, DataArray = data().size()
+    Index              element_count() const;
 
 private:
     typedef boost::variant<

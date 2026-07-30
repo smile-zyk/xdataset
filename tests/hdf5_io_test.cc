@@ -43,7 +43,7 @@ namespace xdataset
 
         BlockCreateInfo make_vector_info()
         {
-            // Regular(2) â†’ 2 rows, vector width 3
+            // Regular(2) â†?2 rows, vector width 3
             BlockCreateInfo info;
             info.independent_specs.push_back(
                 IndependentSpec{"x", MakeScalarSeries(2),

@@ -29,9 +29,9 @@ namespace xdataset
             case DataKind::kVector:
                 switch (data_type_)
                 {
-                    case DataType::kReal:    shape_.push_back(boost::get<Eigen::VectorXd>(storage_).size());            break;
-                    case DataType::kInteger: shape_.push_back(boost::get<Eigen::VectorXi>(storage_).size());            break;
-                    case DataType::kComplex: shape_.push_back(boost::get<Eigen::VectorXcd>(storage_).size());           break;
+                    case DataType::kReal:    shape_.push_back(boost::get<Eigen::RowVectorXd>(storage_).size());            break;
+                    case DataType::kInteger: shape_.push_back(boost::get<Eigen::RowVectorXi>(storage_).size());            break;
+                    case DataType::kComplex: shape_.push_back(boost::get<Eigen::RowVectorXcd>(storage_).size());           break;
                     case DataType::kString:  shape_.push_back(boost::get<Eigen::Tensor<std::string, 1>>(storage_).dimension(0)); break;
                     default: break;  // kBoolean/kNull are scalar-only
                 }
@@ -42,19 +42,19 @@ namespace xdataset
                 {
                     case DataType::kReal:
                     {
-                        const auto& m = boost::get<Eigen::MatrixXd>(storage_);
+                        const auto& m = boost::get<MatrixXRd>(storage_);
                         shape_.push_back(m.rows()); shape_.push_back(m.cols());
                         break;
                     }
                     case DataType::kInteger:
                     {
-                        const auto& m = boost::get<Eigen::MatrixXi>(storage_);
+                        const auto& m = boost::get<MatrixXRi>(storage_);
                         shape_.push_back(m.rows()); shape_.push_back(m.cols());
                         break;
                     }
                     case DataType::kComplex:
                     {
-                        const auto& m = boost::get<Eigen::MatrixXcd>(storage_);
+                        const auto& m = boost::get<MatrixXRcd>(storage_);
                         shape_.push_back(m.rows()); shape_.push_back(m.cols());
                         break;
                     }
@@ -141,7 +141,7 @@ namespace xdataset
         return m;
     }
 
-    Measurement Measurement::Vector(const Eigen::VectorXd& v)
+    Measurement Measurement::Vector(const Eigen::RowVectorXd& v)
     {
         Measurement m;
         m.storage_ = v;
@@ -151,7 +151,7 @@ namespace xdataset
         return m;
     }
 
-    Measurement Measurement::Vector(const Eigen::VectorXi& v)
+    Measurement Measurement::Vector(const Eigen::RowVectorXi& v)
     {
         Measurement m;
         m.storage_ = v;
@@ -161,7 +161,7 @@ namespace xdataset
         return m;
     }
 
-    Measurement Measurement::Vector(const Eigen::VectorXcd& v)
+    Measurement Measurement::Vector(const Eigen::RowVectorXcd& v)
     {
         Measurement m;
         m.storage_ = v;
@@ -181,7 +181,7 @@ namespace xdataset
         return m;
     }
 
-    Measurement Measurement::Matrix(const Eigen::MatrixXd& m)
+    Measurement Measurement::Matrix(const MatrixXRd& m)
     {
         Measurement mm;
         mm.storage_ = m;
@@ -192,7 +192,7 @@ namespace xdataset
         return mm;
     }
 
-    Measurement Measurement::Matrix(const Eigen::MatrixXi& m)
+    Measurement Measurement::Matrix(const MatrixXRi& m)
     {
         Measurement mm;
         mm.storage_ = m;
@@ -203,7 +203,7 @@ namespace xdataset
         return mm;
     }
 
-    Measurement Measurement::Matrix(const Eigen::MatrixXcd& m)
+    Measurement Measurement::Matrix(const MatrixXRcd& m)
     {
         Measurement mm;
         mm.storage_ = m;
@@ -252,9 +252,9 @@ namespace xdataset
             throw std::logic_error("element_at(Index) requires vector data");
         switch (data_type_)
         {
-            case DataType::kReal:    return Measurement(boost::get<Eigen::VectorXd>(storage_)(i), unit_);
-            case DataType::kInteger: return Measurement(boost::get<Eigen::VectorXi>(storage_)(i), unit_);
-            case DataType::kComplex: return Measurement(boost::get<Eigen::VectorXcd>(storage_)(i), unit_);
+            case DataType::kReal:    return Measurement(boost::get<Eigen::RowVectorXd>(storage_)(i), unit_);
+            case DataType::kInteger: return Measurement(boost::get<Eigen::RowVectorXi>(storage_)(i), unit_);
+            case DataType::kComplex: return Measurement(boost::get<Eigen::RowVectorXcd>(storage_)(i), unit_);
             case DataType::kString:  return Measurement(boost::get<Eigen::Tensor<std::string, 1>>(storage_)(i), unit_);
             default: break;  // kBoolean/kNull are scalar-only
         }
@@ -267,9 +267,9 @@ namespace xdataset
             throw std::logic_error("element_at(Index, Index) requires matrix data");
         switch (data_type_)
         {
-            case DataType::kReal:    return Measurement(boost::get<Eigen::MatrixXd>(storage_)(r, c), unit_);
-            case DataType::kInteger: return Measurement(boost::get<Eigen::MatrixXi>(storage_)(r, c), unit_);
-            case DataType::kComplex: return Measurement(boost::get<Eigen::MatrixXcd>(storage_)(r, c), unit_);
+            case DataType::kReal:    return Measurement(boost::get<MatrixXRd>(storage_)(r, c), unit_);
+            case DataType::kInteger: return Measurement(boost::get<MatrixXRi>(storage_)(r, c), unit_);
+            case DataType::kComplex: return Measurement(boost::get<MatrixXRcd>(storage_)(r, c), unit_);
             case DataType::kString:  return Measurement(boost::get<Eigen::Tensor<std::string, 2>>(storage_)(r, c), unit_);
             default: break;  // kBoolean/kNull are scalar-only
         }
@@ -341,7 +341,7 @@ namespace xdataset
 
     // -- vector --------------------------------------------------------------
 
-    std::string MeasurementFormatter::operator()(const Eigen::VectorXd& v) const
+    std::string MeasurementFormatter::operator()(const Eigen::RowVectorXd& v) const
     {
         std::ostringstream oss;
         oss << "[";
@@ -354,7 +354,7 @@ namespace xdataset
         return with_unit(oss.str());
     }
 
-    std::string MeasurementFormatter::operator()(const Eigen::VectorXi& v) const
+    std::string MeasurementFormatter::operator()(const Eigen::RowVectorXi& v) const
     {
         std::ostringstream oss;
         oss << "[";
@@ -367,7 +367,7 @@ namespace xdataset
         return with_unit(oss.str());
     }
 
-    std::string MeasurementFormatter::operator()(const Eigen::VectorXcd& v) const
+    std::string MeasurementFormatter::operator()(const Eigen::RowVectorXcd& v) const
     {
         auto bd = unit_.best_display(v.size() > 0 ? v(0).real() : 0.0);
         std::ostringstream oss;
@@ -402,7 +402,7 @@ namespace xdataset
 
     // -- matrix --------------------------------------------------------------
 
-    std::string MeasurementFormatter::operator()(const Eigen::MatrixXd& v) const
+    std::string MeasurementFormatter::operator()(const MatrixXRd& v) const
     {
         std::ostringstream oss;
         oss << "[";
@@ -421,7 +421,7 @@ namespace xdataset
         return with_unit(oss.str());
     }
 
-    std::string MeasurementFormatter::operator()(const Eigen::MatrixXi& v) const
+    std::string MeasurementFormatter::operator()(const MatrixXRi& v) const
     {
         std::ostringstream oss;
         oss << "[";
@@ -440,7 +440,7 @@ namespace xdataset
         return with_unit(oss.str());
     }
 
-    std::string MeasurementFormatter::operator()(const Eigen::MatrixXcd& v) const
+    std::string MeasurementFormatter::operator()(const MatrixXRcd& v) const
     {
         auto bd = unit_.best_display(v.size() > 0 ? v(0, 0).real() : 0.0);
         std::ostringstream oss;
@@ -539,15 +539,15 @@ Measurement Measurement::canonicalized() const {
 
     if (data_kind_ == DataKind::kVector) {
         if (res_dtype == DataType::kComplex) {
-            Eigen::VectorXcd vec = boost::get<Eigen::VectorXcd>(storage_);
+            Eigen::RowVectorXcd vec = boost::get<Eigen::RowVectorXcd>(storage_);
             if (!affine) vec *= mult;
             result.storage_ = vec;
         } else {
-            Eigen::VectorXd vec(count);
+            Eigen::RowVectorXd vec(count);
             for (Index i = 0; i < count; ++i) {
                 double v = (data_type_ == DataType::kInteger)
-                           ? static_cast<double>(boost::get<Eigen::VectorXi>(storage_)(i))
-                           : boost::get<Eigen::VectorXd>(storage_)(i);
+                           ? static_cast<double>(boost::get<Eigen::RowVectorXi>(storage_)(i))
+                           : boost::get<Eigen::RowVectorXd>(storage_)(i);
                 vec(i) = affine ? units::convert(v, unit_.raw(), target.raw()) : v * mult;
             }
             result.storage_ = vec;
@@ -557,17 +557,17 @@ Measurement Measurement::canonicalized() const {
 
     // Matrix
     if (res_dtype == DataType::kComplex) {
-        Eigen::MatrixXcd mat = boost::get<Eigen::MatrixXcd>(storage_);
+        MatrixXRcd mat = boost::get<MatrixXRcd>(storage_);
         if (!affine) mat *= mult;
         result.storage_ = mat;
     } else {
         Index rows = shape_[0], cols = shape_[1];
-        Eigen::MatrixXd mat(rows, cols);
+        MatrixXRd mat(rows, cols);
         for (Index r = 0; r < rows; ++r) {
             for (Index c = 0; c < cols; ++c) {
                 double v = (data_type_ == DataType::kInteger)
-                           ? static_cast<double>(boost::get<Eigen::MatrixXi>(storage_)(r, c))
-                           : boost::get<Eigen::MatrixXd>(storage_)(r, c);
+                           ? static_cast<double>(boost::get<MatrixXRi>(storage_)(r, c))
+                           : boost::get<MatrixXRd>(storage_)(r, c);
                 mat(r, c) = affine ? units::convert(v, unit_.raw(), target.raw()) : v * mult;
             }
         }

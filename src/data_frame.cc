@@ -629,7 +629,7 @@ namespace xdataset
                                                std::string name)
     {
         const DataKind kind  = measurement.data_kind();
-        const std::vector<Index>& shape = measurement.shape();
+        const DataShape& shape = measurement.shape();
 
         // Build headers according to kind / shape, using the caller-supplied name.
         std::vector<std::string> all_headers;

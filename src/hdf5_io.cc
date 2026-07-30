@@ -33,7 +33,7 @@ void check_h5(herr_t status, const char* msg)
 }
 
 // -----------------------------------------------------------------------
-// Type mapping: xdataset DataType ï¿½?HDF5 type id.
+// Type mapping: xdataset DataType ï¿?HDF5 type id.
 // Caller must close the returned type with H5Tclose unless it's a native type.
 // -----------------------------------------------------------------------
 hid_t h5_type_from(DataType dtype)
@@ -236,7 +236,7 @@ void write_block(hid_t root_group, const std::string& block_path, const Block& b
     }
     // current is the leaf HDF5 group = the Block's home.
 
-    // Independent DataSeries ï¿½?Datasets with dimension attributes
+    // Independent DataSeries ï¿?Datasets with dimension attributes
     for (const auto& name : block.independents())
     {
         const IndependentSpec& spec = block.independent_spec(name);
@@ -246,7 +246,7 @@ void write_block(hid_t root_group, const std::string& block_path, const Block& b
         H5Dclose(dset);
     }
 
-    // Dependent DataSeries ï¿½?Datasets
+    // Dependent DataSeries ï¿?Datasets
     for (const auto& name : block.dependents())
     {
         const DependentSpec& spec = block.dependent_spec(name);
@@ -505,7 +505,7 @@ Block read_block(hid_t group, const std::string& block_name)
         int otype = H5Gget_objtype_by_idx(bg, i);
         if (otype != H5G_DATASET) continue;
 
-        // Check if this dataset has a dim_type attribute ï¿½?independent
+        // Check if this dataset has a dim_type attribute ï¿?independent
         hid_t dset = H5Dopen2(bg, oname.c_str(), H5P_DEFAULT);
         bool has_dim = H5Aexists(dset, "dim_type");
         H5Dclose(dset);

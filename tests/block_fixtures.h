@@ -38,7 +38,7 @@ namespace xdataset
             vecs.resize(rows);
             for (std::size_t i = 0; i < rows; ++i)
             {
-                Eigen::VectorXd v(width);
+                Eigen::RowVectorXd v(width);
                 for (Index j = 0; j < width; ++j)
                     v(j) = static_cast<double>(i * width + j + 1);
                 vecs.vector_at<double>(i) = v;
@@ -52,7 +52,7 @@ namespace xdataset
             mats.resize(rows);
             for (std::size_t i = 0; i < rows; ++i)
             {
-                Eigen::MatrixXd m(r, c);
+                xdataset::MatrixXRd m(r, c);
                 for (Index ri = 0; ri < r; ++ri)
                     for (Index ci = 0; ci < c; ++ci)
                         m(ri, ci) = static_cast<double>(i * r * c + ri * c + ci + 1);

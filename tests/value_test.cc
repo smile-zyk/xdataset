@@ -58,12 +58,12 @@ TEST(ValueTest, ConstructFromDataArray)
 
 TEST(ValueTest, MetadataMeas)
 {
-    Eigen::VectorXd ev5(5); ev5.setOnes();
+    Eigen::RowVectorXd ev5(5); ev5.setOnes();
     xdataset::Measurement m(ev5, Unit::parse("Hz"));
     Value v(m);
     EXPECT_EQ(v.data_kind(), DataKind::kVector);
     EXPECT_EQ(v.data_type(), DataType::kReal);
-    EXPECT_EQ(v.shape(), std::vector<Index>({5}));
+    EXPECT_EQ(v.shape(), xdataset::DataShape{5});
     EXPECT_TRUE(v.unit().same_dimension(Unit::parse("Hz")));
     EXPECT_EQ(v.rows(), 1);
 }

@@ -98,7 +98,7 @@ public:
 
     DataSeries();
 
-    DataSeries(DataKind kind, DataType dtype, const std::vector<Index>& shape);
+    DataSeries(DataKind kind, DataType dtype, const DataShape& shape);
 
     DataSeries(const DataSeries& other);
 
@@ -324,7 +324,7 @@ public:
 
     DataKind data_kind() const { return data_kind_; }
     DataType data_type() const { return data_type_; }
-    std::vector<Index> data_shape() const { return shape_; }
+    DataShape data_shape() const { return shape_; }
     const Unit& unit() const { return unit_; }
 
     //---- unit assignment & canonicalisation ----------------------------
@@ -347,16 +347,16 @@ public:
     // Return a canonicalised copy without modifying *this.
     DataSeries canonicalized() const;
 
+    /// Promote the dtype in-place: int -> real -> complex.  No-op if
+    /// already at or above target.  String is not promotable.
+    void promote_dtype(DataType target);
+
     /// True when the stored unit is already canonical (multiplier == 1, non-affine).
     bool is_canonicalized() const;
 
     //---------------------------------------------------------------------
 
-    Index element_count() const {
-        if (data_kind_ == DataKind::kScalar) return 1;
-        if (data_kind_ == DataKind::kVector) return shape_[0];
-        return shape_[0] * shape_[1];
-    }
+    Index element_count() const { return shape_.element_count(); }
 
     void resize(std::size_t n) { storage_->resize(n); }
     void clear() { storage_->resize(0); }
@@ -570,9 +570,9 @@ private:
         const std::vector<Index>& selected_rows,
         const std::vector<Index>& selected_cols) const;
 
-    static void validate_schema(DataKind kind, const std::vector<Index>& shape);
+    static void validate_schema(DataKind kind, const DataShape& shape);
 
-    static std::unique_ptr<SeriesStorage> make_storage(DataKind kind, DataType dtype, const std::vector<Index>& shape);
+    static std::unique_ptr<SeriesStorage> make_storage(DataKind kind, DataType dtype, const DataShape& shape);
 
     template <typename T>
     ScalarSeriesStorage<T>* scalar_storage() {
@@ -634,7 +634,7 @@ private:
 
     DataKind data_kind_;
     DataType data_type_;
-    std::vector<Index> shape_;
+    DataShape shape_;
     std::unique_ptr<SeriesStorage> storage_;
     Unit unit_;
 };
@@ -645,7 +645,7 @@ public:
 
     DataKind data_kind() const { return checked_owner()->data_kind(); }
     DataType data_type() const { return checked_owner()->data_type(); }
-    std::vector<Index> data_shape() const { return checked_owner()->data_shape(); }
+    DataShape data_shape() const { return checked_owner()->data_shape(); }
     Index index() const { return idx_; }
 
     template <typename T>
@@ -728,7 +728,7 @@ public:
 
     DataKind data_kind() const { return checked_owner()->data_kind(); }
     DataType data_type() const { return checked_owner()->data_type(); }
-    std::vector<Index> data_shape() const { return checked_owner()->data_shape(); }
+    DataShape data_shape() const { return checked_owner()->data_shape(); }
     Index index() const { return idx_; }
 
     template <typename T>

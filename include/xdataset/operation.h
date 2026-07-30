@@ -32,11 +32,61 @@ enum class OpCategory {
 };
 
 // =========================================================================
-// ShapeInfo -- return type of derive_shape callback
+// DataShape -- defined in xdataset_predefine.h.  Key members:
+//
+//   DataShape{}     → kScalar     ds.kind() / ds.element_count()
+//   DataShape{w}    → kVector
+//   DataShape{r,c}  → kMatrix
 // =========================================================================
-struct ShapeInfo {
-    DataKind           kind;
-    std::vector<Index> shape;
+
+// =========================================================================
+// RowBroadcastPlan -- row 维度的广播计划
+// =========================================================================
+//
+// 规则：size=1 的 operand 广播到 max size；>1 的必须全部相等。
+
+struct RowBroadcastPlan {
+    Index              result_size;
+    std::vector<bool>  broadcast;     // per-operand: true=始终取索引0
+
+    /// 核心算法：给定 N 个 operand 在 row 轴上的大小，计算广播计划。
+    /// 例: {1, 100}  → result_size=100, broadcast={true, false}
+    ///     {100,100} → result_size=100, broadcast={false,false}
+    static RowBroadcastPlan Compute(const std::vector<Index>& sizes);
+};
+
+// =========================================================================
+// OperandBroadcastShapeInfo -- 单个 operand 的 cell 内形状和广播信息
+// =========================================================================
+struct OperandBroadcastShapeInfo {
+    Index elements;        // cell 内元素总数
+    Index cols;            // scalar=1, vector=shape[0] (单行), matrix=shape[1]
+    bool  broadcast_row;   // row 维度是否广播
+    bool  broadcast_col;   // col 维度是否广播
+};
+
+// =========================================================================
+// ShapeBroadcastPlan -- cell 内元素广播计划（支持 Scalar/Vector/Matrix/Vec×Mat）
+// =========================================================================
+//
+// Vector 视为单行 (row=1, col=w)，与 Matrix 的 col 维对齐。
+// 每个维度独立广播：1→N，>1 的必须相等。
+//
+//   Vector [w] × Matrix [r, w]  → 广播行 (1→r)，列对齐 (w==w)
+//   Vector [w] × Matrix [r, c]  → w!=c 时抛异常
+//   Vector [1] × Matrix [r, c]  → 全广播 (1→r, 1→c)
+
+struct ShapeBroadcastPlan {
+    DataShape          result_shape;
+    Index              result_elements;
+    Index              result_cols;      // 1 for scalar, shape[0] for vector, shape[1] for matrix
+
+    std::vector<OperandBroadcastShapeInfo> ops;
+
+    static ShapeBroadcastPlan Make(const std::vector<DataShape>& operand_shapes,
+                                    const DataShape& result);
+
+    Index MapFlatIndex(Index result_flat, int k) const;
 };
 
 // =========================================================================
@@ -44,18 +94,24 @@ struct ShapeInfo {
 // =========================================================================
 struct ExecContextInfo {
     OpCategory         op;
-    ShapeInfo          shape;
     Index              rows;
+    DataShape          shape;
     DataType           dtype;
     Unit               unit;
 };
 
 // =========================================================================
+// Element-wise operation type (for unified T* loop)
+// =========================================================================
+template <typename T>
+using ElemOp = T (*)(T, T);
+
+// =========================================================================
 // Callback type aliases (C++11)
 // =========================================================================
 
-/// Shape derivation (kind + shape combined)
-typedef ShapeInfo (*DeriveShapeFunc)(const std::vector<ShapeInfo>& operand_shapes,
+/// Shape derivation — returns result DataShape (kind via ds.kind())
+typedef DataShape (*DeriveShapeFunc)(const std::vector<DataShape>& operand_shapes,
                                       OpCategory category);
 
 /// Type derivation
@@ -66,7 +122,7 @@ typedef DataType (*DeriveDtypeFunc)(const std::vector<DataType>& dtypes,
 typedef Unit (*DeriveUnitFunc)(const std::vector<Unit>& units,
                                 OpCategory category);
 
-/// Row derivation
+/// Row derivation — returns result row count
 typedef Index (*DeriveRowsFunc)(const std::vector<Index>& rows,
                                  OpCategory category);
 
@@ -107,7 +163,7 @@ struct OpTraits {
 };
 
 // =========================================================================
-// Operate -- unified entry point
+// Public API
 // =========================================================================
 
 /// Derive + execute. Only extracts parameters and forwards to callbacks;
@@ -120,9 +176,9 @@ XDATASET_API Value Operate(const std::vector<Value>& operands,
 // =========================================================================
 
 /// ── derive_shape ───────────────────────────────────────────────────
-XDATASET_API ShapeInfo DeriveShapeBroadcast(const std::vector<ShapeInfo>& operand_shapes,
+XDATASET_API DataShape DeriveShapeBroadcast(const std::vector<DataShape>& operand_shapes,
                                              OpCategory category);
-XDATASET_API ShapeInfo DeriveShapeConcat(const std::vector<ShapeInfo>& operand_shapes,
+XDATASET_API DataShape DeriveShapeConcat(const std::vector<DataShape>& operand_shapes,
                                           OpCategory category);
 
 /// ── derive_rows ────────────────────────────────────────────────────
@@ -138,7 +194,7 @@ XDATASET_API DataType DeriveDtypeForceInt(const std::vector<DataType>& dtypes,
                                            OpCategory category);
 
 /// ── derive_unit ────────────────────────────────────────────────────
-XDATASET_API Unit DeriveUnitAdd(const std::vector<Unit>& units,
+XDATASET_API Unit DeriveUnitSameDim(const std::vector<Unit>& units,
                                  OpCategory category);
 XDATASET_API Unit DeriveUnitMul(const std::vector<Unit>& units,
                                  OpCategory category);
@@ -150,7 +206,18 @@ XDATASET_API Unit DeriveUnitFirst(const std::vector<Unit>& units,
                                    OpCategory category);
 
 // =========================================================================
-// Predefined OpTraits instances (execute is NULL for now)
+// Predefined execute callbacks
+// =========================================================================
+
+XDATASET_API Value ExecuteBinaryArith(const ExecContextInfo& info,
+                                       const std::vector<Value>& ops);
+XDATASET_API Value ExecuteBinaryCmp(const ExecContextInfo& info,
+                                     const std::vector<Value>& ops);
+XDATASET_API Value ExecuteBinaryLogical(const ExecContextInfo& info,
+                                         const std::vector<Value>& ops);
+
+// =========================================================================
+// Predefined OpTraits instances
 // =========================================================================
 extern XDATASET_API const OpTraits kOpAdd;
 extern XDATASET_API const OpTraits kOpSub;

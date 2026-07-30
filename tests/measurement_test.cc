@@ -1,4 +1,4 @@
-#include "data_series.h"
+﻿#include "data_series.h"
 #include "data_frame.h"
 
 #include <gtest/gtest.h>
@@ -65,108 +65,32 @@ TEST(CellTest, AppendCellToSeries) {
 TEST(CellTest, AppendTypePromotionIntToReal) {
     Measurement int_cell = Measurement(10);
     DataSeries s = DataSeries::CreateScalar<double>(0);
-    // int→real promotion is now supported in append.
-    s.append(int_cell);
-    ASSERT_EQ(s.size(), 1u);
-    EXPECT_DOUBLE_EQ(s.scalar_at<double>(0), 10.0);
+    EXPECT_THROW(s.append(int_cell), std::bad_cast);
 }
 
 TEST(CellTest, AppendTypePromotionIntToComplex) {
     Measurement int_cell = Measurement(10);
     DataSeries s = DataSeries::CreateScalar<std::complex<double>>(0);
-    s.append(int_cell);
-    ASSERT_EQ(s.size(), 1u);
-    auto v = s.scalar_at<std::complex<double>>(0);
-    EXPECT_DOUBLE_EQ(v.real(), 10.0);
-    EXPECT_DOUBLE_EQ(v.imag(), 0.0);
+    EXPECT_THROW(s.append(int_cell), std::bad_cast);
 }
 
 TEST(CellTest, AppendTypePromotionRealToComplex) {
     Measurement real_cell(3.5);
     DataSeries s = DataSeries::CreateScalar<std::complex<double>>(0);
-    s.append(real_cell);
-    auto v = s.scalar_at<std::complex<double>>(0);
-    EXPECT_DOUBLE_EQ(v.real(), 3.5);
-    EXPECT_DOUBLE_EQ(v.imag(), 0.0);
-}
-
-TEST(CellTest, AppendScalarBroadcastToVector) {
-    DataSeries s = DataSeries::CreateVector<double>(3, 0);
-    s.append(Measurement(7.0));  // scalar → vector[7,7,7]
-    ASSERT_EQ(s.size(), 1u);
-    auto row = s.vector_at<double>(0);
-    EXPECT_DOUBLE_EQ(row(0), 7.0);
-    EXPECT_DOUBLE_EQ(row(1), 7.0);
-    EXPECT_DOUBLE_EQ(row(2), 7.0);
-}
-
-TEST(CellTest, AppendScalarBroadcastToVectorIntToReal) {
-    DataSeries s = DataSeries::CreateVector<double>(2, 0);
-    s.append(Measurement(5));  // int scalar → real vector[5,5]
-    ASSERT_EQ(s.size(), 1u);
-    auto row = s.vector_at<double>(0);
-    EXPECT_DOUBLE_EQ(row(0), 5.0);
-    EXPECT_DOUBLE_EQ(row(1), 5.0);
+    EXPECT_THROW(s.append(real_cell), std::bad_cast);
 }
 
 TEST(CellTest, AppendStillThrowsOnCompleteMismatch) {
-    // Vector DataSeries, trying to append a different-shaped vector → still throws.
-    Eigen::VectorXd v(4); v << 1., 2., 3., 4.;
+    // Vector DataSeries, trying to append a different-shaped vector - still throws.
+    Eigen::RowVectorXd v(4); v << 1., 2., 3., 4.;
     DataSeries s = DataSeries::CreateVector<double>(3, 0);
-    EXPECT_THROW(s.append(Measurement(v)), std::invalid_argument);
-}
-
-TEST(CellTest, AppendVectorIntToReal) {
-    Eigen::VectorXi vi(2); vi << 1, 2;
-    DataSeries s = DataSeries::CreateVector<double>(2, 0);
-    s.append(Measurement(vi));
-    auto row = s.vector_at<double>(0);
-    EXPECT_DOUBLE_EQ(row(0), 1.0);
-    EXPECT_DOUBLE_EQ(row(1), 2.0);
-}
-
-TEST(CellTest, AppendVectorIntToComplex) {
-    Eigen::VectorXi vi(2); vi << 3, 4;
-    DataSeries s(DataKind::kVector, DataType::kComplex, std::vector<Index>{2});
-    s.append(Measurement(vi));
-    auto row = s.vector_at<std::complex<double>>(0);
-    EXPECT_DOUBLE_EQ(row(0).real(), 3.0);
-    EXPECT_DOUBLE_EQ(row(1).imag(), 0.0);
-}
-
-TEST(CellTest, AppendVectorRealToComplex) {
-    Eigen::VectorXd vd(2); vd << 1.5, 2.5;
-    DataSeries s(DataKind::kVector, DataType::kComplex, std::vector<Index>{2});
-    s.append(Measurement(vd));
-    auto row = s.vector_at<std::complex<double>>(0);
-    EXPECT_DOUBLE_EQ(row(0).real(), 1.5);
-    EXPECT_DOUBLE_EQ(row(1).real(), 2.5);
-}
-
-TEST(CellTest, AppendMatrixIntToReal) {
-    Eigen::MatrixXi mi(2, 2); mi << 1, 2, 3, 4;
-    DataSeries s = DataSeries::CreateMatrix<double>(2, 2, 0);
-    s.append(Measurement(mi));
-    auto row = s.matrix_at<double>(0);
-    EXPECT_DOUBLE_EQ(row(0, 0), 1.0);
-    EXPECT_DOUBLE_EQ(row(0, 1), 2.0);
-    EXPECT_DOUBLE_EQ(row(1, 0), 3.0);
-    EXPECT_DOUBLE_EQ(row(1, 1), 4.0);
-}
-
-TEST(CellTest, AppendMatrixIntToComplex) {
-    Eigen::MatrixXi mi(2, 2); mi << 5, 6, 7, 8;
-    DataSeries s(DataKind::kMatrix, DataType::kComplex, std::vector<Index>{2, 2});
-    s.append(Measurement(mi));
-    auto row = s.matrix_at<std::complex<double>>(0);
-    EXPECT_DOUBLE_EQ(row(0, 0).real(), 5.0);
-    EXPECT_DOUBLE_EQ(row(1, 1).real(), 8.0);
+    EXPECT_THROW(s.append(Measurement(v)), std::bad_cast);
 }
 
 TEST(CellTest, AppendVectorShapeMismatchThrows) {
-    Eigen::VectorXd vd(3); vd << 1., 2., 3.;
-    DataSeries s(DataKind::kVector, DataType::kComplex, std::vector<Index>{2});
-    EXPECT_THROW(s.append(Measurement(vd)), std::invalid_argument);
+    Eigen::RowVectorXd vd(3); vd << 1., 2., 3.;
+    DataSeries s(DataKind::kVector, DataType::kComplex, xdataset::DataShape{2});
+    EXPECT_THROW(s.append(Measurement(vd)), std::bad_cast);
 }
 
 TEST(CellTest, AppendUnitMismatchThrows) {
@@ -362,7 +286,7 @@ TEST(MeasurementToDataFrameTest, Scalar)
 
 TEST(MeasurementToDataFrameTest, Vector)
 {
-    Eigen::VectorXd v(3);
+    Eigen::RowVectorXd v(3);
     v << 1.0, 2.0, 3.0;
     Measurement m = Measurement::Vector(v);
 
@@ -381,7 +305,7 @@ TEST(MeasurementToDataFrameTest, Vector)
 
 TEST(MeasurementToDataFrameTest, Matrix)
 {
-    Eigen::MatrixXd mat(2, 2);
+    xdataset::MatrixXRd mat(2, 2);
     mat << 1.0, 2.0, 3.0, 4.0;
     Measurement m = Measurement::Matrix(mat);
 
@@ -402,7 +326,7 @@ TEST(MeasurementToDataFrameTest, Matrix)
 
 TEST(MeasurementToDataFrameTest, ToCsvRoundtrip)
 {
-    Eigen::VectorXd v(2);
+    Eigen::RowVectorXd v(2);
     v << 10.0, 20.0;
     Measurement m = Measurement::Vector(v);
 

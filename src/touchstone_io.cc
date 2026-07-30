@@ -1,4 +1,4 @@
-#include "touchstone_io.h"
+﻿#include "touchstone_io.h"
 
 #include "block.h"
 #include "data_array.h"
@@ -347,7 +347,7 @@ public:
             throw std::runtime_error(
                 "Touchstone: self data must be a complex matrix");
 
-        const std::vector<Index>& shape = s_data.data_shape();
+        const DataShape& shape = s_data.data_shape();
         if (shape.size() != 2 || shape[0] != shape[1])
             throw std::runtime_error(
                 "Touchstone: S matrix must be square (NxN), got " +

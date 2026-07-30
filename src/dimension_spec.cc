@@ -1,4 +1,4 @@
-﻿#include "dimension_spec.h"
+#include "dimension_spec.h"
 #include <cstddef>
 #include <stdexcept>
 

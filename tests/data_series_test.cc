@@ -226,9 +226,9 @@ TEST(CopyMoveTest, MoveAssignmentTransfersOwnership) {
 TEST(VectorTest, CreateAndWrite) {
     DataSeries vecs(DataKind::kVector, DataType::kReal, {4});
     vecs.resize(3);
-    vecs.vector_at<double>(0) = Eigen::Vector4d(1, 0, 0, 0);
-    vecs.vector_at<double>(1) = Eigen::Vector4d(0, 1, 0, 0);
-    vecs.vector_at<double>(2) = Eigen::Vector4d(0, 0, 1, 0);
+    vecs.vector_at<double>(0) = Eigen::RowVector4d(1, 0, 0, 0);
+    vecs.vector_at<double>(1) = Eigen::RowVector4d(0, 1, 0, 0);
+    vecs.vector_at<double>(2) = Eigen::RowVector4d(0, 0, 1, 0);
 
     EXPECT_EQ(vecs.size(), 3u);
     EXPECT_EQ(vecs.element_count(), 4);
@@ -240,15 +240,15 @@ TEST(VectorTest, CreateAndWrite) {
 TEST(VectorTest, DotProductBetweenRows) {
     DataSeries vecs(DataKind::kVector, DataType::kReal, {4});
     vecs.resize(2);
-    vecs.vector_at<double>(0) = Eigen::Vector4d(1, 0, 0, 0);
-    vecs.vector_at<double>(1) = Eigen::Vector4d(0, 1, 0, 0);
+    vecs.vector_at<double>(0) = Eigen::RowVector4d(1, 0, 0, 0);
+    vecs.vector_at<double>(1) = Eigen::RowVector4d(0, 1, 0, 0);
     EXPECT_DOUBLE_EQ(vecs.vector_at<double>(0).dot(vecs.vector_at<double>(1)), 0.0);
 }
 
 TEST(VectorTest, AppendGrowsSize) {
     DataSeries vecs(DataKind::kVector, DataType::kReal, {4});
     vecs.resize(2);
-    Eigen::Matrix<double, Eigen::Dynamic, 1> v(4);
+    Eigen::Matrix<double, 1, Eigen::Dynamic> v(4);
     v << 0.5, 0.5, 0.5, 0.5;
     vecs.append(Measurement(v));
     EXPECT_EQ(vecs.size(), 3u);
@@ -345,10 +345,10 @@ TEST(VectorTest, DynamicAppendWithoutInitialRowCount) {
     DataSeries vecs = DataSeries::CreateVector<double>(3);
     EXPECT_EQ(vecs.size(), 0u);
 
-    Eigen::Vector3d a(1.0, 2.0, 3.0);
-    Eigen::Vector3d b(4.0, 5.0, 6.0);
-    vecs.append(Measurement(Eigen::VectorXd(a)));
-    vecs.append(Measurement(Eigen::VectorXd(b)));
+    Eigen::RowVector3d a(1.0, 2.0, 3.0);
+    Eigen::RowVector3d b(4.0, 5.0, 6.0);
+    vecs.append(Measurement(Eigen::RowVectorXd(a)));
+    vecs.append(Measurement(Eigen::RowVectorXd(b)));
 
     ASSERT_EQ(vecs.size(), 2u);
     EXPECT_DOUBLE_EQ(vecs.vector_at<double>(1)(2), 6.0);
@@ -367,7 +367,7 @@ TEST(VectorTest, ComplexVector) {
     using cd = std::complex<double>;
     DataSeries vecs(DataKind::kVector, DataType::kComplex, {2});
     vecs.resize(1);
-    Eigen::Matrix<cd, Eigen::Dynamic, 1> v(2);
+    Eigen::Matrix<cd, 1, Eigen::Dynamic> v(2);
     v(0) = cd(1.0, 2.0);
     v(1) = cd(3.0, 4.0);
     vecs.vector_at<cd>(0) = v;
@@ -388,7 +388,7 @@ TEST(VectorExceptionTest, VectorAtOutOfRange) {
 TEST(VectorExceptionTest, AppendWrongWidthThrows) {
     DataSeries vecs(DataKind::kVector, DataType::kReal, {3});
     vecs.resize(1);
-    Eigen::Matrix<double, Eigen::Dynamic, 1> bad(5);
+    Eigen::Matrix<double, 1, Eigen::Dynamic> bad(5);
     bad.setZero();
     EXPECT_THROW(vecs.append(Measurement(bad)), std::invalid_argument);
 }
@@ -409,7 +409,7 @@ TEST(MatrixTest, CreateAndMetadata) {
     EXPECT_EQ(mats.size(), 3u);
     EXPECT_EQ(mats.data_kind(), DataKind::kMatrix);
     EXPECT_EQ(mats.element_count(), 9);
-    std::vector<Index> shape = mats.data_shape();
+    xdataset::DataShape shape = mats.data_shape();
     ASSERT_EQ(shape.size(), 2u);
     EXPECT_EQ(shape[0], 3);
     EXPECT_EQ(shape[1], 3);
@@ -428,15 +428,15 @@ TEST(MatrixTest, TraceAndProduct) {
     mats.matrix_at<double>(0) = Eigen::Matrix3d::Identity();
     mats.matrix_at<double>(1) = Eigen::Matrix3d::Ones() * 2.0;
     EXPECT_DOUBLE_EQ(mats.matrix_at<double>(1).trace(), 6.0);
-    Eigen::MatrixXd product = mats.matrix_at<double>(0) * mats.matrix_at<double>(1);
+    xdataset::MatrixXRd product = mats.matrix_at<double>(0) * mats.matrix_at<double>(1);
     EXPECT_DOUBLE_EQ(product.sum(), 18.0);
 }
 
 TEST(MatrixTest, AppendGrowsSize) {
     DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
     mats.resize(2);
-    Eigen::MatrixXd m = Eigen::Matrix3d::Random();
-    mats.append(Measurement(Eigen::MatrixXd(m)));
+    xdataset::MatrixXRd m = Eigen::Matrix3d::Random();
+    mats.append(Measurement(xdataset::MatrixXRd(m)));
     EXPECT_EQ(mats.size(), 3u);
 }
 
@@ -462,7 +462,7 @@ TEST(MatrixTest, RotationMatrix) {
     DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
     mats.resize(1);
     Eigen::Matrix3d rot =
-        Eigen::AngleAxisd(0.5, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+        Eigen::AngleAxisd(0.5, Eigen::RowVector3d::UnitZ()).toRotationMatrix();
     mats.matrix_at<double>(0) = rot;
     EXPECT_NEAR(mats.matrix_at<double>(0).determinant(), 1.0, 1e-12);
 }
@@ -559,8 +559,8 @@ TEST(MatrixTest, DynamicAppendWithoutInitialRowCount) {
     a << 1, 2, 3, 4;
     Eigen::Matrix2d b;
     b << 5, 6, 7, 8;
-    mats.append(Measurement(Eigen::MatrixXd(a)));
-    mats.append(Measurement(Eigen::MatrixXd(b)));
+    mats.append(Measurement(xdataset::MatrixXRd(a)));
+    mats.append(Measurement(xdataset::MatrixXRd(b)));
 
     ASSERT_EQ(mats.size(), 2u);
     EXPECT_DOUBLE_EQ(mats.matrix_at<double>(1)(1, 0), 7.0);
@@ -579,7 +579,7 @@ TEST(MatrixExceptionTest, MatrixAtOutOfRange) {
 TEST(MatrixExceptionTest, AppendWrongShapeThrows) {
     DataSeries mats(DataKind::kMatrix, DataType::kReal, {2, 2});
     mats.resize(1);
-    Eigen::MatrixXd bad(3, 3);
+    xdataset::MatrixXRd bad(3, 3);
     bad.setZero();
     EXPECT_THROW(mats.append(Measurement(bad)), std::invalid_argument);
 }

@@ -107,14 +107,9 @@ namespace {
 //  Helpers: element-level access
 // =========================================================================
 
-/// Flat element count: Scalar=1, Vector=width, Matrix=rowsxcols.
+/// Flat element count: delegates to Measurement::element_count().
 Index meas_element_count(const Measurement& m) {
-    switch (m.data_kind()) {
-        case DataKind::kScalar: return 1;
-        case DataKind::kVector: return m.shape()[0];
-        case DataKind::kMatrix: return m.shape()[0] * m.shape()[1];
-    }
-    return 0;  // unreachable
+    return m.element_count();
 }
 
 /// Read element at flat index, promoting Integer -> double.
@@ -181,12 +176,12 @@ int meas_as_int(const Measurement& m, Index i) {
 Measurement make_scalar_real(double v, const Unit& u)            { return {v, u}; }
 Measurement make_scalar_int  (int v,    const Unit& u)            { return {v, u}; }
 Measurement make_scalar_cplx (std::complex<double> v, const Unit& u) { return {v, u}; }
-Measurement make_vector_real (const Eigen::VectorXd& v,  const Unit& u) { return {v, u}; }
-Measurement make_vector_int  (const Eigen::VectorXi& v,  const Unit& u) { return {v, u}; }
-Measurement make_vector_cplx (const Eigen::VectorXcd& v, const Unit& u) { return {v, u}; }
-Measurement make_matrix_real (const Eigen::MatrixXd& v,  const Unit& u) { return {v, u}; }
-Measurement make_matrix_int  (const Eigen::MatrixXi& v,  const Unit& u) { return {v, u}; }
-Measurement make_matrix_cplx (const Eigen::MatrixXcd& v, const Unit& u) { return {v, u}; }
+Measurement make_vector_real (const Eigen::RowVectorXd& v,  const Unit& u) { return {v, u}; }
+Measurement make_vector_int  (const Eigen::RowVectorXi& v,  const Unit& u) { return {v, u}; }
+Measurement make_vector_cplx (const Eigen::RowVectorXcd& v, const Unit& u) { return {v, u}; }
+Measurement make_matrix_real (const MatrixXRd& v,  const Unit& u) { return {v, u}; }
+Measurement make_matrix_int  (const MatrixXRi& v,  const Unit& u) { return {v, u}; }
+Measurement make_matrix_cplx (const MatrixXRcd& v, const Unit& u) { return {v, u}; }
 
 /// Extract the effective shape from the non-Scalar operand.
 inline void get_shape(const Measurement& a, const Measurement& b,
@@ -301,7 +296,7 @@ Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
                 meas_as_complex(a, 0), meas_as_complex(b, 0)), result_unit);
         }
         if (res_kind == DataKind::kVector) {
-            Eigen::VectorXcd v(n_elems);
+            Eigen::RowVectorXcd v(n_elems);
             for (Index i = 0; i < n_elems; ++i)
                 v(i) = tr.cplx_op(meas_as_complex(a, a_broad ? 0 : i),
                                    meas_as_complex(b, b_broad ? 0 : i));
@@ -309,7 +304,7 @@ Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
         }
         // Matrix
         Index rows, cols; get_shape(a, b, rows, cols);
-        Eigen::MatrixXcd m(rows, cols);
+        MatrixXRcd m(rows, cols);
         for (Index r = 0; r < rows; ++r) {
             for (Index c = 0; c < cols; ++c) {
                 Index ai = a_broad ? 0 : r * cols + c;
@@ -340,7 +335,7 @@ Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
                 result_unit);
         }
         if (res_kind == DataKind::kVector) {
-            Eigen::VectorXi v(n_elems);
+            Eigen::RowVectorXi v(n_elems);
             for (Index i = 0; i < n_elems; ++i) {
                 if (pure_int)
                     v(i) = tr.int_op(meas_as_int(a, a_broad ? 0 : i), meas_as_int(b, b_broad ? 0 : i));
@@ -355,7 +350,7 @@ Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
         }
         // Matrix
         Index rows, cols; get_shape(a, b, rows, cols);
-        Eigen::MatrixXi m(rows, cols);
+        MatrixXRi m(rows, cols);
         for (Index r = 0; r < rows; ++r) {
             for (Index c = 0; c < cols; ++c) {
                 Index ai = a_broad ? 0 : r * cols + c;
@@ -379,7 +374,7 @@ Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
             meas_as_double(a, 0), meas_as_double(b, 0)), result_unit);
     }
     if (res_kind == DataKind::kVector) {
-        Eigen::VectorXd v(n_elems);
+        Eigen::RowVectorXd v(n_elems);
         for (Index i = 0; i < n_elems; ++i)
             v(i) = tr.real_op(meas_as_double(a, a_broad ? 0 : i),
                                meas_as_double(b, b_broad ? 0 : i));
@@ -387,7 +382,7 @@ Measurement meas_binop(const Measurement& lhs, const Measurement& rhs,
     }
     // Matrix real
     Index rows, cols; get_shape(a, b, rows, cols);
-    Eigen::MatrixXd mat(rows, cols);
+    MatrixXRd mat(rows, cols);
     for (Index r = 0; r < rows; ++r)
         for (Index c = 0; c < cols; ++c) {
             Index ai = a_broad ? 0 : r * cols + c;
@@ -612,14 +607,14 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
                 std::pow(meas_as_complex(a, 0), meas_as_complex(exponent, 0)),
                 result_unit);
         if (res_kind == DataKind::kVector) {
-            Eigen::VectorXcd v(n_elems);
+            Eigen::RowVectorXcd v(n_elems);
             for (Index i = 0; i < n_elems; ++i)
                 v(i) = std::pow(meas_as_complex(a, a_broad ? 0 : i),
                                 meas_as_complex(exponent, e_broad ? 0 : i));
             return make_vector_cplx(v, result_unit);
         }
         Index rows, cols; get_shape(a, exponent, rows, cols);
-        Eigen::MatrixXcd m(rows, cols);
+        MatrixXRcd m(rows, cols);
         for (Index r = 0; r < rows; ++r)
             for (Index c = 0; c < cols; ++c) {
                 Index ai = a_broad ? 0 : r * cols + c;
@@ -636,14 +631,14 @@ Measurement pow(const Measurement& base, const Measurement& exponent) {
             std::pow(meas_as_double(a, 0), meas_as_double(exponent, 0)),
             result_unit);
     if (res_kind == DataKind::kVector) {
-        Eigen::VectorXd v(n_elems);
+        Eigen::RowVectorXd v(n_elems);
         for (Index i = 0; i < n_elems; ++i)
             v(i) = std::pow(meas_as_double(a, a_broad ? 0 : i),
                             meas_as_double(exponent, e_broad ? 0 : i));
         return make_vector_real(v, result_unit);
     }
     Index rows, cols; get_shape(a, exponent, rows, cols);
-    Eigen::MatrixXd mat(rows, cols);
+    MatrixXRd mat(rows, cols);
     for (Index r = 0; r < rows; ++r)
         for (Index c = 0; c < cols; ++c) {
             Index ai = a_broad ? 0 : r * cols + c;
@@ -738,17 +733,17 @@ Measurement Measurement::operator-() const {
             Index n = meas_element_count(a);
             switch (a.data_type()) {
                 case DataType::kInteger: {
-                    Eigen::VectorXi v(n);
+                    Eigen::RowVectorXi v(n);
                     for (Index i = 0; i < n; ++i) v(i) = -meas_as_int(a, i);
                     return make_vector_int(v, a.unit());
                 }
                 case DataType::kReal: {
-                    Eigen::VectorXd v(n);
+                    Eigen::RowVectorXd v(n);
                     for (Index i = 0; i < n; ++i) v(i) = -meas_as_double(a, i);
                     return make_vector_real(v, a.unit());
                 }
                 case DataType::kComplex: {
-                    Eigen::VectorXcd v(n);
+                    Eigen::RowVectorXcd v(n);
                     for (Index i = 0; i < n; ++i) v(i) = -meas_as_complex(a, i);
                     return make_vector_cplx(v, a.unit());
                 }
@@ -760,21 +755,21 @@ Measurement Measurement::operator-() const {
             Index rows = a.shape()[0], cols = a.shape()[1];
             switch (a.data_type()) {
                 case DataType::kInteger: {
-                    Eigen::MatrixXi m(rows, cols);
+                    MatrixXRi m(rows, cols);
                     for (Index r = 0; r < rows; ++r)
                         for (Index c = 0; c < cols; ++c)
                             m(r, c) = -meas_as_int(a, r * cols + c);
                     return make_matrix_int(m, a.unit());
                 }
                 case DataType::kReal: {
-                    Eigen::MatrixXd m(rows, cols);
+                    MatrixXRd m(rows, cols);
                     for (Index r = 0; r < rows; ++r)
                         for (Index c = 0; c < cols; ++c)
                             m(r, c) = -meas_as_double(a, r * cols + c);
                     return make_matrix_real(m, a.unit());
                 }
                 case DataType::kComplex: {
-                    Eigen::MatrixXcd m(rows, cols);
+                    MatrixXRcd m(rows, cols);
                     for (Index r = 0; r < rows; ++r)
                         for (Index c = 0; c < cols; ++c)
                             m(r, c) = -meas_as_complex(a, r * cols + c);
@@ -811,13 +806,13 @@ Measurement Measurement::operator!() const {
             return make_scalar_int(not_val(a, 0), Unit());
         case DataKind::kVector: {
             Index n = meas_element_count(a);
-            Eigen::VectorXi v(n);
+            Eigen::RowVectorXi v(n);
             for (Index i = 0; i < n; ++i) v(i) = not_val(a, i);
             return make_vector_int(v, Unit());
         }
         case DataKind::kMatrix: {
             Index rows = a.shape()[0], cols = a.shape()[1];
-            Eigen::MatrixXi m(rows, cols);
+            MatrixXRi m(rows, cols);
             for (Index r = 0; r < rows; ++r)
                 for (Index c = 0; c < cols; ++c)
                     m(r, c) = not_val(a, r * cols + c);
@@ -837,12 +832,12 @@ Measurement Measurement::operator~() const {
     Index n = meas_element_count(a);
 
     if (a.data_kind() == DataKind::kVector) {
-        Eigen::VectorXi v(n);
+        Eigen::RowVectorXi v(n);
         for (Index i = 0; i < n; ++i) v(i) = ~meas_as_int(a, i);
         return make_vector_int(v, Unit());
     }
     Index rows = a.shape()[0], cols = a.shape()[1];
-    Eigen::MatrixXi m(rows, cols);
+    MatrixXRi m(rows, cols);
     for (Index r = 0; r < rows; ++r)
         for (Index c = 0; c < cols; ++c)
             m(r, c) = ~meas_as_int(a, r * cols + c);
@@ -879,9 +874,9 @@ void validate_ds_ds(const DataSeries& a, const DataSeries& b,
 // --- result shape for DataSeries vs DataSeries ----------------------------------
 //     Returns the shape of the non-Scalar side; validates same-shape when
 //     both sides are non-Scalar (Vector vs Vector, Matrix vs Matrix).
-std::vector<Index> ds_ds_result_shape(const DataSeries& a, const DataSeries& b) {
+DataShape ds_ds_result_shape(const DataSeries& a, const DataSeries& b) {
     if (a.data_kind() == DataKind::kScalar && b.data_kind() == DataKind::kScalar)
-        return {};
+        return DataShape{};
     if (a.data_kind() == DataKind::kScalar) return b.data_shape();
     if (b.data_kind() == DataKind::kScalar) return a.data_shape();
 
@@ -988,7 +983,7 @@ void validate_ds_meas(const DataSeries& a, const Measurement& m,
 }
 
 // --- result shape for DataSeries vs Measurement ---------------------------------
-std::vector<Index> ds_meas_result_shape(const DataSeries& ds, const Measurement& m) {
+DataShape ds_meas_result_shape(const DataSeries& ds, const Measurement& m) {
     if (ds.data_kind() == DataKind::kScalar) return m.shape();
     return ds.data_shape();
 }
@@ -2178,20 +2173,20 @@ Measurement Concat(const std::vector<Measurement>& values)
         }
         if (dtype == DataType::kInteger)
         {
-            Eigen::VectorXi v(N);
+            Eigen::RowVectorXi v(N);
             for (Index i = 0; i < N; ++i)
                 v(i) = mutable_values[static_cast<std::size_t>(i)].as_scalar<int>();
             return make_vector_int(v, result_unit);
         }
         if (dtype == DataType::kReal)
         {
-            Eigen::VectorXd v(N);
+            Eigen::RowVectorXd v(N);
             for (Index i = 0; i < N; ++i)
                 v(i) = meas_to_double_scalar(mutable_values[static_cast<std::size_t>(i)], 0);
             return make_vector_real(v, result_unit);
         }
         {
-            Eigen::VectorXcd v(N);
+            Eigen::RowVectorXcd v(N);
             for (Index i = 0; i < N; ++i)
                 v(i) = meas_to_complex_scalar(mutable_values[static_cast<std::size_t>(i)], 0);
             return make_vector_cplx(v, result_unit);
@@ -2211,21 +2206,21 @@ Measurement Concat(const std::vector<Measurement>& values)
         }
         if (dtype == DataType::kInteger)
         {
-            Eigen::MatrixXi m(N, W);
+            MatrixXRi m(N, W);
             for (Index i = 0; i < N; ++i)
-                m.row(i) = mutable_values[static_cast<std::size_t>(i)].as_vector<int>().transpose();
+                m.row(i) = mutable_values[static_cast<std::size_t>(i)].as_vector<int>();
             return make_matrix_int(m, result_unit);
         }
         if (dtype == DataType::kReal)
         {
-            Eigen::MatrixXd m(N, W);
+            MatrixXRd m(N, W);
             for (Index i = 0; i < N; ++i)
                 for (Index j = 0; j < W; ++j)
                     m(i, j) = meas_to_double_scalar(mutable_values[static_cast<std::size_t>(i)], j);
             return make_matrix_real(m, result_unit);
         }
         {
-            Eigen::MatrixXcd m(N, W);
+            MatrixXRcd m(N, W);
             for (Index i = 0; i < N; ++i)
                 for (Index j = 0; j < W; ++j)
                     m(i, j) = meas_to_complex_scalar(mutable_values[static_cast<std::size_t>(i)], j);
@@ -2382,7 +2377,7 @@ DataArray Concat(const std::vector<DataArray>& values)
 }
 
 // =========================================================================
-// Combine — collect N Measurements into a DataArray (one per row)
+// Combine - collect N Measurements into a DataArray (one per row)
 // =========================================================================
 
 DataArray Combine(const std::vector<Measurement>& values)
@@ -2398,7 +2393,7 @@ DataArray Combine(const std::vector<Measurement>& values)
     // First non-Scalar determines the result kind & shape; Scalars broadcast.
     DataKind  result_kind  = DataKind::kScalar;
     DataType  result_dtype = mutable_values[0].data_type();
-    std::vector<Index> result_shape;
+    DataShape result_shape;
 
     for (std::size_t i = 0; i < mutable_values.size(); ++i)
     {
