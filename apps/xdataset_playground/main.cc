@@ -1,6 +1,7 @@
 #include "block.h"
 #include "dataset.h"
 #include "dataset_io.h"
+#include "operation.h"
 #include "unit.h"
 
 #include <cmath>
@@ -311,7 +312,7 @@ int main()
 
         Measurement dist(3.0, Unit::parse("meter"));
         Measurement time(2.0, Unit::parse("sec"));
-        Measurement speed = dist / time;
+        Measurement speed = OperationDiv(Value(dist), Value(time)).as_meas();
         std::cout << "\nSpeed = " << speed.to_string() << std::endl;
         std::cout << "Speed value = " << speed.as_scalar<double>() << std::endl;
         std::cout << "Speed unit = " << speed.unit().to_string() << std::endl;

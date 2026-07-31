@@ -2,319 +2,89 @@
 //  xdataset -- operation_test.cc
 // =============================================================================
 //
-//  Tests for derive callbacks and the Operate framework.
+//  Tests for the public Operation* API.
 
 #include "operation.h"
+#include "block_fixtures.h"
 
 #include <gtest/gtest.h>
 
 #include <vector>
 
+using xdataset::Block;
+using xdataset::DataArray;
+using xdataset::DataArrayKind;
 using xdataset::DataKind;
 using xdataset::DataType;
-using xdataset::ExecContextInfo;
 using xdataset::Index;
-using xdataset::OpCategory;
-using xdataset::Operate;
-using xdataset::OpTraits;
 using xdataset::Unit;
 using xdataset::Value;
-using xdataset::kOpAdd;
-using xdataset::kOpSub;
+using xdataset::VecXd;
+using xdataset::VecXi;
+using xdataset::VecXcd;
+using xdataset::VecXs;
+using xdataset::MatXd;
+using xdataset::MatXi;
+using xdataset::MatXcd;
+using xdataset::MatXs;
+using xdataset::block_fixtures::MakeBaseCreateInfo;
 
-// =========================================================================
-//  Derive callbacks
-// =========================================================================
-
-TEST(DeriveTest, ShapeBroadcastScalarScalar)
-{
-    std::vector<xdataset::DataShape> ops = {
-        xdataset::DataShape{},
-        xdataset::DataShape{}
-    };
-    auto ds = xdataset::DeriveShapeBroadcast(ops, OpCategory::kAdd);
-    EXPECT_EQ(ds.kind(), DataKind::kScalar);
-    EXPECT_TRUE(ds.empty());
-}
-
-TEST(DeriveTest, ShapeBroadcastScalarVector)
-{
-    std::vector<Index> vshape = {5};
-    std::vector<xdataset::DataShape> ops = {
-        xdataset::DataShape{},
-        xdataset::DataShape(vshape)
-    };
-    auto ds = xdataset::DeriveShapeBroadcast(ops, OpCategory::kAdd);
-    EXPECT_EQ(ds.kind(), DataKind::kVector);
-    EXPECT_EQ(ds.dims, vshape);
-}
-
-TEST(DeriveTest, ShapeBroadcastVectorVectorSame)
-{
-    std::vector<Index> s = {3};
-    std::vector<xdataset::DataShape> ops = {
-        xdataset::DataShape(s),
-        xdataset::DataShape(s)
-    };
-    auto ds = xdataset::DeriveShapeBroadcast(ops, OpCategory::kMul);
-    EXPECT_EQ(ds.kind(), DataKind::kVector);
-    EXPECT_EQ(ds.dims, s);
-}
-
-TEST(DeriveTest, ShapeBroadcastVectorVectorMismatchThrows)
-{
-    std::vector<xdataset::DataShape> ops = {
-        xdataset::DataShape{3},
-        xdataset::DataShape{4}
-    };
-    EXPECT_THROW(xdataset::DeriveShapeBroadcast(ops, OpCategory::kAdd), std::invalid_argument);
-}
-
-TEST(DeriveTest, ShapeBroadcastVectorMatrixThrows)
-{
-    // Vector [5] x Matrix [2,2] -> col dim mismatch (5 vs 2)
-    std::vector<xdataset::DataShape> ops = {
-        xdataset::DataShape{5},
-        xdataset::DataShape{2, 2}
-    };
-    EXPECT_THROW(xdataset::DeriveShapeBroadcast(ops, OpCategory::kAdd), std::invalid_argument);
-}
-
-TEST(DeriveTest, ShapeBroadcastVectorMatrixOk)
-{
-    // Vector [2] x Matrix [3,2] -> row broadcast (1->3), col matches
-    std::vector<xdataset::DataShape> ops = {
-        xdataset::DataShape{2},
-        xdataset::DataShape{3, 2}
-    };
-    auto ds = xdataset::DeriveShapeBroadcast(ops, OpCategory::kAdd);
-    EXPECT_EQ(ds.kind(), DataKind::kMatrix);
-    EXPECT_EQ(ds.dims, std::vector<Index>({3, 2}));
-}
-
-TEST(DeriveTest, ShapeBroadcastMatrixRowBroadcast)
-{
-    // Matrix [1, 4] x Matrix [3, 4] -> row broadcast (1->3), col matches
-    std::vector<xdataset::DataShape> ops = {
-        xdataset::DataShape{1, 4},
-        xdataset::DataShape{3, 4}
-    };
-    auto ds = xdataset::DeriveShapeBroadcast(ops, OpCategory::kAdd);
-    EXPECT_EQ(ds.kind(), DataKind::kMatrix);
-    EXPECT_EQ(ds.dims, std::vector<Index>({3, 4}));
-}
-
-TEST(DeriveTest, ShapeBroadcastMatrixColBroadcast)
-{
-    // Matrix [3, 1] x Matrix [3, 5] -> col broadcast (1->5), row matches
-    std::vector<xdataset::DataShape> ops = {
-        xdataset::DataShape{3, 1},
-        xdataset::DataShape{3, 5}
-    };
-    auto ds = xdataset::DeriveShapeBroadcast(ops, OpCategory::kAdd);
-    EXPECT_EQ(ds.kind(), DataKind::kMatrix);
-    EXPECT_EQ(ds.dims, std::vector<Index>({3, 5}));
-}
-
-TEST(DeriveTest, ShapeBroadcastMatrixRowColMismatchThrows)
-{
-    // Matrix [2, 3] x Matrix [4, 3] -> both >1 and differ
-    std::vector<xdataset::DataShape> ops = {
-        xdataset::DataShape{2, 3},
-        xdataset::DataShape{4, 3}
-    };
-    EXPECT_THROW(xdataset::DeriveShapeBroadcast(ops, OpCategory::kAdd), std::invalid_argument);
-}
-
-TEST(DeriveTest, ShapeBroadcastVectorVectorWidthOneBroadcast)
-{
-    // Vector [1] x Vector [5] -> col broadcast (1->5)
-    std::vector<xdataset::DataShape> ops = {
-        xdataset::DataShape{1},
-        xdataset::DataShape{5}
-    };
-    auto ds = xdataset::DeriveShapeBroadcast(ops, OpCategory::kAdd);
-    EXPECT_EQ(ds.kind(), DataKind::kVector);
-    EXPECT_EQ(ds.dims, std::vector<Index>({5}));
-}
-
-TEST(DeriveTest, ShapeConcatScalars)
-{
-    std::vector<xdataset::DataShape> ops = {
-        xdataset::DataShape{},
-        xdataset::DataShape{},
-        xdataset::DataShape{}
-    };
-    auto ds = xdataset::DeriveShapeConcat(ops, OpCategory::kConcat);
-    EXPECT_EQ(ds.kind(), DataKind::kVector);
-    EXPECT_EQ(ds.dims, std::vector<Index>({3}));
-}
-
-TEST(DeriveTest, ShapeConcatVectors)
-{
-    std::vector<xdataset::DataShape> ops = {
-        xdataset::DataShape{4},
-        xdataset::DataShape{4}
-    };
-    auto ds = xdataset::DeriveShapeConcat(ops, OpCategory::kConcat);
-    EXPECT_EQ(ds.kind(), DataKind::kMatrix);
-    EXPECT_EQ(ds.dims, std::vector<Index>({2, 4}));
-}
-
-TEST(DeriveTest, ShapeConcatKindMismatchThrows)
-{
-    std::vector<xdataset::DataShape> ops = {
-        xdataset::DataShape{},
-        xdataset::DataShape{5}
-    };
-    EXPECT_THROW(xdataset::DeriveShapeConcat(ops, OpCategory::kConcat), std::invalid_argument);
-}
-
-TEST(DeriveTest, DtypePromote)
-{
-    std::vector<DataType> dt = {DataType::kInteger, DataType::kReal};
-    EXPECT_EQ(xdataset::DeriveDtypePromote(dt, OpCategory::kAdd), DataType::kReal);
-}
-
-TEST(DeriveTest, DtypePromoteComplex)
-{
-    std::vector<DataType> dt = {DataType::kInteger, DataType::kReal, DataType::kComplex};
-    EXPECT_EQ(xdataset::DeriveDtypePromote(dt, OpCategory::kAdd), DataType::kComplex);
-}
-
-TEST(DeriveTest, DtypeDivIntInt)
-{
-    std::vector<DataType> dt = {DataType::kInteger, DataType::kInteger};
-    EXPECT_EQ(xdataset::DeriveDtypeDiv(dt, OpCategory::kDiv), DataType::kReal);
-}
-
-TEST(DeriveTest, DtypeForceInt)
-{
-    std::vector<DataType> dt = {DataType::kReal, DataType::kComplex};
-    EXPECT_EQ(xdataset::DeriveDtypeForceInt(dt, OpCategory::kEq), DataType::kInteger);
-}
-
-TEST(DeriveTest, RowsBroadcast)
-{
-    std::vector<Index> rows = {3, 3};
-    EXPECT_EQ(xdataset::DeriveRowsBroadcast(rows, OpCategory::kAdd), 3);
-}
-
-TEST(DeriveTest, RowsBroadcastWithOne)
-{
-    std::vector<Index> rows = {3, 1, 3};
-    EXPECT_EQ(xdataset::DeriveRowsBroadcast(rows, OpCategory::kAdd), 3);
-}
-
-TEST(DeriveTest, RowsBroadcastAllOne)
-{
-    std::vector<Index> rows = {1, 1, 1};
-    EXPECT_EQ(xdataset::DeriveRowsBroadcast(rows, OpCategory::kAdd), 1);
-}
-
-TEST(DeriveTest, RowsBroadcastMismatchThrows)
-{
-    std::vector<Index> rows = {3, 5};
-    EXPECT_THROW(xdataset::DeriveRowsBroadcast(rows, OpCategory::kAdd), std::invalid_argument);
-}
-
-// =========================================================================
-//  Operate framework -- derivation pipeline tests
-// =========================================================================
-
-namespace {
-
-xdataset::Value dummy_execute(const ExecContextInfo& info,
-                               const std::vector<Value>& /*ops*/) {
-    int tag = static_cast<int>(info.shape.kind()) * 100
-            + static_cast<int>(info.dtype) * 10
-            + static_cast<int>(info.rows);
-    return Value(xdataset::Measurement(tag));
-}
-
-const OpTraits kTestOp = {
-    OpCategory::kAdd, 2,
-    xdataset::DeriveShapeBroadcast,
-    xdataset::DeriveRowsBroadcast,
-    xdataset::DeriveDtypePromote,
-    xdataset::DeriveUnitSameDim,
-    dummy_execute
-};
-
-}  // anonymous namespace
-
-TEST(OperateTest, TwoMeasurements)
-{
-    Eigen::RowVectorXd ev(3); ev << 1, 1, 1;
-    Value v1(xdataset::Measurement::Vector(ev));
-    Value v2(xdataset::Measurement::Vector(ev));
-    Value result = Operate({v1, v2}, kTestOp);
-
-    ASSERT_TRUE(result.is_meas());
-    int tag = result.as_meas().as_scalar<int>();
-    EXPECT_EQ(tag, 101);   // kind=Vector(1)*100 + dtype=Real(0)*10 + rows=1
-}
-
-TEST(OperateTest, MeasAndArray)
-{
-    Value v1(xdataset::Measurement(2.0));
-
-    auto ds = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
-    auto da = xdataset::DataArray::CreateIndependent(std::move(ds));
-    Value v2(da);
-
-    Value result = Operate({v1, v2}, kTestOp);
-
-    ASSERT_TRUE(result.is_meas());
-    int tag = result.as_meas().as_scalar<int>();
-    EXPECT_EQ(tag, 3);    // kind=Scalar(0)*100 + dtype=Real(0)*10 + rows=3
-}
-
-TEST(OperateTest, ArityMismatchThrows)
-{
-    Value v1(xdataset::Measurement(1.0));
-    EXPECT_THROW(Operate({v1}, kTestOp), std::invalid_argument);         // 1 vs 2
-    EXPECT_THROW(Operate({v1, v1, v1}, kTestOp), std::invalid_argument); // 3 vs 2
-}
-
-// =========================================================================
-//  Operate framework -- execution tests (kOpAdd / kOpSub)
-// =========================================================================
+using xdataset::OperationAdd;
+using xdataset::OperationSub;
+using xdataset::OperationMul;
+using xdataset::OperationDiv;
+using xdataset::OperationMod;
+using xdataset::OperationPow;
+using xdataset::OperationNegate;
+using xdataset::OperationNot;
+using xdataset::OperationBitNot;
+using xdataset::OperationEq;
+using xdataset::OperationNeq;
+using xdataset::OperationLt;
+using xdataset::OperationGt;
+using xdataset::OperationLe;
+using xdataset::OperationGe;
+using xdataset::OperationAnd;
+using xdataset::OperationOr;
+using xdataset::OperationBitAnd;
+using xdataset::OperationBitOr;
+using xdataset::OperationBitXor;
+using xdataset::OperationShl;
+using xdataset::OperationShr;
+using xdataset::OperationMatrix;
+using xdataset::OperationSweep;
 
 #define EXPECT_MEAS_SCALAR_DOUBLE(val, expected) do { \
     ASSERT_TRUE((val).is_meas()); \
     EXPECT_DOUBLE_EQ((val).as_meas().as_scalar<double>(), (expected)); \
 } while(0)
 
-#define EXPECT_ARRAY_ELEMENT(row, col, arr, expected) do { \
-    ASSERT_LT((row), (arr).as_array().data().size()); \
-    EXPECT_DOUBLE_EQ((arr).as_array().data().vector_at<double>((row))((col)), (expected)); \
-} while(0)
+// =========================================================================
+//  OperationAdd / OperationSub
+// =========================================================================
 
-// ---- Meas x Meas --------------------------------------------------------
-
-TEST(OpAddTest, MeasMeasScalarScalar)
+TEST(OperationAddTest, MeasMeasScalarScalar)
 {
     Value v1(xdataset::Measurement(3.0));
     Value v2(xdataset::Measurement(4.0));
-    Value result = Operate({v1, v2}, kOpAdd);
+    Value result = OperationAdd(v1, v2);
     EXPECT_MEAS_SCALAR_DOUBLE(result, 7.0);
 }
 
-TEST(OpSubTest, MeasMeasScalarScalar)
+TEST(OperationSubTest, MeasMeasScalarScalar)
 {
     Value v1(xdataset::Measurement(10.0));
     Value v2(xdataset::Measurement(3.0));
-    Value result = Operate({v1, v2}, kOpSub);
+    Value result = OperationSub(v1, v2);
     EXPECT_MEAS_SCALAR_DOUBLE(result, 7.0);
 }
 
-TEST(OpAddTest, MeasMeasScalarVectorBroadcast)
+TEST(OperationAddTest, MeasMeasScalarVectorBroadcast)
 {
     Value v1(xdataset::Measurement(2.0));
-    Eigen::RowVectorXd ev(3); ev << 1.0, 2.0, 3.0;
+    VecXd ev(3); ev << 1.0, 2.0, 3.0;
     Value v2(xdataset::Measurement::Vector(ev));
-    Value result = Operate({v1, v2}, kOpAdd);
+    Value result = OperationAdd(v1, v2);
     ASSERT_TRUE(result.is_meas());
     auto vec = result.as_meas().as_vector<double>();
     EXPECT_DOUBLE_EQ(vec(0), 3.0);
@@ -322,54 +92,34 @@ TEST(OpAddTest, MeasMeasScalarVectorBroadcast)
     EXPECT_DOUBLE_EQ(vec(2), 5.0);
 }
 
-TEST(OpAddTest, MeasMeasVectorVector)
+TEST(OperationAddTest, MeasMeasVectorVector)
 {
-    Eigen::RowVectorXd a(3); a << 1.0, 2.0, 3.0;
-    Eigen::RowVectorXd b(3); b << 4.0, 5.0, 6.0;
-    Value result = Operate({Value(xdataset::Measurement::Vector(a)),
-                             Value(xdataset::Measurement::Vector(b))}, kOpAdd);
+    VecXd a(3); a << 1.0, 2.0, 3.0;
+    VecXd b(3); b << 4.0, 5.0, 6.0;
+    Value result = OperationAdd(Value(xdataset::Measurement::Vector(a)),
+                                 Value(xdataset::Measurement::Vector(b)));
     auto vec = result.as_meas().as_vector<double>();
     EXPECT_DOUBLE_EQ(vec(0), 5.0);
     EXPECT_DOUBLE_EQ(vec(1), 7.0);
     EXPECT_DOUBLE_EQ(vec(2), 9.0);
 }
 
-TEST(OpAddTest, MeasMeasMatrixMatrix)
+TEST(OperationAddTest, MeasMeasIntAndRealPromoteToReal)
 {
-    xdataset::MatrixXRd a(2, 2); a << 1.0, 2.0, 3.0, 4.0;
-    xdataset::MatrixXRd b(2, 2); b << 5.0, 6.0, 7.0, 8.0;
-    Value result = Operate({Value(xdataset::Measurement::Matrix(a)),
-                             Value(xdataset::Measurement::Matrix(b))}, kOpAdd);
-    auto mat = result.as_meas().as_matrix<double>();
-    EXPECT_DOUBLE_EQ(mat(0, 0), 6.0);
-    EXPECT_DOUBLE_EQ(mat(0, 1), 8.0);
-    EXPECT_DOUBLE_EQ(mat(1, 0), 10.0);
-    EXPECT_DOUBLE_EQ(mat(1, 1), 12.0);
-}
-
-TEST(OpAddTest, MeasMeasVectorMatrixRowBroadcast)
-{
-    Eigen::RowVectorXd v(2); v << 10.0, 20.0;
-    xdataset::MatrixXRd m(3, 2); m << 1.0, 1.0, 2.0, 2.0, 3.0, 3.0;
-    Value result = Operate({Value(xdataset::Measurement::Vector(v)),
-                             Value(xdataset::Measurement::Matrix(m))}, kOpAdd);
-    auto mat = result.as_meas().as_matrix<double>();
-    EXPECT_DOUBLE_EQ(mat(0, 0), 11.0);
-    EXPECT_DOUBLE_EQ(mat(0, 1), 21.0);
-    EXPECT_DOUBLE_EQ(mat(1, 0), 12.0);
-    EXPECT_DOUBLE_EQ(mat(1, 1), 22.0);
-    EXPECT_DOUBLE_EQ(mat(2, 0), 13.0);
-    EXPECT_DOUBLE_EQ(mat(2, 1), 23.0);
+    Value v1(xdataset::Measurement(3));
+    Value v2(xdataset::Measurement(4.5));
+    Value result = OperationAdd(v1, v2);
+    EXPECT_MEAS_SCALAR_DOUBLE(result, 7.5);
 }
 
 // ---- Meas x Array -------------------------------------------------------
 
-TEST(OpAddTest, MeasScalarArrayScalar)
+TEST(OperationAddTest, MeasScalarArrayScalar)
 {
     Value v1(xdataset::Measurement(5.0));
     auto ds = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
     Value v2(xdataset::DataArray::CreateIndependent(std::move(ds)));
-    Value result = Operate({v1, v2}, kOpAdd);
+    Value result = OperationAdd(v1, v2);
     ASSERT_TRUE(result.is_array());
     const auto& arr = result.as_array().data();
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 6.0);
@@ -377,25 +127,12 @@ TEST(OpAddTest, MeasScalarArrayScalar)
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(2), 8.0);
 }
 
-TEST(OpSubTest, MeasScalarArrayScalar)
-{
-    Value v1(xdataset::Measurement(10.0));
-    auto ds = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
-    Value v2(xdataset::DataArray::CreateIndependent(std::move(ds)));
-    Value result = Operate({v1, v2}, kOpSub);
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
-    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 9.0);
-    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 8.0);
-    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(2), 7.0);
-}
-
-TEST(OpAddTest, ArrayScalarMeasScalar)
+TEST(OperationAddTest, ArrayScalarMeasScalar)
 {
     auto ds = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
     Value v1(xdataset::DataArray::CreateIndependent(std::move(ds)));
     Value v2(xdataset::Measurement(5.0));
-    Value result = Operate({v1, v2}, kOpAdd);
+    Value result = OperationAdd(v1, v2);
     ASSERT_TRUE(result.is_array());
     const auto& arr = result.as_array().data();
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 6.0);
@@ -403,33 +140,13 @@ TEST(OpAddTest, ArrayScalarMeasScalar)
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(2), 8.0);
 }
 
-TEST(OpAddTest, MeasScalarArrayVector)
-{
-    Value v1(xdataset::Measurement(1.0));
-    auto ds = xdataset::DataSeries::CreateVector<double>(3, 2);
-    ds.vector_at<double>(0) << 10.0, 20.0, 30.0;
-    ds.vector_at<double>(1) << 40.0, 50.0, 60.0;
-    Value v2(xdataset::DataArray::CreateIndependent(std::move(ds)));
-    Value result = Operate({v1, v2}, kOpAdd);
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(0)(0), 11.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(0)(1), 21.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(0)(2), 31.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(1)(0), 41.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(1)(1), 51.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(1)(2), 61.0);
-}
-
-// ---- Array x Array (same rows) ------------------------------------------
-
-TEST(OpAddTest, ArrayArrayScalarSameRows)
+TEST(OperationAddTest, ArrayArrayScalarSameRows)
 {
     auto ds1 = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
     auto ds2 = xdataset::DataSeries::CreateScalarFromVector<double>({10.0, 20.0, 30.0});
     Value v1(xdataset::DataArray::CreateIndependent(std::move(ds1)));
     Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
-    Value result = Operate({v1, v2}, kOpAdd);
+    Value result = OperationAdd(v1, v2);
     ASSERT_TRUE(result.is_array());
     const auto& arr = result.as_array().data();
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 11.0);
@@ -437,103 +154,737 @@ TEST(OpAddTest, ArrayArrayScalarSameRows)
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(2), 33.0);
 }
 
-TEST(OpSubTest, ArrayArrayScalarSameRows)
+// =========================================================================
+//  OperationMul
+// =========================================================================
+
+TEST(OperationMulTest, MeasMeasScalarScalar)
 {
-    auto ds1 = xdataset::DataSeries::CreateScalarFromVector<double>({10.0, 20.0, 30.0});
-    auto ds2 = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
-    Value v1(xdataset::DataArray::CreateIndependent(std::move(ds1)));
-    Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
-    Value result = Operate({v1, v2}, kOpSub);
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
-    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 9.0);
-    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 18.0);
-    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(2), 27.0);
+    Value result = OperationMul(Value(xdataset::Measurement(3.0)),
+                                 Value(xdataset::Measurement(4.0)));
+    EXPECT_MEAS_SCALAR_DOUBLE(result, 12.0);
 }
 
-TEST(OpAddTest, ArrayArrayVectorSameRowsSameShape)
+TEST(OperationMulTest, MeasMeasVectorxMatrix)
 {
-    auto ds1 = xdataset::DataSeries::CreateVector<double>(2, 3);
-    ds1.vector_at<double>(0) << 1.0, 2.0;
-    ds1.vector_at<double>(1) << 3.0, 4.0;
-    ds1.vector_at<double>(2) << 5.0, 6.0;
-    auto ds2 = xdataset::DataSeries::CreateVector<double>(2, 3);
-    ds2.vector_at<double>(0) << 10.0, 20.0;
-    ds2.vector_at<double>(1) << 30.0, 40.0;
-    ds2.vector_at<double>(2) << 50.0, 60.0;
-    Value v1(xdataset::DataArray::CreateIndependent(std::move(ds1)));
-    Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
-    Value result = Operate({v1, v2}, kOpAdd);
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(0)(0), 11.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(0)(1), 22.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(1)(0), 33.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(1)(1), 44.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(2)(0), 55.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(2)(1), 66.0);
+    VecXd v(2); v << 1.0, 2.0;
+    MatXd m(2, 3);
+    m << 1.0, 2.0, 3.0, 4.0, 5.0, 6.0;
+    Value result = OperationMul(Value(xdataset::Measurement::Vector(v)),
+                                 Value(xdataset::Measurement::Matrix(m)));
+    ASSERT_TRUE(result.is_meas());
+    auto vec = result.as_meas().as_vector<double>();
+    EXPECT_DOUBLE_EQ(vec(0), 9.0);
+    EXPECT_DOUBLE_EQ(vec(1), 12.0);
+    EXPECT_DOUBLE_EQ(vec(2), 15.0);
 }
 
-// ---- Array x Array (row broadcast) --------------------------------------
-
-TEST(OpAddTest, ArrayArrayScalarBroadcastRows)
+TEST(OperationMulTest, MatrixMulByScalarIsElementwise)
 {
-    auto ds1 = xdataset::DataSeries::CreateScalarFromVector<double>({1.0});  // 1 row
-    auto ds2 = xdataset::DataSeries::CreateScalarFromVector<double>({2.0, 4.0, 6.0}); // 3 rows
+    MatXd m(2, 2); m << 1.0, 2.0, 3.0, 4.0;
+    Value result = OperationMul(Value(xdataset::Measurement::Matrix(m)),
+                                 Value(xdataset::Measurement(2.0)));
+    ASSERT_TRUE(result.is_meas());
+    auto mat = result.as_meas().as_matrix<double>();
+    EXPECT_DOUBLE_EQ(mat(0, 0), 2.0);
+    EXPECT_DOUBLE_EQ(mat(1, 1), 8.0);
+}
+
+TEST(OperationMulTest, ArrayArrayScalarSameRows)
+{
+    auto ds1 = xdataset::DataSeries::CreateScalarFromVector<double>({2.0, 3.0});
+    auto ds2 = xdataset::DataSeries::CreateScalarFromVector<double>({4.0, 5.0});
+    Value result = OperationMul(
+        Value(xdataset::DataArray::CreateIndependent(std::move(ds1))),
+        Value(xdataset::DataArray::CreateIndependent(std::move(ds2))));
+    ASSERT_TRUE(result.is_array());
+    const auto& arr = result.as_array().data();
+    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 8.0);
+    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 15.0);
+}
+
+// =========================================================================
+//  OperationDiv
+// =========================================================================
+
+TEST(OperationDivTest, MeasMeasScalarScalar)
+{
+    Value result = OperationDiv(Value(xdataset::Measurement(12.0)),
+                                 Value(xdataset::Measurement(4.0)));
+    EXPECT_MEAS_SCALAR_DOUBLE(result, 3.0);
+}
+
+TEST(OperationDivTest, ScalarDivByZeroThrows)
+{
+    EXPECT_THROW(OperationDiv(Value(xdataset::Measurement(1.0)),
+                               Value(xdataset::Measurement(0.0))),
+                 std::invalid_argument);
+}
+
+TEST(OperationDivTest, MeasMeasVectorDivMatrix)
+{
+    VecXd v(2); v << 6.0, 8.0;
+    MatXd m(2, 2); m << 2.0, 0.0, 0.0, 4.0;
+    Value result = OperationDiv(Value(xdataset::Measurement::Vector(v)),
+                                 Value(xdataset::Measurement::Matrix(m)));
+    ASSERT_TRUE(result.is_meas());
+    auto vec = result.as_meas().as_vector<double>();
+    EXPECT_DOUBLE_EQ(vec(0), 3.0);
+    EXPECT_DOUBLE_EQ(vec(1), 2.0);
+}
+
+// =========================================================================
+//  OperationMod
+// =========================================================================
+
+TEST(OperationModTest, MeasMeasIntScalarScalar)
+{
+    Value result = OperationMod(Value(xdataset::Measurement(10)),
+                                 Value(xdataset::Measurement(3)));
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<int>(), 1);
+}
+
+TEST(OperationModTest, MeasMeasDoubleScalarScalar)
+{
+    Value result = OperationMod(Value(xdataset::Measurement(10.5)),
+                                 Value(xdataset::Measurement(3.0)));
+    EXPECT_MEAS_SCALAR_DOUBLE(result, 1.5);
+}
+
+TEST(OperationModTest, ScalarModByZeroThrows)
+{
+    EXPECT_THROW(OperationMod(Value(xdataset::Measurement(10)),
+                               Value(xdataset::Measurement(0))),
+                 std::invalid_argument);
+}
+
+// =========================================================================
+//  OperationPow
+// =========================================================================
+
+TEST(OperationPowTest, MeasMeasScalarScalar)
+{
+    Value result = OperationPow(Value(xdataset::Measurement(2.0)),
+                                 Value(xdataset::Measurement(3.0)));
+    EXPECT_MEAS_SCALAR_DOUBLE(result, 8.0);
+}
+
+TEST(OperationPowTest, MeasMeasScalarVectorBroadcast)
+{
+    Value v1(xdataset::Measurement(2.0));
+    VecXd ev(3); ev << 1.0, 2.0, 3.0;
+    Value v2(xdataset::Measurement::Vector(ev));
+    Value result = OperationPow(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    auto vec = result.as_meas().as_vector<double>();
+    EXPECT_DOUBLE_EQ(vec(0), 2.0);
+    EXPECT_DOUBLE_EQ(vec(1), 4.0);
+    EXPECT_DOUBLE_EQ(vec(2), 8.0);
+}
+
+// =========================================================================
+//  OperationNegate
+// =========================================================================
+
+TEST(OperationNegateTest, MeasScalar)
+{
+    Value result = OperationNegate(Value(xdataset::Measurement(5.0)));
+    EXPECT_MEAS_SCALAR_DOUBLE(result, -5.0);
+}
+
+TEST(OperationNegateTest, ArrayScalar)
+{
+    auto ds = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, -2.0, 3.0});
+    Value v(xdataset::DataArray::CreateIndependent(std::move(ds)));
+    Value result = OperationNegate(v);
+    ASSERT_TRUE(result.is_array());
+    const auto& arr = result.as_array().data();
+    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), -1.0);
+    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 2.0);
+    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(2), -3.0);
+}
+
+// =========================================================================
+//  OperationNot
+// =========================================================================
+
+TEST(OperationNotTest, MeasScalarZero)
+{
+    Value result = OperationNot(Value(xdataset::Measurement(0.0)));
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+TEST(OperationNotTest, MeasScalarNonZero)
+{
+    Value result = OperationNot(Value(xdataset::Measurement(3.5)));
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);
+}
+
+// =========================================================================
+//  OperationBitNot
+// =========================================================================
+
+TEST(OperationBitNotTest, MeasScalar)
+{
+    Value result = OperationBitNot(Value(xdataset::Measurement(0)));
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<int>(), ~0);
+}
+
+// =========================================================================
+//  OperationEq / OperationNeq / OperationLt / OperationGt
+// =========================================================================
+
+TEST(OperationEqTest, MeasMeasScalarEqual)
+{
+    Value result = OperationEq(Value(xdataset::Measurement(3.0)),
+                                Value(xdataset::Measurement(3.0)));
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+TEST(OperationEqTest, MeasMeasScalarNotEqual)
+{
+    Value result = OperationEq(Value(xdataset::Measurement(3.0)),
+                                Value(xdataset::Measurement(4.0)));
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);
+}
+
+TEST(OperationNeqTest, MeasMeasScalar)
+{
+    Value result = OperationNeq(Value(xdataset::Measurement(3.0)),
+                                 Value(xdataset::Measurement(4.0)));
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+TEST(OperationLtTest, MeasMeasScalar)
+{
+    Value result = OperationLt(Value(xdataset::Measurement(2.0)),
+                                Value(xdataset::Measurement(5.0)));
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+TEST(OperationGtTest, MeasMeasScalar)
+{
+    Value result = OperationGt(Value(xdataset::Measurement(5.0)),
+                                Value(xdataset::Measurement(2.0)));
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+// ---- Cmp: int (eq/ne/lt/gt/le/ge) --------------------------------------
+
+TEST(OperationLtTest, IntScalar)
+{
+    Value v1(xdataset::Measurement(3));
+    Value v2(xdataset::Measurement(7));
+    Value result = OperationLt(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+TEST(OperationGtTest, IntScalar)
+{
+    Value v1(xdataset::Measurement(7));
+    Value v2(xdataset::Measurement(3));
+    Value result = OperationGt(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+TEST(OperationLeTest, IntScalar)
+{
+    Value v1(xdataset::Measurement(3));
+    Value v2(xdataset::Measurement(3));
+    Value result = OperationLe(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+// ---- Cmp: complex (abs() for < <= > >=) --------------------------------
+
+TEST(OperationEqTest, ComplexEqual)
+{
+    Value v1(xdataset::Measurement(std::complex<double>(1.0, 2.0)));
+    Value v2(xdataset::Measurement(std::complex<double>(1.0, 2.0)));
+    Value result = OperationEq(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+TEST(OperationNeqTest, ComplexNotEqual)
+{
+    Value v1(xdataset::Measurement(std::complex<double>(1.0, 2.0)));
+    Value v2(xdataset::Measurement(std::complex<double>(3.0, 4.0)));
+    Value result = OperationNeq(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+TEST(OperationLtTest, ComplexAbs)
+{
+    // |3+4i| = 5  <  |6+0i| = 6
+    Value v1(xdataset::Measurement(std::complex<double>(3.0, 4.0)));
+    Value v2(xdataset::Measurement(std::complex<double>(6.0, 0.0)));
+    Value result = OperationLt(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+TEST(OperationGtTest, ComplexAbs)
+{
+    // |5+0i| = 5  >  |3+4i| = 5  → false (equal abs)
+    Value v1(xdataset::Measurement(std::complex<double>(5.0, 0.0)));
+    Value v2(xdataset::Measurement(std::complex<double>(3.0, 4.0)));
+    Value result = OperationGt(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);
+}
+
+TEST(OperationLeTest, ComplexAbs)
+{
+    Value v1(xdataset::Measurement(std::complex<double>(3.0, 4.0)));
+    Value v2(xdataset::Measurement(std::complex<double>(5.0, 0.0)));
+    Value result = OperationLe(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);  // 5 <= 5
+}
+
+// ---- Cmp: string -------------------------------------------------------
+
+TEST(OperationEqTest, StringEqual)
+{
+    Value v1(xdataset::Measurement::String("abc"));
+    Value v2(xdataset::Measurement::String("abc"));
+    Value result = OperationEq(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+TEST(OperationNeqTest, StringNotEqual)
+{
+    Value v1(xdataset::Measurement::String("abc"));
+    Value v2(xdataset::Measurement::String("xyz"));
+    Value result = OperationNeq(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+TEST(OperationLtTest, StringLex)
+{
+    Value v1(xdataset::Measurement::String("abc"));
+    Value v2(xdataset::Measurement::String("xyz"));
+    Value result = OperationLt(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+TEST(OperationGtTest, StringLex)
+{
+    Value v1(xdataset::Measurement::String("xyz"));
+    Value v2(xdataset::Measurement::String("abc"));
+    Value result = OperationGt(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+// ---- Cmp: mixed types (int↔double compare directly) ---------------------
+
+TEST(OperationEqTest, IntAndDouble)
+{
+    Value v1(xdataset::Measurement(3));
+    Value v2(xdataset::Measurement(3.0));
+    Value result = OperationEq(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+TEST(OperationLtTest, IntAndDouble)
+{
+    Value v1(xdataset::Measurement(3));
+    Value v2(xdataset::Measurement(5.5));
+    Value result = OperationLt(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+// ---- Cmp: mixed complex↔real (promote to complex, use abs() for < >) -----
+
+TEST(OperationLtTest, ComplexAndReal)
+{
+    // real 5.0 becomes (5,0), |3+4i|=5, |5+0i|=5 → not less
+    Value v1(xdataset::Measurement(std::complex<double>(3.0, 4.0)));
+    Value v2(xdataset::Measurement(5.0));
+    Value result = OperationLt(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);  // 5 < 5 → false
+}
+
+// ---- Cmp: row broadcast (Array x Array) ---------------------------------
+
+TEST(OperationEqTest, ArrayArrayScalarSameRows)
+{
+    auto ds1 = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, 3.0, 5.0});
+    auto ds2 = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, 3.0, 5.0});
     Value v1(xdataset::DataArray::CreateIndependent(std::move(ds1)));
     Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
-    Value result = Operate({v1, v2}, kOpAdd);
+    Value result = OperationEq(v1, v2);
+    ASSERT_TRUE(result.is_array());
+    const auto& arr = result.as_array().data();
+    EXPECT_EQ(arr.scalar_at<int>(0), 1);
+    EXPECT_EQ(arr.scalar_at<int>(1), 1);
+    EXPECT_EQ(arr.scalar_at<int>(2), 1);
+}
+
+TEST(OperationLtTest, ArrayArrayBroadcastRows)
+{
+    auto ds1 = xdataset::DataSeries::CreateScalarFromVector<double>({3.0});      // 1 row
+    auto ds2 = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, 5.0});  // 2 rows
+    Value v1(xdataset::DataArray::CreateIndependent(std::move(ds1)));
+    Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
+    Value result = OperationLt(v1, v2);
+    ASSERT_TRUE(result.is_array());
+    const auto& arr = result.as_array().data();
+    EXPECT_EQ(arr.size(), 2u);
+    EXPECT_EQ(arr.scalar_at<int>(0), 0);  // 3 < 1 → 0
+    EXPECT_EQ(arr.scalar_at<int>(1), 1);  // 3 < 5 → 1
+}
+
+// ---- Cmp: cell broadcast (Vector broadcast in Meas) ---------------------
+
+TEST(OperationEqTest, MeasVectorMeasScalarBroadcast)
+{
+    VecXd a(3); a << 2.0, 2.0, 2.0;
+    Value v1(xdataset::Measurement::Vector(a));
+    Value v2(xdataset::Measurement(2.0));
+    Value result = OperationEq(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    auto vec = result.as_meas().as_vector<int>();
+    EXPECT_EQ(vec(0), 1); EXPECT_EQ(vec(1), 1); EXPECT_EQ(vec(2), 1);
+}
+
+// ---- Logic: row broadcast (Array x Array) --------------------------------
+
+TEST(OperationAndTest, ArrayArrayBroadcastRows)
+{
+    auto ds1 = xdataset::DataSeries::CreateScalarFromVector<double>({1.0});     // 1 row, non-zero
+    auto ds2 = xdataset::DataSeries::CreateScalarFromVector<double>({0.0, 3.0}); // 2 rows
+    Value v1(xdataset::DataArray::CreateIndependent(std::move(ds1)));
+    Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
+    Value result = OperationAnd(v1, v2);
+    ASSERT_TRUE(result.is_array());
+    const auto& arr = result.as_array().data();
+    EXPECT_EQ(arr.size(), 2u);
+    EXPECT_EQ(arr.scalar_at<int>(0), 0);  // 1 && 0 = 0
+    EXPECT_EQ(arr.scalar_at<int>(1), 1);  // 1 && 1 = 1
+}
+
+// ---- Not: array ------------------------------------------------
+
+TEST(OperationNotTest, ArrayScalar)
+{
+    auto ds = xdataset::DataSeries::CreateScalarFromVector<double>({0.0, 5.0, -3.0});
+    Value v(xdataset::DataArray::CreateIndependent(std::move(ds)));
+    Value result = OperationNot(v);
+    ASSERT_TRUE(result.is_array());
+    const auto& arr = result.as_array().data();
+    EXPECT_EQ(arr.scalar_at<int>(0), 1);
+    EXPECT_EQ(arr.scalar_at<int>(1), 0);
+    EXPECT_EQ(arr.scalar_at<int>(2), 0);
+}
+
+// =========================================================================
+//  OperationAnd / OperationOr
+// =========================================================================
+
+TEST(OperationAndTest, MeasMeasScalarScalar)
+{
+    Value v1(xdataset::Measurement(0.0));
+    Value v2(xdataset::Measurement(1.0));
+    Value result = OperationAnd(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);
+}
+
+TEST(OperationAndTest, BoolOperands)
+{
+    Value v1(xdataset::Measurement::Boolean(true));
+    Value v2(xdataset::Measurement::Boolean(false));
+    Value result = OperationAnd(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);
+}
+
+TEST(OperationOrTest, BoolOperands)
+{
+    Value v1(xdataset::Measurement::Boolean(true));
+    Value v2(xdataset::Measurement::Boolean(false));
+    Value result = OperationOr(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+// ---- Logic: real/complex operands (as_logical: non-zero→1) --------------
+
+TEST(OperationAndTest, RealOperands)
+{
+    Value v1(xdataset::Measurement(3.5));
+    Value v2(xdataset::Measurement(0.0));
+    Value result = OperationAnd(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);  // 1 && 0 = 0
+}
+
+TEST(OperationOrTest, RealOperands)
+{
+    Value v1(xdataset::Measurement(0.0));
+    Value v2(xdataset::Measurement(-2.0));
+    Value result = OperationOr(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);  // 0 || 1 = 1
+}
+
+TEST(OperationAndTest, ComplexOperands)
+{
+    // (1+0i) non-zero → 1, (0+0i) zero → 0
+    Value v1(xdataset::Measurement(std::complex<double>(1.0, 0.0)));
+    Value v2(xdataset::Measurement(std::complex<double>(0.0, 0.0)));
+    Value result = OperationAnd(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);  // 1 && 0 = 0
+}
+
+TEST(OperationOrTest, ComplexOperands)
+{
+    // (0+5i) non-zero → 1
+    Value v1(xdataset::Measurement(std::complex<double>(0.0, 5.0)));
+    Value v2(xdataset::Measurement(std::complex<double>(0.0, 0.0)));
+    Value result = OperationOr(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);  // 1 || 0 = 1
+}
+
+// ---- Logic: vector operands (as_logical broadcasts) ---------------------
+
+TEST(OperationAndTest, VectorOperands)
+{
+    VecXd a(2); a << 0.0, 1.0;
+    VecXd b(2); b << 2.0, 0.0;
+    Value v1(xdataset::Measurement::Vector(a));
+    Value v2(xdataset::Measurement::Vector(b));
+    Value result = OperationAnd(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    auto vec = result.as_meas().as_vector<int>();
+    EXPECT_EQ(vec(0), 0);  // 0 && 1
+    EXPECT_EQ(vec(1), 0);  // 1 && 0
+}
+
+// ---- Logic: Not with real/complex --------------------------------------
+
+TEST(OperationNotTest, RealOperand)
+{
+    Value result = OperationNot(Value(xdataset::Measurement(3.5)));
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);  // !1 = 0
+}
+
+TEST(OperationNotTest, ComplexOperand)
+{
+    // (0+5i) non-zero → !1 = 0
+    Value result = OperationNot(Value(xdataset::Measurement(std::complex<double>(0.0, 5.0))));
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);
+}
+
+TEST(OperationNotTest, BoolOperand)
+{
+    Value result = OperationNot(Value(xdataset::Measurement::Boolean(false)));
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+}
+
+// =========================================================================
+//  OperationBitAnd / OperationBitOr / OperationBitXor
+// =========================================================================
+
+TEST(OperationBitAndTest, MeasMeasScalar)
+{
+    Value v1(xdataset::Measurement(6));   // 110
+    Value v2(xdataset::Measurement(3));   // 011
+    Value result = OperationBitAnd(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<int>(), 2);  // 010
+}
+
+TEST(OperationBitOrTest, MeasMeasScalar)
+{
+    Value v1(xdataset::Measurement(6));
+    Value v2(xdataset::Measurement(3));
+    Value result = OperationBitOr(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<int>(), 7);
+}
+
+TEST(OperationBitXorTest, MeasMeasScalar)
+{
+    Value v1(xdataset::Measurement(6));
+    Value v2(xdataset::Measurement(3));
+    Value result = OperationBitXor(v1, v2);
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<int>(), 5);
+}
+
+// =========================================================================
+//  OperationShl / OperationShr
+// =========================================================================
+
+TEST(OperationShlTest, MeasMeasScalar)
+{
+    Value result = OperationShl(Value(xdataset::Measurement(1)),
+                                 Value(xdataset::Measurement(3)));
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<int>(), 8);
+}
+
+TEST(OperationShrTest, MeasMeasScalar)
+{
+    Value result = OperationShr(Value(xdataset::Measurement(16)),
+                                 Value(xdataset::Measurement(2)));
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_EQ(result.as_meas().as_scalar<int>(), 4);
+}
+
+// =========================================================================
+//  OperationMatrix
+// =========================================================================
+
+TEST(OperationMatrixTest, IntAndRealPromote)
+{
+    Value result = OperationMatrix({Value(xdataset::Measurement(1)),
+                                     Value(xdataset::Measurement(2.5))});
+    ASSERT_TRUE(result.is_meas());
+    auto vec = result.as_meas().as_vector<double>();
+    EXPECT_DOUBLE_EQ(vec(0), 1.0);
+    EXPECT_DOUBLE_EQ(vec(1), 2.5);
+}
+
+TEST(OperationMatrixTest, StringScalarsToVector)
+{
+    Value v1(xdataset::Measurement::String("hello"));
+    Value v2(xdataset::Measurement::String("world"));
+    Value result = OperationMatrix({v1, v2});
+    ASSERT_TRUE(result.is_meas());
+    auto vec = result.as_meas().as_vector<std::string>();
+    EXPECT_EQ(vec(0), "hello");
+    EXPECT_EQ(vec(1), "world");
+}
+
+TEST(OperationMatrixTest, SameUnit)
+{
+    Unit u = Unit::parse("V");
+    Value result = OperationMatrix({Value(xdataset::Measurement(1.0, u)),
+                                     Value(xdataset::Measurement(2.0, u))});
+    ASSERT_TRUE(result.is_meas());
+    EXPECT_TRUE(result.as_meas().unit().same_dimension(u));
+}
+
+TEST(OperationMatrixTest, IncompatibleUnitsThrows)
+{
+    Unit uv = Unit::parse("V");
+    Unit ua = Unit::parse("A");
+    EXPECT_THROW(OperationMatrix({Value(xdataset::Measurement(1.0, uv)),
+                                   Value(xdataset::Measurement(2.0, ua))}),
+                 std::invalid_argument);
+}
+
+TEST(OperationMatrixTest, EmptyThrows)
+{
+    EXPECT_THROW(OperationMatrix({}), std::invalid_argument);
+}
+
+TEST(OperationMatrixTest, DataArraysSameKindSameShape)
+{
+    auto ds1 = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, 2.0});
+    auto ds2 = xdataset::DataSeries::CreateScalarFromVector<double>({3.0, 4.0});
+    Value v1(xdataset::DataArray::CreateIndependent(std::move(ds1)));
+    Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
+    Value result = OperationMatrix({v1, v2});
+    ASSERT_TRUE(result.is_array());
+    const auto& arr = result.as_array().data();
+    EXPECT_EQ(arr.size(), 2u);
+}
+
+TEST(OperationMatrixTest, PreservesFirstDataArrayMetadata)
+{
+    Block block(MakeBaseCreateInfo());
+    DataArray da_z = block.GetOrCreateDataArray("z");
+    Value v1(std::move(da_z));
+    auto ds2 = xdataset::DataSeries::CreateScalarFromVector<double>({3.0});
+    Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
+    Value result = OperationMatrix({v1, v2});
+    ASSERT_TRUE(result.is_array());
+    const auto& arr = result.as_array();
+    EXPECT_EQ(arr.multi_dimension_spec().rank(), 2u);
+    EXPECT_EQ(arr.data_kind(), DataArrayKind::kDependent);
+}
+
+// =========================================================================
+//  OperationSweep
+// =========================================================================
+
+TEST(OperationSweepTest, ScalarOnly)
+{
+    Value v1(xdataset::Measurement(1.0));
+    Value v2(xdataset::Measurement(2.0));
+    Value v3(xdataset::Measurement(3.0));
+    Value result = OperationSweep({v1, v2, v3});
     ASSERT_TRUE(result.is_array());
     const auto& arr = result.as_array().data();
     EXPECT_EQ(arr.size(), 3u);
-    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 3.0);
-    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 5.0);
-    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(2), 7.0);
+    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 1.0);
+    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 2.0);
+    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(2), 3.0);
 }
 
-TEST(OpAddTest, ArrayArrayVectorBroadcastRows)
+TEST(OperationSweepTest, VectorOnly)
 {
-    auto ds1 = xdataset::DataSeries::CreateVector<double>(2, 1);
-    ds1.vector_at<double>(0) << 1.0, 2.0;  // 1 row
-    auto ds2 = xdataset::DataSeries::CreateVector<double>(2, 3);
-    ds2.vector_at<double>(0) << 10.0, 20.0;
-    ds2.vector_at<double>(1) << 30.0, 40.0;
-    ds2.vector_at<double>(2) << 50.0, 60.0;
-    Value v1(xdataset::DataArray::CreateIndependent(std::move(ds1)));
-    Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
-    Value result = Operate({v1, v2}, kOpAdd);
+    VecXd a(2); a << 1.0, 2.0;
+    VecXd b(2); b << 3.0, 4.0;
+    Value result = OperationSweep({Value(xdataset::Measurement::Vector(a)),
+                                    Value(xdataset::Measurement::Vector(b))});
     ASSERT_TRUE(result.is_array());
     const auto& arr = result.as_array().data();
-    EXPECT_EQ(arr.size(), 3u);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(0)(0), 11.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(0)(1), 22.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(1)(0), 31.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(1)(1), 42.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(2)(0), 51.0);
-    EXPECT_DOUBLE_EQ(arr.vector_at<double>(2)(1), 62.0);
+    EXPECT_EQ(arr.size(), 2u);
+    EXPECT_DOUBLE_EQ(arr.vector_at<double>(0)(0), 1.0);
+    EXPECT_DOUBLE_EQ(arr.vector_at<double>(0)(1), 2.0);
 }
 
-// ---- Meas x Meas int -> double promotion -------------------------------
-
-TEST(OpAddTest, MeasMeasIntAndRealPromoteToReal)
+TEST(OperationSweepTest, IntAndRealPromote)
 {
-    Value v1(xdataset::Measurement(3));    // int
-    Value v2(xdataset::Measurement(4.5));  // real
-    Value result = Operate({v1, v2}, kOpAdd);
-    EXPECT_MEAS_SCALAR_DOUBLE(result, 7.5);
-}
-
-// ---- Meas x Array int -> double promotion via FlatInput ----------------
-
-TEST(OpAddTest, MeasIntArrayReal)
-{
-    Value v1(xdataset::Measurement(3));  // int scalar
-    auto ds = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
-    Value v2(xdataset::DataArray::CreateIndependent(std::move(ds)));
-    Value result = Operate({v1, v2}, kOpAdd);
+    Value result = OperationSweep({Value(xdataset::Measurement(1)),
+                                    Value(xdataset::Measurement(2.5))});
     ASSERT_TRUE(result.is_array());
     const auto& arr = result.as_array().data();
-    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 4.0);
-    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 5.0);
-    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(2), 6.0);
+    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 1.0);
+    EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 2.5);
+}
+
+TEST(OperationSweepTest, EmptyThrows)
+{
+    EXPECT_THROW(OperationSweep({}), std::invalid_argument);
+}
+
+TEST(OperationSweepTest, IncompatibleUnitsThrows)
+{
+    Unit uv = Unit::parse("V");
+    Unit ua = Unit::parse("A");
+    EXPECT_THROW(OperationSweep({Value(xdataset::Measurement(1.0, uv)),
+                                  Value(xdataset::Measurement(2.0, ua))}),
+                 std::invalid_argument);
 }

@@ -35,7 +35,6 @@ set(XDATASET_SOURCES
 	src/block.cc
 	src/data_frame.cc
 	src/data_series.cc
-	src/arithmetic.cc
 	src/value.cc
 	src/operation.cc
 	src/measurement.cc
@@ -49,6 +48,9 @@ set(XDATASET_SOURCES
 add_library(xdataset SHARED ${XDATASET_SOURCES})
 target_compile_definitions(xdataset PRIVATE XDATASET_BUILD_DLL)
 
+# GCC 15 needs -O1 for Eigen header-only template inlining, regardless of Eigen version
+target_compile_options(xdataset PRIVATE $<$<CXX_COMPILER_ID:GNU>:$<$<CONFIG:Debug>:-O1>>)
+
 if(BUILD_XDATASET_TEST)
     find_package(GTest CONFIG REQUIRED)
     include(GoogleTest)
@@ -57,7 +59,6 @@ if(BUILD_XDATASET_TEST)
     add_executable(xdataset_test
         tests/data_series_test.cc
         tests/measurement_test.cc
-        tests/arithmetic_test.cc
         tests/multi_dimension_test.cc
         tests/block_test.cc
         tests/data_array_test.cc

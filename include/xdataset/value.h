@@ -59,4 +59,40 @@ private:
 
 }  // namespace xdataset
 
+// =========================================================================
+//  Value operators (delegate to OperationXxx)
+// =========================================================================
+
+namespace xdataset {
+
+XDATASET_API Value operator+(const Value& lhs, const Value& rhs);
+XDATASET_API Value operator-(const Value& lhs, const Value& rhs);
+XDATASET_API Value operator*(const Value& lhs, const Value& rhs);
+XDATASET_API Value operator/(const Value& lhs, const Value& rhs);
+XDATASET_API Value operator%(const Value& lhs, const Value& rhs);
+
+XDATASET_API Value operator==(const Value& lhs, const Value& rhs);
+XDATASET_API Value operator!=(const Value& lhs, const Value& rhs);
+XDATASET_API Value operator<(const Value& lhs, const Value& rhs);
+XDATASET_API Value operator>(const Value& lhs, const Value& rhs);
+XDATASET_API Value operator<=(const Value& lhs, const Value& rhs);
+XDATASET_API Value operator>=(const Value& lhs, const Value& rhs);
+
+XDATASET_API Value operator&&(const Value& lhs, const Value& rhs);
+XDATASET_API Value operator||(const Value& lhs, const Value& rhs);
+
+XDATASET_API Value operator&(const Value& lhs, const Value& rhs);
+XDATASET_API Value operator|(const Value& lhs, const Value& rhs);
+XDATASET_API Value operator^(const Value& lhs, const Value& rhs);
+XDATASET_API Value operator<<(const Value& lhs, const Value& rhs);
+XDATASET_API Value operator>>(const Value& lhs, const Value& rhs);
+
+XDATASET_API Value operator-(const Value& v);
+XDATASET_API Value operator!(const Value& v);
+XDATASET_API Value operator~(const Value& v);
+
+XDATASET_API Value pow(const Value& base, const Value& exponent);
+
+}  // namespace xdataset
+
 #endif  // XDATASET_VALUE_H

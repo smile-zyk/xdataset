@@ -19,17 +19,6 @@ namespace xdataset
 
     class MeasurementDataFrame;
 
-    // Row-major Matrix typedefs (cache-friendly, consistent with DataSeries storage)
-    typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>              MatrixXRd;
-    typedef Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>                 MatrixXRi;
-    typedef Eigen::Matrix<std::complex<double>, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXRcd;
-
-    // =========================================================================
-    // Null -- sentinel value for Measurement null scalars
-    // =========================================================================
-
-    struct Null {};
-
     // =========================================================================
     // Measurement -- a single named value with units (scalar | vector | matrix)
     // =========================================================================
@@ -70,19 +59,18 @@ namespace xdataset
             std::complex<double>,
             std::string,
             bool,                           // DataType::kBoolean
-            Null,                           // DataType::kNull
 
             // --- DataKind::kVector ---
-            Eigen::RowVectorXd,             // DataType::kReal     (1 行, w 列)
-            Eigen::RowVectorXi,             // DataType::kInteger
-            Eigen::RowVectorXcd,            // DataType::kComplex
-            Eigen::Tensor<std::string, 1>,  // DataType::kString
+            VecXd,                          // DataType::kReal     (1 行, w 列, RowMajor)
+            VecXi,                          // DataType::kInteger
+            VecXcd,                         // DataType::kComplex
+            VecXs,                          // DataType::kString
 
             // --- DataKind::kMatrix ---
-            MatrixXRd,                      // DataType::kReal    (RowMajor)
-            MatrixXRi,                      // DataType::kInteger
-            MatrixXRcd,                     // DataType::kComplex
-            Eigen::Tensor<std::string, 2>   // DataType::kString
+            MatXd,                          // DataType::kReal    (RowMajor)
+            MatXi,                          // DataType::kInteger
+            MatXcd,                         // DataType::kComplex
+            MatXs                           // DataType::kString
         >;
 
         // ======== construction ==============================================
@@ -114,24 +102,23 @@ namespace xdataset
         static Measurement Complex(std::complex<double> value);
         static Measurement String(std::string value);
         static Measurement Boolean(bool value);
-        static Measurement NullVal();
         /// @}
 
         /// @{
         /// Vector factories (1-d) -- numeric (行向量).
-        static Measurement Vector(const Eigen::RowVectorXd& v);
-        static Measurement Vector(const Eigen::RowVectorXi& v);
-        static Measurement Vector(const Eigen::RowVectorXcd& v);
+        static Measurement Vector(const VecXd& v);
+        static Measurement Vector(const VecXi& v);
+        static Measurement Vector(const VecXcd& v);
         /// @}
-        static Measurement Vector(const Eigen::Tensor<std::string, 1>& v);
+        static Measurement Vector(const VecXs& v);
 
         /// @{
         /// Matrix factories (2-d) -- numeric (RowMajor).
-        static Measurement Matrix(const MatrixXRd& m);
-        static Measurement Matrix(const MatrixXRi& m);
-        static Measurement Matrix(const MatrixXRcd& m);
+        static Measurement Matrix(const MatXd& m);
+        static Measurement Matrix(const MatXi& m);
+        static Measurement Matrix(const MatXcd& m);
         /// @}
-        static Measurement Matrix(const Eigen::Tensor<std::string, 2>& m);
+        static Measurement Matrix(const MatXs& m);
 
         // ======== metadata queries ==========================================
 
@@ -144,9 +131,9 @@ namespace xdataset
         Index element_count() const { return shape_.element_count(); }
 
         void set_unit(const Unit& u) {
-            if (data_type_ == DataType::kBoolean || data_type_ == DataType::kNull) {
+            if (data_type_ == DataType::kBoolean) {
                 if (u.has_dimension())
-                    throw std::invalid_argument("Boolean and Null measurements cannot have a unit");
+                    throw std::invalid_argument("Boolean measurements cannot have a unit");
             }
             unit_ = u;
         }
@@ -170,13 +157,13 @@ namespace xdataset
         template <typename T>
         typename std::enable_if<
             !std::is_same<T, std::string>::value,
-            Eigen::Map<const Eigen::Matrix<T, 1, Eigen::Dynamic>>>::type
+            VecConstMap<T>>::type
         as_vector() const;
 
         template <typename T>
         typename std::enable_if<
             std::is_same<T, std::string>::value,
-            const Eigen::Tensor<std::string, 1>&>::type
+            const VecXs&>::type
         as_vector() const;
         /// @}
 
@@ -185,13 +172,13 @@ namespace xdataset
         template <typename T>
         typename std::enable_if<
             !std::is_same<T, std::string>::value,
-            Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>>::type
+            MatConstMap<T>>::type
         as_matrix() const;
 
         template <typename T>
         typename std::enable_if<
             std::is_same<T, std::string>::value,
-            const Eigen::Tensor<std::string, 2>&>::type
+            const MatXs&>::type
         as_matrix() const;
         /// @}
 
@@ -244,15 +231,29 @@ namespace xdataset
     };
 
     // =========================================================================
-    // Concat — stack N Measurements with shape promotion
+    //  Measurement arithmetic operators (delegate to OperationXxx)
     // =========================================================================
-    //
-    // All measurements must share the same DataKind and DataShape.
-    // DataType promotes: int → real → complex (string forbidden).
-    // Shape promotion:  scalar × N → vector(N), vector(W) × N → matrix(N, W).
-    // Matrix cannot be promoted further.
 
-    XDATASET_API Measurement Concat(const std::vector<Measurement>& values);
+    XDATASET_API Measurement operator+(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator-(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator*(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator/(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator==(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator!=(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator<(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator>(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator<=(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator>=(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator&&(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator||(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator&(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator|(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator^(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator<<(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator>>(const Measurement& lhs, const Measurement& rhs);
+    XDATASET_API Measurement operator%(const Measurement& lhs, const Measurement& rhs);
+
+    XDATASET_API Measurement pow(const Measurement& base, const Measurement& exponent);
 
     // =========================================================================
     // MeasurementFormatter -- boost::static_visitor that renders any stored
@@ -269,17 +270,16 @@ namespace xdataset
         std::string operator()(const std::complex<double>& v) const;
         std::string operator()(const std::string& v) const;
         std::string operator()(bool v) const;
-        std::string operator()(const Null&) const;
 
-        std::string operator()(const Eigen::RowVectorXd& v) const;
-        std::string operator()(const Eigen::RowVectorXi& v) const;
-        std::string operator()(const Eigen::RowVectorXcd& v) const;
-        std::string operator()(const Eigen::Tensor<std::string, 1>& v) const;
+        std::string operator()(const VecXd& v) const;
+        std::string operator()(const VecXi& v) const;
+        std::string operator()(const VecXcd& v) const;
+        std::string operator()(const VecXs& v) const;
 
-        std::string operator()(const MatrixXRd& v) const;
-        std::string operator()(const MatrixXRi& v) const;
-        std::string operator()(const MatrixXRcd& v) const;
-        std::string operator()(const Eigen::Tensor<std::string, 2>& v) const;
+        std::string operator()(const MatXd& v) const;
+        std::string operator()(const MatXi& v) const;
+        std::string operator()(const MatXcd& v) const;
+        std::string operator()(const MatXs& v) const;
 
     private:
         std::string with_unit(const std::string& s) const;
@@ -301,17 +301,16 @@ namespace xdataset
         void operator()(const std::complex<double>&){ kind = DataKind::kScalar;  dtype = DataType::kComplex; }
         void operator()(const std::string&)         { kind = DataKind::kScalar;  dtype = DataType::kString;  }
         void operator()(bool)                       { kind = DataKind::kScalar;  dtype = DataType::kBoolean; }
-        void operator()(const Null&)                { kind = DataKind::kScalar;  dtype = DataType::kNull;    }
 
-        void operator()(const Eigen::RowVectorXd&)          { kind = DataKind::kVector; dtype = DataType::kReal;    }
-        void operator()(const Eigen::RowVectorXi&)          { kind = DataKind::kVector; dtype = DataType::kInteger; }
-        void operator()(const Eigen::RowVectorXcd&)         { kind = DataKind::kVector; dtype = DataType::kComplex; }
-        void operator()(const Eigen::Tensor<std::string, 1>&){ kind = DataKind::kVector; dtype = DataType::kString;  }
+        void operator()(const VecXd&)           { kind = DataKind::kVector; dtype = DataType::kReal;    }
+        void operator()(const VecXi&)           { kind = DataKind::kVector; dtype = DataType::kInteger; }
+        void operator()(const VecXcd&)          { kind = DataKind::kVector; dtype = DataType::kComplex; }
+        void operator()(const VecXs&)           { kind = DataKind::kVector; dtype = DataType::kString;  }
 
-        void operator()(const MatrixXRd&)             { kind = DataKind::kMatrix; dtype = DataType::kReal;    }
-        void operator()(const MatrixXRi&)             { kind = DataKind::kMatrix; dtype = DataType::kInteger; }
-        void operator()(const MatrixXRcd&)            { kind = DataKind::kMatrix; dtype = DataType::kComplex; }
-        void operator()(const Eigen::Tensor<std::string, 2>&){ kind = DataKind::kMatrix; dtype = DataType::kString;  }
+        void operator()(const MatXd&)           { kind = DataKind::kMatrix; dtype = DataType::kReal;    }
+        void operator()(const MatXi&)           { kind = DataKind::kMatrix; dtype = DataType::kInteger; }
+        void operator()(const MatXcd&)          { kind = DataKind::kMatrix; dtype = DataType::kComplex; }
+        void operator()(const MatXs&)           { kind = DataKind::kMatrix; dtype = DataType::kString;  }
     };
 
     // =========================================================================
@@ -352,15 +351,15 @@ namespace xdataset
     template <typename T>
     typename std::enable_if<
         !std::is_same<T, std::string>::value,
-        Eigen::Map<const Eigen::Matrix<T, 1, Eigen::Dynamic>>>::type
+        VecConstMap<T>>::type
     Measurement::as_vector() const
     {
         if (data_kind_ != DataKind::kVector)
             throw std::logic_error("as_vector: Measurement is not a vector (kind=" +
                 std::to_string(static_cast<int>(data_kind_)) + ")");
-        typedef Eigen::Matrix<T, 1, Eigen::Dynamic> VecType;
+        typedef Vec<T> VecType;
         const VecType& vec = boost::get<VecType>(storage_);
-        return Eigen::Map<const VecType>(vec.data(), 1, vec.size());
+        return VecConstMap<T>(vec.data(), 1, vec.size());
     }
 
     // -- as_vector<T> (string) ---------------------------------------------------
@@ -368,13 +367,13 @@ namespace xdataset
     template <typename T>
     typename std::enable_if<
         std::is_same<T, std::string>::value,
-        const Eigen::Tensor<std::string, 1>&>::type
+        const VecXs&>::type
     Measurement::as_vector() const
     {
         if (data_kind_ != DataKind::kVector)
             throw std::logic_error("as_vector: Measurement is not a vector (kind=" +
                 std::to_string(static_cast<int>(data_kind_)) + ")");
-        return boost::get<Eigen::Tensor<std::string, 1>>(storage_);
+        return boost::get<VecXs>(storage_);
     }
 
     // -- as_matrix<T> (numeric) --------------------------------------------------
@@ -382,15 +381,15 @@ namespace xdataset
     template <typename T>
     typename std::enable_if<
         !std::is_same<T, std::string>::value,
-        Eigen::Map<const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>>::type
+        MatConstMap<T>>::type
     Measurement::as_matrix() const
     {
         if (data_kind_ != DataKind::kMatrix)
             throw std::logic_error("as_matrix: Measurement is not a matrix (kind=" +
                 std::to_string(static_cast<int>(data_kind_)) + ")");
-        typedef Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatType;
+        typedef Mat<T> MatType;
         const MatType& mat = boost::get<MatType>(storage_);
-        return Eigen::Map<const MatType>(mat.data(), mat.rows(), mat.cols());
+        return MatConstMap<T>(mat.data(), mat.rows(), mat.cols());
     }
 
     // -- as_matrix<T> (string) ---------------------------------------------------
@@ -398,67 +397,14 @@ namespace xdataset
     template <typename T>
     typename std::enable_if<
         std::is_same<T, std::string>::value,
-        const Eigen::Tensor<std::string, 2>&>::type
+        const MatXs&>::type
     Measurement::as_matrix() const
     {
         if (data_kind_ != DataKind::kMatrix)
             throw std::logic_error("as_matrix: Measurement is not a matrix (kind=" +
                 std::to_string(static_cast<int>(data_kind_)) + ")");
-        return boost::get<Eigen::Tensor<std::string, 2>>(storage_);
+        return boost::get<MatXs>(storage_);
     }
-
-    // =========================================================================
-    //  Measurement arithmetic operators
-    // =========================================================================
-
-    /// DataKind promotion for binary ops (per the Scalar/Vector/Matrix table).
-    /// Returns the result kind, or throws on incompatible combinations.
-    XDATASET_API DataKind promoted_kind(DataKind a, DataKind b);
-
-    /// dtype promotion: Integer -> Real -> Complex.  String throws.
-    XDATASET_API DataType promoted_dtype(DataType a, DataType b);
-
-    // Measurement x Measurement
-    XDATASET_API Measurement operator+(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator-(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator*(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator/(const Measurement& lhs, const Measurement& rhs);
-
-    /// pow(base, exponent): exponent must be dimensionless, non-String.
-    /// DataKind broadcasting applies (e.g. Scalar^Vector -> Vector).
-    /// When exponent is non-scalar, base must also be dimensionless.
-    XDATASET_API Measurement pow(const Measurement& base, const Measurement& exponent);
-
-    // --- Comparison operators (result is Integer 0/1, dimensionless) -----------
-
-    XDATASET_API Measurement operator==(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator!=(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator<(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator>(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator<=(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator>=(const Measurement& lhs, const Measurement& rhs);
-
-    // --- Logical operators (result is Integer 0/1, dimensionless) ---------------
-
-    XDATASET_API Measurement operator&&(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator||(const Measurement& lhs, const Measurement& rhs);
-
-    // --- Bitwise operators (Integer only, result is Integer, dimensionless) -----
-
-    XDATASET_API Measurement operator&(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator|(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator^(const Measurement& lhs, const Measurement& rhs);
-
-    // --- Shift operators (Integer only, result is Integer) ----------------------
-
-    XDATASET_API Measurement operator<<(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator>>(const Measurement& lhs, const Measurement& rhs);
-
-    // --- Modulo (integer remainder; promotes int/int → Integer) -----------------
-
-    XDATASET_API Measurement operator%(const Measurement& lhs, const Measurement& rhs);
-
-
 
 } // namespace xdataset
 

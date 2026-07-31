@@ -347,9 +347,16 @@ public:
     // Return a canonicalised copy without modifying *this.
     DataSeries canonicalized() const;
 
-    /// Promote the dtype in-place: int -> real -> complex.  No-op if
+    /// Promote the dtype: int -> real -> complex.  No-op if
     /// already at or above target.  String is not promotable.
-    void promote_dtype(DataType target);
+    /// Returns a new DataSeries; does not modify *this.
+    DataSeries promoted_data_type(DataType target) const;
+
+    /// Convert to a logical (int 0/1) DataSeries.
+    /// real/complex: 0.0 -> 0, any other value -> 1.
+    /// string: non-empty -> 1, empty -> 0.
+    /// Returns a new DataSeries with DataType::kInteger.
+    DataSeries as_logical() const;
 
     /// True when the stored unit is already canonical (multiplier == 1, non-affine).
     bool is_canonicalized() const;
@@ -404,14 +411,14 @@ public:
     }
 
     template <typename T>
-    typename std::enable_if<std::is_same<T, std::string>::value, Eigen::Tensor<std::string, 1>&>::type
+    typename std::enable_if<std::is_same<T, std::string>::value, VecXs&>::type
     vector_at(Index i) {
         if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("row index out of range");
         return vector_storage_string()->value(i);
     }
 
     template <typename T>
-    typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 1>&>::type
+    typename std::enable_if<std::is_same<T, std::string>::value, const VecXs&>::type
     vector_at(Index i) const {
         if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("row index out of range");
         return vector_storage_string()->value(i);
@@ -434,14 +441,14 @@ public:
     }
 
     template <typename T>
-    typename std::enable_if<std::is_same<T, std::string>::value, Eigen::Tensor<std::string, 2>&>::type
+    typename std::enable_if<std::is_same<T, std::string>::value, MatXs&>::type
     matrix_at(Index i) {
         if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("row index out of range");
         return matrix_storage_string()->value(i);
     }
 
     template <typename T>
-    typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 2>&>::type
+    typename std::enable_if<std::is_same<T, std::string>::value, const MatXs&>::type
     matrix_at(Index i) const {
         if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("row index out of range");
         return matrix_storage_string()->value(i);
@@ -461,7 +468,7 @@ public:
         vector_storage_numeric<T>()->append(v);
     }
 
-    void append_vector(const Eigen::Tensor<std::string, 1>& v);
+    void append_vector(const VecXs& v);
 
     template <typename T>
     typename std::enable_if<!std::is_same<T, std::string>::value, void>::type
@@ -470,7 +477,7 @@ public:
         matrix_storage_numeric<T>()->append(m);
     }
 
-    void append_matrix(const Eigen::Tensor<std::string, 2>& m);
+    void append_matrix(const MatXs& m);
 
     void append_from(const DataSeries& src, Index row);
 
@@ -673,13 +680,13 @@ public:
     }
 
     template <typename T>
-    typename std::enable_if<std::is_same<T, std::string>::value, Eigen::Tensor<std::string, 1>&>::type
+    typename std::enable_if<std::is_same<T, std::string>::value, VecXs&>::type
     vector() {
         return checked_owner()->vector_at<std::string>(idx_);
     }
 
     template <typename T>
-    typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 1>&>::type
+    typename std::enable_if<std::is_same<T, std::string>::value, const VecXs&>::type
     vector() const {
         return checked_owner()->vector_at<std::string>(idx_);
     }
@@ -699,13 +706,13 @@ public:
     }
 
     template <typename T>
-    typename std::enable_if<std::is_same<T, std::string>::value, Eigen::Tensor<std::string, 2>&>::type
+    typename std::enable_if<std::is_same<T, std::string>::value, MatXs&>::type
     matrix() {
         return checked_owner()->matrix_at<std::string>(idx_);
     }
 
     template <typename T>
-    typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 2>&>::type
+    typename std::enable_if<std::is_same<T, std::string>::value, const MatXs&>::type
     matrix() const {
         return checked_owner()->matrix_at<std::string>(idx_);
     }
@@ -744,7 +751,7 @@ public:
     }
 
     template <typename T>
-    typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 1>&>::type
+    typename std::enable_if<std::is_same<T, std::string>::value, const VecXs&>::type
     vector() const {
         return checked_owner()->vector_at<std::string>(idx_);
     }
@@ -757,7 +764,7 @@ public:
     }
 
     template <typename T>
-    typename std::enable_if<std::is_same<T, std::string>::value, const Eigen::Tensor<std::string, 2>&>::type
+    typename std::enable_if<std::is_same<T, std::string>::value, const MatXs&>::type
     matrix() const {
         return checked_owner()->matrix_at<std::string>(idx_);
     }
@@ -791,142 +798,6 @@ inline DataSeries::iterator::reference DataSeries::iterator::operator*() const {
 inline DataSeries::const_iterator::reference DataSeries::const_iterator::operator*() const {
     return ConstRowView(owner_, idx_);
 }
-
-// =========================================================================
-//  Arithmetic operators for DataSeries
-// =========================================================================
-
-// DataSeries x DataSeries
-XDATASET_API DataSeries operator+(const DataSeries& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator-(const DataSeries& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator*(const DataSeries& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator/(const DataSeries& lhs, const DataSeries& rhs);
-
-// DataSeries x Measurement (broadcast)
-XDATASET_API DataSeries operator+(const DataSeries& lhs, const Measurement& rhs);
-XDATASET_API DataSeries operator-(const DataSeries& lhs, const Measurement& rhs);
-XDATASET_API DataSeries operator*(const DataSeries& lhs, const Measurement& rhs);
-XDATASET_API DataSeries operator/(const DataSeries& lhs, const Measurement& rhs);
-
-// Measurement x DataSeries (broadcast)
-XDATASET_API DataSeries operator+(const Measurement& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator-(const Measurement& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator*(const Measurement& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator/(const Measurement& lhs, const DataSeries& rhs);
-
-/// pow(base, exponent): exponent must be a dimensionless, non-String Measurement.
-XDATASET_API DataSeries pow(const DataSeries& base, const Measurement& exp);
-
-/// pow(base, exponent): broadcast a single Measurement base across every row of exponent.
-XDATASET_API DataSeries pow(const Measurement& base, const DataSeries& exponent);
-
-/// pow(base, exponent): row-by-row pow, exponent series must be dimensionless.
-XDATASET_API DataSeries pow(const DataSeries& base, const DataSeries& exponent);
-
-// =========================================================================
-//  Comparison operators (result is Integer 0/1, dimensionless)
-// =========================================================================
-
-// DataSeries x DataSeries
-XDATASET_API DataSeries operator==(const DataSeries& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator!=(const DataSeries& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator<(const DataSeries& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator>(const DataSeries& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator<=(const DataSeries& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator>=(const DataSeries& lhs, const DataSeries& rhs);
-
-// DataSeries x Measurement
-XDATASET_API DataSeries operator==(const DataSeries& lhs, const Measurement& rhs);
-XDATASET_API DataSeries operator!=(const DataSeries& lhs, const Measurement& rhs);
-XDATASET_API DataSeries operator<(const DataSeries& lhs, const Measurement& rhs);
-XDATASET_API DataSeries operator>(const DataSeries& lhs, const Measurement& rhs);
-XDATASET_API DataSeries operator<=(const DataSeries& lhs, const Measurement& rhs);
-XDATASET_API DataSeries operator>=(const DataSeries& lhs, const Measurement& rhs);
-
-// Measurement x DataSeries
-XDATASET_API DataSeries operator==(const Measurement& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator!=(const Measurement& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator<(const Measurement& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator>(const Measurement& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator<=(const Measurement& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator>=(const Measurement& lhs, const DataSeries& rhs);
-
-// =========================================================================
-//  Logical operators (result is Integer 0/1, dimensionless)
-// =========================================================================
-
-// DataSeries x DataSeries
-XDATASET_API DataSeries operator&&(const DataSeries& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator||(const DataSeries& lhs, const DataSeries& rhs);
-
-// DataSeries x Measurement
-XDATASET_API DataSeries operator&&(const DataSeries& lhs, const Measurement& rhs);
-XDATASET_API DataSeries operator||(const DataSeries& lhs, const Measurement& rhs);
-
-// Measurement x DataSeries
-XDATASET_API DataSeries operator&&(const Measurement& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator||(const Measurement& lhs, const DataSeries& rhs);
-
-// =========================================================================
-//  Bitwise operators (Integer only, result is Integer, dimensionless)
-// =========================================================================
-
-// DataSeries x DataSeries
-XDATASET_API DataSeries operator&(const DataSeries& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator|(const DataSeries& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator^(const DataSeries& lhs, const DataSeries& rhs);
-
-// DataSeries x Measurement
-XDATASET_API DataSeries operator&(const DataSeries& lhs, const Measurement& rhs);
-XDATASET_API DataSeries operator|(const DataSeries& lhs, const Measurement& rhs);
-XDATASET_API DataSeries operator^(const DataSeries& lhs, const Measurement& rhs);
-
-// Measurement x DataSeries
-XDATASET_API DataSeries operator&(const Measurement& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator|(const Measurement& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator^(const Measurement& lhs, const DataSeries& rhs);
-
-// =========================================================================
-//  Shift operators (Integer only, result is Integer)
-// =========================================================================
-
-// DataSeries x DataSeries
-XDATASET_API DataSeries operator<<(const DataSeries& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator>>(const DataSeries& lhs, const DataSeries& rhs);
-
-// DataSeries x Measurement
-XDATASET_API DataSeries operator<<(const DataSeries& lhs, const Measurement& rhs);
-XDATASET_API DataSeries operator>>(const DataSeries& lhs, const Measurement& rhs);
-
-// Measurement x DataSeries
-XDATASET_API DataSeries operator<<(const Measurement& lhs, const DataSeries& rhs);
-XDATASET_API DataSeries operator>>(const Measurement& lhs, const DataSeries& rhs);
-
-// =========================================================================
-//  Modulo
-// =========================================================================
-
-// DataSeries x DataSeries
-XDATASET_API DataSeries operator%(const DataSeries& lhs, const DataSeries& rhs);
-
-// DataSeries x Measurement
-XDATASET_API DataSeries operator%(const DataSeries& lhs, const Measurement& rhs);
-
-// Measurement x DataSeries
-XDATASET_API DataSeries operator%(const Measurement& lhs, const DataSeries& rhs);
-
-// =========================================================================
-//  Unary operators
-// =========================================================================
-
-/// Negation: flips sign, preserves unit.
-XDATASET_API DataSeries operator-(const DataSeries& lhs);
-
-/// Logical NOT: returns Integer 0/1, dimensionless.
-XDATASET_API DataSeries operator!(const DataSeries& lhs);
-
-/// Bitwise NOT (Integer only, dimensionless).
-XDATASET_API DataSeries operator~(const DataSeries& lhs);
 
 }  // namespace xdataset
 

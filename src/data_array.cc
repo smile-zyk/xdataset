@@ -1,5 +1,6 @@
 #include "data_array.h"
 #include "data_series.h"
+#include "operation.h"
 #include "dimension_spec.h"
 #include "multi_dimension_spec.h"
 
@@ -216,7 +217,7 @@ namespace xdataset
         DataArrayCreateInfo info;
         info.kind = DataArrayKind::kIndependent;
 
-        // Copy first (target+1) entries from datas_ â€?raw dimension data, no
+        // Copy first (target+1) entries from datas_ ï¿½?raw dimension data, no
         // expansion needed.  The last copied entry becomes kSelf.  When the
         // source is Independent and the last entry is the self-dimension,
         // generate an index series (0, 1, ...) instead of copying the data.
@@ -348,7 +349,7 @@ namespace xdataset
         }
 
         // Independent DataArray: the last dimension (self) must never be eliminated,
-        // even when the selector is Equal â€?otherwise the result has no data.
+        // even when the selector is Equal ï¿½?otherwise the result has no data.
         if (data_kind_ == DataArrayKind::kIndependent && rank > 0)
             is_dim_retain[rank - 1] = true;
 
@@ -566,4 +567,87 @@ namespace xdataset
         vinfo.kind = DataArrayKind::kDependent;
         return DataArray(std::move(vinfo));
     }
+
+// =========================================================================
+//  DataArray operators (via OperationXxx)
+// =========================================================================
+
+// -- arithmetic (AA, AM, MA)
+DataArray operator+(const DataArray& a, const DataArray& b)  { return OperationAdd(Value(a),Value(b)).as_array(); }
+DataArray operator-(const DataArray& a, const DataArray& b)  { return OperationSub(Value(a),Value(b)).as_array(); }
+DataArray operator*(const DataArray& a, const DataArray& b)  { return OperationMul(Value(a),Value(b)).as_array(); }
+DataArray operator/(const DataArray& a, const DataArray& b)  { return OperationDiv(Value(a),Value(b)).as_array(); }
+DataArray operator+(const DataArray& a, const Measurement& b){ return OperationAdd(Value(a),Value(b)).as_array(); }
+DataArray operator-(const DataArray& a, const Measurement& b){ return OperationSub(Value(a),Value(b)).as_array(); }
+DataArray operator*(const DataArray& a, const Measurement& b){ return OperationMul(Value(a),Value(b)).as_array(); }
+DataArray operator/(const DataArray& a, const Measurement& b){ return OperationDiv(Value(a),Value(b)).as_array(); }
+DataArray operator+(const Measurement& a, const DataArray& b){ return OperationAdd(Value(a),Value(b)).as_array(); }
+DataArray operator-(const Measurement& a, const DataArray& b){ return OperationSub(Value(a),Value(b)).as_array(); }
+DataArray operator*(const Measurement& a, const DataArray& b){ return OperationMul(Value(a),Value(b)).as_array(); }
+DataArray operator/(const Measurement& a, const DataArray& b){ return OperationDiv(Value(a),Value(b)).as_array(); }
+
+// -- comparison (AA, AM, MA)
+DataArray operator==(const DataArray& a, const DataArray& b) { return OperationEq(Value(a),Value(b)).as_array(); }
+DataArray operator!=(const DataArray& a, const DataArray& b) { return OperationNeq(Value(a),Value(b)).as_array(); }
+DataArray operator<(const DataArray& a, const DataArray& b)  { return OperationLt(Value(a),Value(b)).as_array(); }
+DataArray operator>(const DataArray& a, const DataArray& b)  { return OperationGt(Value(a),Value(b)).as_array(); }
+DataArray operator<=(const DataArray& a, const DataArray& b) { return OperationLe(Value(a),Value(b)).as_array(); }
+DataArray operator>=(const DataArray& a, const DataArray& b) { return OperationGe(Value(a),Value(b)).as_array(); }
+
+DataArray operator==(const DataArray& a, const Measurement& b) { return OperationEq(Value(a),Value(b)).as_array(); }
+DataArray operator!=(const DataArray& a, const Measurement& b) { return OperationNeq(Value(a),Value(b)).as_array(); }
+DataArray operator<(const DataArray& a, const Measurement& b)  { return OperationLt(Value(a),Value(b)).as_array(); }
+DataArray operator>(const DataArray& a, const Measurement& b)  { return OperationGt(Value(a),Value(b)).as_array(); }
+DataArray operator<=(const DataArray& a, const Measurement& b) { return OperationLe(Value(a),Value(b)).as_array(); }
+DataArray operator>=(const DataArray& a, const Measurement& b) { return OperationGe(Value(a),Value(b)).as_array(); }
+
+DataArray operator==(const Measurement& a, const DataArray& b) { return OperationEq(Value(a),Value(b)).as_array(); }
+DataArray operator!=(const Measurement& a, const DataArray& b) { return OperationNeq(Value(a),Value(b)).as_array(); }
+DataArray operator<(const Measurement& a, const DataArray& b)  { return OperationLt(Value(a),Value(b)).as_array(); }
+DataArray operator>(const Measurement& a, const DataArray& b)  { return OperationGt(Value(a),Value(b)).as_array(); }
+DataArray operator<=(const Measurement& a, const DataArray& b) { return OperationLe(Value(a),Value(b)).as_array(); }
+DataArray operator>=(const Measurement& a, const DataArray& b) { return OperationGe(Value(a),Value(b)).as_array(); }
+
+// -- logical (AA, AM, MA)
+DataArray operator&&(const DataArray& a, const DataArray& b){ return OperationAnd(Value(a),Value(b)).as_array(); }
+DataArray operator||(const DataArray& a, const DataArray& b){ return OperationOr(Value(a),Value(b)).as_array(); }
+DataArray operator&&(const DataArray& a, const Measurement& b){ return OperationAnd(Value(a),Value(b)).as_array(); }
+DataArray operator||(const DataArray& a, const Measurement& b){ return OperationOr(Value(a),Value(b)).as_array(); }
+DataArray operator&&(const Measurement& a, const DataArray& b){ return OperationAnd(Value(a),Value(b)).as_array(); }
+DataArray operator||(const Measurement& a, const DataArray& b){ return OperationOr(Value(a),Value(b)).as_array(); }
+
+// -- bitwise (AA, AM, MA)
+DataArray operator&(const DataArray& a, const DataArray& b) { return OperationBitAnd(Value(a),Value(b)).as_array(); }
+DataArray operator|(const DataArray& a, const DataArray& b) { return OperationBitOr(Value(a),Value(b)).as_array(); }
+DataArray operator^(const DataArray& a, const DataArray& b) { return OperationBitXor(Value(a),Value(b)).as_array(); }
+DataArray operator&(const DataArray& a, const Measurement& b){ return OperationBitAnd(Value(a),Value(b)).as_array(); }
+DataArray operator|(const DataArray& a, const Measurement& b){ return OperationBitOr(Value(a),Value(b)).as_array(); }
+DataArray operator^(const DataArray& a, const Measurement& b){ return OperationBitXor(Value(a),Value(b)).as_array(); }
+DataArray operator&(const Measurement& a, const DataArray& b){ return OperationBitAnd(Value(a),Value(b)).as_array(); }
+DataArray operator|(const Measurement& a, const DataArray& b){ return OperationBitOr(Value(a),Value(b)).as_array(); }
+DataArray operator^(const Measurement& a, const DataArray& b){ return OperationBitXor(Value(a),Value(b)).as_array(); }
+
+// -- shift (AA, AM, MA)
+DataArray operator<<(const DataArray& a, const DataArray& b){ return OperationShl(Value(a),Value(b)).as_array(); }
+DataArray operator>>(const DataArray& a, const DataArray& b){ return OperationShr(Value(a),Value(b)).as_array(); }
+DataArray operator<<(const DataArray& a, const Measurement& b){ return OperationShl(Value(a),Value(b)).as_array(); }
+DataArray operator>>(const DataArray& a, const Measurement& b){ return OperationShr(Value(a),Value(b)).as_array(); }
+DataArray operator<<(const Measurement& a, const DataArray& b){ return OperationShl(Value(a),Value(b)).as_array(); }
+DataArray operator>>(const Measurement& a, const DataArray& b){ return OperationShr(Value(a),Value(b)).as_array(); }
+
+// -- modulo (AA, AM, MA)
+DataArray operator%(const DataArray& a, const DataArray& b) { return OperationMod(Value(a),Value(b)).as_array(); }
+DataArray operator%(const DataArray& a, const Measurement& b){ return OperationMod(Value(a),Value(b)).as_array(); }
+DataArray operator%(const Measurement& a, const DataArray& b){ return OperationMod(Value(a),Value(b)).as_array(); }
+
+// -- unary
+DataArray operator-(const DataArray& v) { return OperationNegate(Value(v)).as_array(); }
+DataArray operator!(const DataArray& v) { return OperationNot(Value(v)).as_array(); }
+DataArray operator~(const DataArray& v) { return OperationBitNot(Value(v)).as_array(); }
+
+// -- pow
+DataArray pow(const DataArray& base, const DataArray& exp)      { return OperationPow(Value(base),Value(exp)).as_array(); }
+DataArray pow(const DataArray& base, const Measurement& exp)    { return OperationPow(Value(base),Value(exp)).as_array(); }
+DataArray pow(const Measurement& base, const DataArray& exp)    { return OperationPow(Value(base),Value(exp)).as_array(); }
+
 } // namespace xdataset

@@ -1,4 +1,5 @@
 #include "data_series.h"
+#include "operation.h"
 
 #include <algorithm>
 #include <complex>
@@ -109,10 +110,10 @@ bool DataSeries::is_canonicalized() const {
     return unit_.is_canonical();
 }
 
-void DataSeries::promote_dtype(DataType target) {
-    if (data_type_ == target) return;
+DataSeries DataSeries::promoted_data_type(DataType target) const {
+    if (data_type_ == target) return *this;
 
-    // Only one-directional: int -> real -> complex.  String / Boolean / Null cannot promote.
+    // Only one-directional: int -> real -> complex.  String / Boolean cannot promote.
     auto can_promote = [](DataType from, DataType to) -> bool {
         if (from == DataType::kInteger && to == DataType::kReal)    return true;
         if (from == DataType::kInteger && to == DataType::kComplex) return true;
@@ -120,7 +121,7 @@ void DataSeries::promote_dtype(DataType target) {
         return false;
     };
     if (!can_promote(data_type_, target))
-        throw std::invalid_argument("promote_dtype: cannot promote from " +
+        throw std::invalid_argument("promoted_data_type: cannot promote from " +
             std::to_string(static_cast<int>(data_type_)) + " to " +
             std::to_string(static_cast<int>(target)));
 
@@ -156,7 +157,62 @@ void DataSeries::promote_dtype(DataType target) {
         }
     }
 
-    *this = std::move(out);
+    return out;
+}
+
+DataSeries DataSeries::as_logical() const {
+    DataSeries out(data_kind_, DataType::kInteger, shape_);
+    out.resize(size());
+    std::size_t n = size();
+
+    for (std::size_t i = 0; i < n; ++i) {
+        Index idx = static_cast<Index>(i);
+        if (data_kind_ == DataKind::kScalar) {
+            int val = 0;
+            switch (data_type_) {
+                case DataType::kReal:    val = (scalar_at<double>(idx) != 0.0) ? 1 : 0; break;
+                case DataType::kInteger: val = (scalar_at<int>(idx) != 0) ? 1 : 0; break;
+                case DataType::kComplex: val = (scalar_at<std::complex<double>>(idx) != std::complex<double>(0.0, 0.0)) ? 1 : 0; break;
+                case DataType::kString:  val = scalar_at<std::string>(idx).empty() ? 0 : 1; break;
+                default: throw std::invalid_argument("as_logical: unsupported dtype");
+            }
+            out.scalar_at<int>(idx) = val;
+        } else if (data_kind_ == DataKind::kVector) {
+            Index w = shape_[0];
+            auto out_v = out.vector_at<int>(idx);
+            if (data_type_ == DataType::kInteger) {
+                for (Index j = 0; j < w; ++j)
+                    out_v(j) = (vector_at<int>(idx)(j) != 0) ? 1 : 0;
+            } else if (data_type_ == DataType::kReal) {
+                for (Index j = 0; j < w; ++j)
+                    out_v(j) = (vector_at<double>(idx)(j) != 0.0) ? 1 : 0;
+            } else if (data_type_ == DataType::kComplex) {
+                for (Index j = 0; j < w; ++j)
+                    out_v(j) = (vector_at<std::complex<double>>(idx)(j) != std::complex<double>(0.0, 0.0)) ? 1 : 0;
+            } else {
+                throw std::invalid_argument("as_logical: unsupported vector dtype");
+            }
+        } else {
+            Index rows = shape_[0], cols = shape_[1];
+            auto out_m = out.matrix_at<int>(idx);
+            if (data_type_ == DataType::kInteger) {
+                for (Index r = 0; r < rows; ++r)
+                    for (Index c = 0; c < cols; ++c)
+                        out_m(r, c) = (matrix_at<int>(idx)(r, c) != 0) ? 1 : 0;
+            } else if (data_type_ == DataType::kReal) {
+                for (Index r = 0; r < rows; ++r)
+                    for (Index c = 0; c < cols; ++c)
+                        out_m(r, c) = (matrix_at<double>(idx)(r, c) != 0.0) ? 1 : 0;
+            } else if (data_type_ == DataType::kComplex) {
+                for (Index r = 0; r < rows; ++r)
+                    for (Index c = 0; c < cols; ++c)
+                        out_m(r, c) = (matrix_at<std::complex<double>>(idx)(r, c) != std::complex<double>(0.0, 0.0)) ? 1 : 0;
+            } else {
+                throw std::invalid_argument("as_logical: unsupported matrix dtype");
+            }
+        }
+    }
+    return out;
 }
 
 // =========================================================================
@@ -185,12 +241,12 @@ DataSeries DataSeries::iloc(std::size_t start, std::size_t end) const {
 // DataSeries -- append helpers (non-template overloads)
 // =========================================================================
 
-void DataSeries::append_vector(const Eigen::Tensor<std::string, 1>& v) {
+void DataSeries::append_vector(const VecXs& v) {
     if (v.dimension(0) != element_count()) throw std::bad_cast();
     vector_storage_string()->append(v);
 }
 
-void DataSeries::append_matrix(const Eigen::Tensor<std::string, 2>& m) {
+void DataSeries::append_matrix(const MatXs& m) {
     if (m.dimension(0) != shape_[0] || m.dimension(1) != shape_[1]) throw std::bad_cast();
     matrix_storage_string()->append(m);
 }
@@ -275,17 +331,17 @@ void DataSeries::append(const Measurement& m)
     }
 
     if (data_kind_ == DataKind::kVector) {
-        if (data_type_ == DataType::kReal) append_vector<double>(boost::get<Eigen::RowVectorXd>(m.storage()));
-        else if (data_type_ == DataType::kInteger) append_vector<int>(boost::get<Eigen::RowVectorXi>(m.storage()));
-        else if (data_type_ == DataType::kComplex) append_vector<std::complex<double> >(boost::get<Eigen::RowVectorXcd>(m.storage()));
-        else append_vector(boost::get<Eigen::Tensor<std::string, 1> >(m.storage()));
+        if (data_type_ == DataType::kReal) append_vector<double>(boost::get<VecXd>(m.storage()));
+        else if (data_type_ == DataType::kInteger) append_vector<int>(boost::get<VecXi>(m.storage()));
+        else if (data_type_ == DataType::kComplex) append_vector<std::complex<double> >(boost::get<VecXcd>(m.storage()));
+        else append_vector(boost::get<VecXs >(m.storage()));
         return;
     }
 
-    if (data_type_ == DataType::kReal) append_matrix<double>(NumericMatrixTypes<double>::OwnedType(boost::get<MatrixXRd>(m.storage())));
-    else if (data_type_ == DataType::kInteger) append_matrix<int>(NumericMatrixTypes<int>::OwnedType(boost::get<MatrixXRi>(m.storage())));
-    else if (data_type_ == DataType::kComplex) append_matrix<std::complex<double> >(NumericMatrixTypes<std::complex<double> >::OwnedType(boost::get<MatrixXRcd>(m.storage())));
-    else append_matrix(boost::get<Eigen::Tensor<std::string, 2> >(m.storage()));
+    if (data_type_ == DataType::kReal) append_matrix<double>(NumericMatrixTypes<double>::OwnedType(boost::get<MatXd>(m.storage())));
+    else if (data_type_ == DataType::kInteger) append_matrix<int>(NumericMatrixTypes<int>::OwnedType(boost::get<MatXi>(m.storage())));
+    else if (data_type_ == DataType::kComplex) append_matrix<std::complex<double> >(NumericMatrixTypes<std::complex<double> >::OwnedType(boost::get<MatXcd>(m.storage())));
+    else append_matrix(boost::get<MatXs >(m.storage()));
 }
 
 // =========================================================================
@@ -314,19 +370,19 @@ Measurement DataSeries::measurement_at(Index i) const {
     }
 
     if (data_kind_ == DataKind::kVector) {
-        if (data_type_ == DataType::kReal) return Measurement(Eigen::RowVectorXd(vector_at<double>(i)), unit_);
-        else if (data_type_ == DataType::kInteger) return Measurement(Eigen::RowVectorXi(vector_at<int>(i)), unit_);
-        else if (data_type_ == DataType::kComplex) return Measurement(Eigen::RowVectorXcd(vector_at<std::complex<double> >(i)), unit_);
-        else return Measurement(Eigen::Tensor<std::string, 1>(vector_at<std::string>(i)), unit_);
+        if (data_type_ == DataType::kReal) return Measurement(VecXd(vector_at<double>(i)), unit_);
+        else if (data_type_ == DataType::kInteger) return Measurement(VecXi(vector_at<int>(i)), unit_);
+        else if (data_type_ == DataType::kComplex) return Measurement(VecXcd(vector_at<std::complex<double> >(i)), unit_);
+        else return Measurement(VecXs(vector_at<std::string>(i)), unit_);
     }
 
     if (data_type_ == DataType::kReal)
-        return Measurement(MatrixXRd(matrix_at<double>(i)), unit_);
+        return Measurement(MatXd(matrix_at<double>(i)), unit_);
     if (data_type_ == DataType::kInteger)
-        return Measurement(MatrixXRi(matrix_at<int>(i)), unit_);
+        return Measurement(MatXi(matrix_at<int>(i)), unit_);
     if (data_type_ == DataType::kComplex)
-        return Measurement(MatrixXRcd(matrix_at<std::complex<double> >(i)), unit_);
-    return Measurement(Eigen::Tensor<std::string, 2>(matrix_at<std::string>(i)), unit_);
+        return Measurement(MatXcd(matrix_at<std::complex<double> >(i)), unit_);
+    return Measurement(MatXs(matrix_at<std::string>(i)), unit_);
 }
 
 // =========================================================================
@@ -619,12 +675,12 @@ const MatrixStringSeriesStorage* DataSeries::matrix_storage_string() const {
 // =========================================================================
 
 void DataSeries::fill_vector_row(Index row, const std::string& val, std::true_type) {
-    Eigen::Tensor<std::string, 1>& t = vector_at<std::string>(row);
+    VecXs& t = vector_at<std::string>(row);
     for (Index i = 0; i < t.dimension(0); ++i) t(i) = val;
 }
 
 void DataSeries::fill_matrix_row(Index row, const std::string& val, std::true_type) {
-    Eigen::Tensor<std::string, 2>& t = matrix_at<std::string>(row);
+    MatXs& t = matrix_at<std::string>(row);
     for (Index r = 0; r < t.dimension(0); ++r) {
         for (Index c = 0; c < t.dimension(1); ++c) {
             t(r, c) = val;
