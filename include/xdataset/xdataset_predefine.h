@@ -2,6 +2,10 @@
 #define XDATASET_PREDEFINE_H
 
 #include <Eigen/Dense>
+#include <unsupported/Eigen/CXX11/Tensor>
+
+#include <complex>
+#include <string>
 #include <vector>
 
 // ---------------------------------------------------------------------------
@@ -21,6 +25,40 @@ namespace xdataset
 {
     using Index = Eigen::Index;
 
+    // =========================================================================
+    //  Convenient Eigen type aliases (all RowMajor for cache-friendly storage)
+    // =========================================================================
+
+    // --- Template aliases ---
+    template <typename T>
+    using Vec = Eigen::Matrix<T, 1, Eigen::Dynamic, Eigen::RowMajor>;
+
+    template <typename T>
+    using Mat = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+
+    template <typename T>
+    using VecMap = Eigen::Map<Vec<T>>;
+    template <typename T>
+    using VecConstMap = Eigen::Map<const Vec<T>>;
+    template <typename T>
+    using MatMap = Eigen::Map<Mat<T>>;
+    template <typename T>
+    using MatConstMap = Eigen::Map<const Mat<T>>;
+
+    // --- Concrete numeric row-vector types ---
+    using VecXd  = Vec<double>;
+    using VecXi  = Vec<int>;
+    using VecXcd = Vec<std::complex<double>>;
+
+    // --- Concrete numeric matrix types ---
+    using MatXd  = Mat<double>;
+    using MatXi  = Mat<int>;
+    using MatXcd = Mat<std::complex<double>>;
+
+    // --- String tensor types ---
+    using VecXs = Eigen::Tensor<std::string, 1>;
+    using MatXs = Eigen::Tensor<std::string, 2>;
+
     enum class DataKind
     {
         kScalar,
@@ -34,8 +72,7 @@ namespace xdataset
         kInteger,
         kComplex,
         kString,
-        kBoolean,
-        kNull
+        kBoolean
     };
 
     struct DataShape {

@@ -15,6 +15,14 @@ using xdataset::DataKind;
 using xdataset::DataType;
 using xdataset::Index;
 using xdataset::Unit;
+using xdataset::VecXd;
+using xdataset::VecXi;
+using xdataset::VecXcd;
+using xdataset::VecXs;
+using xdataset::MatXd;
+using xdataset::MatXi;
+using xdataset::MatXcd;
+using xdataset::MatXs;
 using xdataset::Value;
 
 // =========================================================================
@@ -58,7 +66,7 @@ TEST(ValueTest, ConstructFromDataArray)
 
 TEST(ValueTest, MetadataMeas)
 {
-    Eigen::RowVectorXd ev5(5); ev5.setOnes();
+    VecXd ev5(5); ev5.setOnes();
     xdataset::Measurement m(ev5, Unit::parse("Hz"));
     Value v(m);
     EXPECT_EQ(v.data_kind(), DataKind::kVector);

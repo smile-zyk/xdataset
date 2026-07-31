@@ -1,4 +1,4 @@
-﻿#include "data_series.h"
+#include "data_series.h"
 #include "data_frame.h"
 
 #include <gtest/gtest.h>
@@ -16,6 +16,14 @@ using xdataset::MeasurementDataFrame;
 using xdataset::DataType;
 using xdataset::Index;
 using xdataset::Unit;
+using xdataset::VecXd;
+using xdataset::VecXi;
+using xdataset::VecXcd;
+using xdataset::VecXs;
+using xdataset::MatXd;
+using xdataset::MatXi;
+using xdataset::MatXcd;
+using xdataset::MatXs;
 
 // ---------------------------------------------------------------------------
 
@@ -82,13 +90,13 @@ TEST(CellTest, AppendTypePromotionRealToComplex) {
 
 TEST(CellTest, AppendStillThrowsOnCompleteMismatch) {
     // Vector DataSeries, trying to append a different-shaped vector - still throws.
-    Eigen::RowVectorXd v(4); v << 1., 2., 3., 4.;
+    VecXd v(4); v << 1., 2., 3., 4.;
     DataSeries s = DataSeries::CreateVector<double>(3, 0);
     EXPECT_THROW(s.append(Measurement(v)), std::bad_cast);
 }
 
 TEST(CellTest, AppendVectorShapeMismatchThrows) {
-    Eigen::RowVectorXd vd(3); vd << 1., 2., 3.;
+    VecXd vd(3); vd << 1., 2., 3.;
     DataSeries s(DataKind::kVector, DataType::kComplex, xdataset::DataShape{2});
     EXPECT_THROW(s.append(Measurement(vd)), std::bad_cast);
 }
@@ -286,7 +294,7 @@ TEST(MeasurementToDataFrameTest, Scalar)
 
 TEST(MeasurementToDataFrameTest, Vector)
 {
-    Eigen::RowVectorXd v(3);
+    VecXd v(3);
     v << 1.0, 2.0, 3.0;
     Measurement m = Measurement::Vector(v);
 
@@ -305,7 +313,7 @@ TEST(MeasurementToDataFrameTest, Vector)
 
 TEST(MeasurementToDataFrameTest, Matrix)
 {
-    xdataset::MatrixXRd mat(2, 2);
+    xdataset::MatXd mat(2, 2);
     mat << 1.0, 2.0, 3.0, 4.0;
     Measurement m = Measurement::Matrix(mat);
 
@@ -326,7 +334,7 @@ TEST(MeasurementToDataFrameTest, Matrix)
 
 TEST(MeasurementToDataFrameTest, ToCsvRoundtrip)
 {
-    Eigen::RowVectorXd v(2);
+    VecXd v(2);
     v << 10.0, 20.0;
     Measurement m = Measurement::Vector(v);
 

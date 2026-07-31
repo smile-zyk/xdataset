@@ -60,16 +60,16 @@ struct DataTypeOf<std::string> {
 
 template <typename T>
 struct NumericVectorTypes {
-    typedef Eigen::Matrix<T, 1, Eigen::Dynamic> OwnedType;       // RowVector
-    typedef Eigen::Map<OwnedType, Eigen::RowMajor> MapType;
-    typedef Eigen::Map<const OwnedType, Eigen::RowMajor> ConstMapType;
+    typedef Vec<T>                   OwnedType;
+    typedef VecMap<T>                MapType;
+    typedef VecConstMap<T>           ConstMapType;
 };
 
 template <typename T>
 struct NumericMatrixTypes {
-    typedef Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> OwnedType;
-    typedef Eigen::Map<OwnedType> MapType;
-    typedef Eigen::Map<const OwnedType> ConstMapType;
+    typedef Mat<T>                   OwnedType;
+    typedef MatMap<T>                MapType;
+    typedef MatConstMap<T>           ConstMapType;
 };
 
 // ---------------------------------------------------------------------------
@@ -184,19 +184,19 @@ public:
         return std::unique_ptr<SeriesStorage>(new VectorStringSeriesStorage(*this));
     }
 
-    Eigen::Tensor<std::string, 1>& value(Index row) { return rows_[static_cast<std::size_t>(row)]; }
-    const Eigen::Tensor<std::string, 1>& value(Index row) const { return rows_[static_cast<std::size_t>(row)]; }
+    VecXs& value(Index row) { return rows_[static_cast<std::size_t>(row)]; }
+    const VecXs& value(Index row) const { return rows_[static_cast<std::size_t>(row)]; }
 
-    void append(const Eigen::Tensor<std::string, 1>& row) { rows_.push_back(row); }
+    void append(const VecXs& row) { rows_.push_back(row); }
 
 private:
-    Eigen::Tensor<std::string, 1> default_row() const {
-        Eigen::Tensor<std::string, 1> out(width_);
+    VecXs default_row() const {
+        VecXs out(width_);
         return out;
     }
 
     Index width_;
-    std::vector<Eigen::Tensor<std::string, 1> > rows_;
+    std::vector<VecXs> rows_;
 };
 
 template <typename T>
@@ -281,20 +281,20 @@ public:
         return std::unique_ptr<SeriesStorage>(new MatrixStringSeriesStorage(*this));
     }
 
-    Eigen::Tensor<std::string, 2>& value(Index row) { return rows_[static_cast<std::size_t>(row)]; }
-    const Eigen::Tensor<std::string, 2>& value(Index row) const { return rows_[static_cast<std::size_t>(row)]; }
+    MatXs& value(Index row) { return rows_[static_cast<std::size_t>(row)]; }
+    const MatXs& value(Index row) const { return rows_[static_cast<std::size_t>(row)]; }
 
-    void append(const Eigen::Tensor<std::string, 2>& row) { rows_.push_back(row); }
+    void append(const MatXs& row) { rows_.push_back(row); }
 
 private:
-    Eigen::Tensor<std::string, 2> default_row() const {
-        Eigen::Tensor<std::string, 2> out(cell_rows_, cell_cols_);
+    MatXs default_row() const {
+        MatXs out(cell_rows_, cell_cols_);
         return out;
     }
 
     Index cell_rows_;
     Index cell_cols_;
-    std::vector<Eigen::Tensor<std::string, 2> > rows_;
+    std::vector<MatXs> rows_;
 };
 
 }  // namespace xdataset

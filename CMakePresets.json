@@ -47,7 +47,8 @@
                 "CMAKE_C_COMPILER": "gcc",
                 "VCPKG_TARGET_TRIPLET" : "x64-mingw-dynamic",
                 "VCPKG_HOST_TRIPLET" : "x64-mingw-dynamic",
-                "HDF5_ROOT": "C:/msys64/mingw64"
+                "HDF5_ROOT": "C:/msys64/mingw64",
+                "EIGEN3_ROOT": "C:/msys64/mingw64/include/eigen3"
             },
             "condition": {
                 "type": "equals",

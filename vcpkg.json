@@ -5,5 +5,11 @@
         "llnl-units",
         "boost-variant",
         "tsl-ordered-map"
+    ],
+    "overrides": [
+        {
+            "name": "eigen3",
+            "version-string": "3.3.7"
+        }
     ]
 }

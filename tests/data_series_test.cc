@@ -14,6 +14,14 @@ using xdataset::Measurement;
 using xdataset::DataType;
 using xdataset::Index;
 using xdataset::Unit;
+using xdataset::VecXd;
+using xdataset::VecXi;
+using xdataset::VecXcd;
+using xdataset::VecXs;
+using xdataset::MatXd;
+using xdataset::MatXi;
+using xdataset::MatXcd;
+using xdataset::MatXs;
 
 // ---------------------------------------------------------------------------
 // Scalar  creation, write, read-back
@@ -248,7 +256,7 @@ TEST(VectorTest, DotProductBetweenRows) {
 TEST(VectorTest, AppendGrowsSize) {
     DataSeries vecs(DataKind::kVector, DataType::kReal, {4});
     vecs.resize(2);
-    Eigen::Matrix<double, 1, Eigen::Dynamic> v(4);
+    VecXd v(4);
     v << 0.5, 0.5, 0.5, 0.5;
     vecs.append(Measurement(v));
     EXPECT_EQ(vecs.size(), 3u);
@@ -288,7 +296,7 @@ TEST(VectorTest, IlocPreservesContent) {
 TEST(VectorTest, StringVector) {
     DataSeries tags(DataKind::kVector, DataType::kString, {3});
     tags.resize(2);
-    Eigen::Tensor<std::string, 1> t0(3);
+    VecXs t0(3);
     t0(0) = "red"; t0(1) = "big"; t0(2) = "fast";
     tags.vector_at<std::string>(0) = t0;
 
@@ -347,8 +355,8 @@ TEST(VectorTest, DynamicAppendWithoutInitialRowCount) {
 
     Eigen::RowVector3d a(1.0, 2.0, 3.0);
     Eigen::RowVector3d b(4.0, 5.0, 6.0);
-    vecs.append(Measurement(Eigen::RowVectorXd(a)));
-    vecs.append(Measurement(Eigen::RowVectorXd(b)));
+    vecs.append(Measurement(VecXd(a)));
+    vecs.append(Measurement(VecXd(b)));
 
     ASSERT_EQ(vecs.size(), 2u);
     EXPECT_DOUBLE_EQ(vecs.vector_at<double>(1)(2), 6.0);
@@ -367,7 +375,7 @@ TEST(VectorTest, ComplexVector) {
     using cd = std::complex<double>;
     DataSeries vecs(DataKind::kVector, DataType::kComplex, {2});
     vecs.resize(1);
-    Eigen::Matrix<cd, 1, Eigen::Dynamic> v(2);
+    VecXcd v(2);
     v(0) = cd(1.0, 2.0);
     v(1) = cd(3.0, 4.0);
     vecs.vector_at<cd>(0) = v;
@@ -388,9 +396,9 @@ TEST(VectorExceptionTest, VectorAtOutOfRange) {
 TEST(VectorExceptionTest, AppendWrongWidthThrows) {
     DataSeries vecs(DataKind::kVector, DataType::kReal, {3});
     vecs.resize(1);
-    Eigen::Matrix<double, 1, Eigen::Dynamic> bad(5);
+    VecXd bad(5);
     bad.setZero();
-    EXPECT_THROW(vecs.append(Measurement(bad)), std::invalid_argument);
+    EXPECT_THROW(vecs.append(Measurement(bad)), std::bad_cast);
 }
 
 TEST(VectorExceptionTest, FromRowsMismatchedWidthThrows) {
@@ -428,15 +436,15 @@ TEST(MatrixTest, TraceAndProduct) {
     mats.matrix_at<double>(0) = Eigen::Matrix3d::Identity();
     mats.matrix_at<double>(1) = Eigen::Matrix3d::Ones() * 2.0;
     EXPECT_DOUBLE_EQ(mats.matrix_at<double>(1).trace(), 6.0);
-    xdataset::MatrixXRd product = mats.matrix_at<double>(0) * mats.matrix_at<double>(1);
+    xdataset::MatXd product = mats.matrix_at<double>(0) * mats.matrix_at<double>(1);
     EXPECT_DOUBLE_EQ(product.sum(), 18.0);
 }
 
 TEST(MatrixTest, AppendGrowsSize) {
     DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
     mats.resize(2);
-    xdataset::MatrixXRd m = Eigen::Matrix3d::Random();
-    mats.append(Measurement(xdataset::MatrixXRd(m)));
+    xdataset::MatXd m = Eigen::Matrix3d::Random();
+    mats.append(Measurement(xdataset::MatXd(m)));
     EXPECT_EQ(mats.size(), 3u);
 }
 
@@ -559,8 +567,8 @@ TEST(MatrixTest, DynamicAppendWithoutInitialRowCount) {
     a << 1, 2, 3, 4;
     Eigen::Matrix2d b;
     b << 5, 6, 7, 8;
-    mats.append(Measurement(xdataset::MatrixXRd(a)));
-    mats.append(Measurement(xdataset::MatrixXRd(b)));
+    mats.append(Measurement(xdataset::MatXd(a)));
+    mats.append(Measurement(xdataset::MatXd(b)));
 
     ASSERT_EQ(mats.size(), 2u);
     EXPECT_DOUBLE_EQ(mats.matrix_at<double>(1)(1, 0), 7.0);
@@ -579,9 +587,9 @@ TEST(MatrixExceptionTest, MatrixAtOutOfRange) {
 TEST(MatrixExceptionTest, AppendWrongShapeThrows) {
     DataSeries mats(DataKind::kMatrix, DataType::kReal, {2, 2});
     mats.resize(1);
-    xdataset::MatrixXRd bad(3, 3);
+    MatXd bad(3, 3);
     bad.setZero();
-    EXPECT_THROW(mats.append(Measurement(bad)), std::invalid_argument);
+    EXPECT_THROW(mats.append(Measurement(bad)), std::bad_cast);
 }
 
 TEST(MatrixExceptionTest, FromRowsMismatchedShapeThrows) {
