@@ -33,7 +33,7 @@ void check_h5(herr_t status, const char* msg)
 }
 
 // -----------------------------------------------------------------------
-// Type mapping: xdataset DataType ï¿?HDF5 type id.
+// Type mapping: xdataset DataType ï¿½?HDF5 type id.
 // Caller must close the returned type with H5Tclose unless it's a native type.
 // -----------------------------------------------------------------------
 hid_t h5_type_from(DataType dtype)
@@ -43,6 +43,7 @@ hid_t h5_type_from(DataType dtype)
     case DataType::kReal:    return H5T_NATIVE_DOUBLE;
     case DataType::kInteger: return H5T_NATIVE_INT;
     case DataType::kString:  return H5T_C_S1;  // base, will be sized later
+    case DataType::kBoolean: throw std::invalid_argument("Boolean not supported in HDF5");
     case DataType::kComplex:
     {
         hid_t tid = H5Tcreate(H5T_COMPOUND, sizeof(std::complex<double>));
@@ -196,6 +197,7 @@ void write_data_series(hid_t group, const std::string& name, const DataSeries& s
     case DataType::kInteger: dtype_str = "int";     break;
     case DataType::kComplex: dtype_str = "complex"; break;
     case DataType::kString:  dtype_str = "string";  break;
+    case DataType::kBoolean: dtype_str = "bool";    break;
     }
     write_str_attr(dset, "dtype", dtype_str);
 
@@ -236,7 +238,7 @@ void write_block(hid_t root_group, const std::string& block_path, const Block& b
     }
     // current is the leaf HDF5 group = the Block's home.
 
-    // Independent DataSeries ï¿?Datasets with dimension attributes
+    // Independent DataSeries ï¿½?Datasets with dimension attributes
     for (const auto& name : block.independents())
     {
         const IndependentSpec& spec = block.independent_spec(name);
@@ -246,7 +248,7 @@ void write_block(hid_t root_group, const std::string& block_path, const Block& b
         H5Dclose(dset);
     }
 
-    // Dependent DataSeries ï¿?Datasets
+    // Dependent DataSeries ï¿½?Datasets
     for (const auto& name : block.dependents())
     {
         const DependentSpec& spec = block.dependent_spec(name);
@@ -505,7 +507,7 @@ Block read_block(hid_t group, const std::string& block_name)
         int otype = H5Gget_objtype_by_idx(bg, i);
         if (otype != H5G_DATASET) continue;
 
-        // Check if this dataset has a dim_type attribute ï¿?independent
+        // Check if this dataset has a dim_type attribute ï¿½?independent
         hid_t dset = H5Dopen2(bg, oname.c_str(), H5P_DEFAULT);
         bool has_dim = H5Aexists(dset, "dim_type");
         H5Dclose(dset);

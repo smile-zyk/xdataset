@@ -20,8 +20,9 @@
 #include "data_series.h"
 #include "data_array.h"
 
-#include <Eigen/SVD>
+#include <Eigen/LU>
 
+#include <cmath>
 #include <complex>
 #include <stdexcept>
 #include <string>
@@ -525,8 +526,6 @@ DataType DeriveDtypeCmp(const std::vector<DataType>& dtypes) {
 }
 
 DataType DeriveDtypeForceInt(const std::vector<DataType>& /*dtypes*/) {
-    // Boolean would never appear here (comparison/logical always produce Integer),
-    // but be defensive.
     return DataType::kInteger;
 }
 
@@ -802,14 +801,14 @@ template <> inline int op_bitnot<int>(int a) { return ~a; }
 //  Row-level and cell-level broadcast are driven by the two plans.
 //  This function does not depend on ExecContextInfo.
 
-template <typename T>
+template <typename T, typename Out = T>
 void ExecBinaryLoop(Index rows,
                      const RowBroadcastPlan&   row_plan,
                      const ShapeBroadcastPlan& shape_plan,
                      const T* l_ptr, Index l_stride,
                      const T* r_ptr, Index r_stride,
-                     T* out,
-                     ElemOp<T> elem_op)
+                     Out* out,
+                     Out (*elem_op)(T, T))
 {
     Index out_stride = shape_plan.result_elements;
 
@@ -834,25 +833,27 @@ void ExecBinaryLoop(Index rows,
 
 namespace {
 
+/// Reconstruct a Measurement from a flat typed buffer and a DataShape.
 template <typename T>
 Measurement MakeMeasFromFlat(const T* data,
-                              const ShapeBroadcastPlan& sp,
+                              const DataShape& shape,
                               const Unit& unit) {
-    DataKind dk = sp.result_shape.kind();
+    DataKind dk = shape.kind();
 
     if (dk == DataKind::kScalar)
         return Measurement(data[0], unit);
 
     if (dk == DataKind::kVector) {
-        Index w = sp.result_cols;
+        Index w = shape[0];
         Eigen::Matrix<T, 1, Eigen::Dynamic> v(w);
         for (Index i = 0; i < w; ++i)
             v(i) = data[i];
         return Measurement(v, unit);
     }
 
-    Index r = sp.result_elements / sp.result_cols;
-    Index c = sp.result_cols;
+    // Matrix
+    Index r = shape[0];
+    Index c = shape[1];
     Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> m(r, c);
     for (Index i = 0; i < r; ++i)
         for (Index j = 0; j < c; ++j)
@@ -867,6 +868,16 @@ Value MakeArrayFromFlat(std::unique_ptr<DataSeries> ds, const DataArray& src) {
     arr_info.multi_dimension_spec     = src.multi_dimension_spec();
     arr_info.kind                     = src.data_kind();
     return Value(DataArray(std::move(arr_info)));
+}
+
+/// Binary ops: when the output is a DataArray, choose which operand's
+/// metadata (MultiDimensionSpec, DataArrayKind) to inherit.
+static const DataArray* SelectOutputSource(bool l_meas, bool r_meas,
+                                            const std::vector<Value>& ops) {
+    if (!l_meas && !r_meas) return &ops[0].as_array();
+    if (l_meas && !r_meas) return &ops[1].as_array();
+    if (!l_meas && r_meas) return &ops[0].as_array();
+    return nullptr;
 }
 
 }  // anonymous namespace
@@ -1008,13 +1019,7 @@ Value ExecBinaryArithT(const ExecContextInfo& info,
     // ====================================
     //  Step 2: 分配输出
     // ====================================
-    const DataArray* out_src = NULL;
-    if (!l_meas && !r_meas)
-        out_src = &ops[0].as_array();
-    else if (l_meas && !r_meas)
-        out_src = &ops[1].as_array();
-    else if (!l_meas && r_meas)
-        out_src = &ops[0].as_array();
+    const DataArray* out_src = SelectOutputSource(l_meas, r_meas, ops);
 
     auto out_ds = std::unique_ptr<DataSeries>(
         new DataSeries(info.shape.kind(), DataTypeOf<T>::tag, info.shape));
@@ -1032,7 +1037,7 @@ Value ExecBinaryArithT(const ExecContextInfo& info,
     //  Step 4: 输出 -> Value
     // ====================================
     if (l_meas && r_meas) {
-        return Value(MakeMeasFromFlat(out, shape_plan, info.unit));
+        return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
         return MakeArrayFromFlat(std::move(out_ds), *out_src);
     }
@@ -1089,13 +1094,7 @@ Value ExecBinaryCmpT(const ExecContextInfo& info,
     Index    l_stride = l_in.stride;
     Index    r_stride = r_in.stride;
 
-    const DataArray* out_src = NULL;
-    if (!l_meas && !r_meas)
-        out_src = &ops[0].as_array();
-    else if (l_meas && !r_meas)
-        out_src = &ops[1].as_array();
-    else if (!l_meas && r_meas)
-        out_src = &ops[0].as_array();
+    const DataArray* out_src = SelectOutputSource(l_meas, r_meas, ops);
 
     // Output is int (0/1), using same shape/kind as result
     auto out_ds = std::unique_ptr<DataSeries>(
@@ -1107,33 +1106,15 @@ Value ExecBinaryCmpT(const ExecContextInfo& info,
     auto elem_op = GetCmpOp<T>(info.op);
     Index out_stride = shape_plan.result_elements;
 
-    for (Index i = 0; i < info.rows; ++i) {
-        Index l_row_off = (row_plan.broadcast[0] ? 0 : i) * l_stride;
-        Index r_row_off = (row_plan.broadcast[1] ? 0 : i) * r_stride;
-        Index o_off     = i * out_stride;
-
-        for (Index j = 0; j < shape_plan.result_elements; ++j) {
-            Index lj = shape_plan.MapFlatIndex(j, 0);
-            Index rj = shape_plan.MapFlatIndex(j, 1);
-            out[o_off + j] = elem_op(
-                l_ptr[l_row_off + lj],
-                r_ptr[r_row_off + rj]);
-        }
-    }
+    ExecBinaryLoop<T, int>(info.rows, row_plan, shape_plan,
+                           l_ptr, l_stride, r_ptr, r_stride, out, elem_op);
 
     if (l_meas && r_meas) {
-        ShapeBroadcastPlan sp;
-        sp.result_shape    = info.shape;
-        sp.result_elements = out_stride;
-        DataKind dk = info.shape.kind();
-        sp.result_cols = (dk == DataKind::kMatrix) ? info.shape[1]
-                       : (dk == DataKind::kVector) ? info.shape[0] : 1;
-
         // Scalar Meas -> upgrade to Boolean
         if (info.shape.kind() == DataKind::kScalar)
             return Value(Measurement::Boolean(out[0] != 0));
 
-        return Value(MakeMeasFromFlat(out, sp, info.unit));
+        return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
         return MakeArrayFromFlat(std::move(out_ds), *out_src);
     }
@@ -1212,13 +1193,7 @@ static Value ExecBinaryCmpString(const ExecContextInfo& info,
     // Compare strings directly
     auto elem_op = GetStrCmpOp(info.op);
 
-    const DataArray* out_src = NULL;
-    if (!l_meas && !r_meas)
-        out_src = &ops[0].as_array();
-    else if (l_meas && !r_meas)
-        out_src = &ops[1].as_array();
-    else if (!l_meas && r_meas)
-        out_src = &ops[0].as_array();
+    const DataArray* out_src = SelectOutputSource(l_meas, r_meas, ops);
 
     auto out_ds = std::unique_ptr<DataSeries>(
         new DataSeries(info.shape.kind(), DataType::kInteger, info.shape));
@@ -1241,15 +1216,9 @@ static Value ExecBinaryCmpString(const ExecContextInfo& info,
     }
 
     if (l_meas && r_meas) {
-        ShapeBroadcastPlan sp;
-        sp.result_shape    = info.shape;
-        sp.result_elements = out_stride;
-        DataKind dk = info.shape.kind();
-        sp.result_cols = (dk == DataKind::kMatrix) ? info.shape[1]
-                       : (dk == DataKind::kVector) ? info.shape[0] : 1;
         if (info.shape.kind() == DataKind::kScalar)
             return Value(Measurement::Boolean(out[0] != 0));
-        return Value(MakeMeasFromFlat(out, sp, info.unit));
+        return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
         return MakeArrayFromFlat(std::move(out_ds), *out_src);
     }
@@ -1296,8 +1265,7 @@ Value ExecuteBinaryLogical(const ExecContextInfo& info,
             ds.append(m);
             auto logical_ds = std::unique_ptr<DataSeries>(new DataSeries(ds.as_logical()));
             return Value(MakeMeasFromFlat(logical_ds->contiguous_data<int>(),
-                        ShapeBroadcastPlan::Make({m.shape()}, m.shape()),
-                        m.unit()));
+                        m.shape(), m.unit()));
         } else {
             auto logical_ds = std::unique_ptr<DataSeries>(new DataSeries(v.as_array().data().as_logical()));
             return MakeArrayFromFlat(std::move(logical_ds), v.as_array());
@@ -1383,17 +1351,11 @@ static Value ExecMatrixT(const ExecContextInfo& info,
     }
 
     if (all_meas) {
-        ShapeBroadcastPlan sp;
-        sp.result_shape    = info.shape;
-        sp.result_elements = row_stride;
-        DataKind dk = info.shape.kind();
-        sp.result_cols = (dk == DataKind::kMatrix) ? info.shape[1]
-                       : (dk == DataKind::kVector) ? info.shape[0] : 1;
-        return Value(MakeMeasFromFlat(out, sp, info.unit));
+        return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     }
 
     // Preserve metadata from first DataArray operand
-    const DataArray* tmpl = NULL;
+    const DataArray* tmpl = nullptr;
     for (size_t i = 0; i < ops.size(); ++i)
         if (ops[i].is_array()) { tmpl = &ops[i].as_array(); break; }
     if (tmpl)
@@ -1505,7 +1467,7 @@ static Value ExecMatrixString(const ExecContextInfo& info,
                     out_ds->matrix_at<std::string>(r)(i, j) = std::move(flat[static_cast<std::size_t>(base + i * info.shape[1] + j)]);
     }
     // DataArray output: preserve metadata from first DataArray operand
-    const DataArray* tmpl = NULL;
+    const DataArray* tmpl = nullptr;
     for (size_t i = 0; i < ops.size(); ++i)
         if (ops[i].is_array()) { tmpl = &ops[i].as_array(); break; }
     if (tmpl)
@@ -1566,19 +1528,23 @@ static Value ExecSweepT(const ExecContextInfo& info,
     out_ds->resize(static_cast<std::size_t>(result_rows));
     T* out = out_ds->mutable_contiguous_data<T>();
 
-    for (Index r = 0; r < result_rows; ++r) {
-        Index op_row = (ops[static_cast<size_t>(r)].is_meas())
-                       ? 0
-                       : (row_plan.broadcast[static_cast<size_t>(r)] ? 0 : r);
-        const T* src = inputs[static_cast<size_t>(r)].ptr + op_row * inputs[static_cast<size_t>(r)].stride;
+    Index out_row = 0;
+    for (size_t k = 0; k < ops.size(); ++k) {
+        Index n_rows = ops[k].rows();
+        for (Index local_r = 0; local_r < n_rows; ++local_r, ++out_row) {
+            Index op_row = (ops[k].is_meas())
+                           ? 0
+                           : (row_plan.broadcast[k] ? 0 : local_r);
+            const T* src = inputs[k].ptr + op_row * inputs[k].stride;
 
-        if (inputs[static_cast<size_t>(r)].stride == cell_elems) {
-            for (Index j = 0; j < cell_elems; ++j)
-                out[r * cell_elems + j] = src[j];
-        } else {
-            for (Index j = 0; j < cell_elems; ++j) {
-                Index sj = shape_plan.MapFlatIndex(j, static_cast<int>(r));
-                out[r * cell_elems + j] = src[sj];
+            if (inputs[k].stride == cell_elems) {
+                for (Index j = 0; j < cell_elems; ++j)
+                    out[out_row * cell_elems + j] = src[j];
+            } else {
+                for (Index j = 0; j < cell_elems; ++j) {
+                    Index sj = shape_plan.MapFlatIndex(j, static_cast<int>(k));
+                    out[out_row * cell_elems + j] = src[sj];
+                }
             }
         }
     }
@@ -1606,46 +1572,50 @@ static Value ExecSweepString(const ExecContextInfo& info,
 
     std::vector<std::string> flat(static_cast<std::size_t>(total));
 
-    for (Index r = 0; r < result_rows; ++r) {
-        Index op_row = row_plan.broadcast[static_cast<size_t>(r)] ? 0 : r;
-        Index base = r * cell_elems;
+    Index out_row = 0;
+    for (size_t k = 0; k < ops.size(); ++k) {
+        Index n_rows = ops[k].rows();
+        for (Index local_r = 0; local_r < n_rows; ++local_r, ++out_row) {
+            Index op_row = row_plan.broadcast[k] ? 0 : local_r;
+            Index base = out_row * cell_elems;
 
-        if (ops[static_cast<size_t>(r)].is_meas()) {
-            const Measurement& m = ops[static_cast<size_t>(r)].as_meas();
-            DataKind dk = m.data_kind();
-            if (dk == DataKind::kScalar) {
-                std::string s = m.as_scalar<std::string>();
-                for (Index j = 0; j < cell_elems; ++j)
-                    flat[static_cast<std::size_t>(base + j)] = s;
-            } else if (dk == DataKind::kVector) {
-                auto vec = m.as_vector<std::string>();
-                for (Index j = 0; j < cell_elems; ++j)
-                    flat[static_cast<std::size_t>(base + j)] = vec(shape_plan.MapFlatIndex(j, static_cast<int>(r)));
-            } else {
-                auto mat = m.as_matrix<std::string>();
-                Index cols = m.shape()[1];
-                for (Index j = 0; j < cell_elems; ++j) {
-                    Index sj = shape_plan.MapFlatIndex(j, static_cast<int>(r));
-                    flat[static_cast<std::size_t>(base + j)] = mat(sj / cols, sj % cols);
+            if (ops[k].is_meas()) {
+                const Measurement& m = ops[k].as_meas();
+                DataKind dk = m.data_kind();
+                if (dk == DataKind::kScalar) {
+                    std::string s = m.as_scalar<std::string>();
+                    for (Index j = 0; j < cell_elems; ++j)
+                        flat[static_cast<std::size_t>(base + j)] = s;
+                } else if (dk == DataKind::kVector) {
+                    auto vec = m.as_vector<std::string>();
+                    for (Index j = 0; j < cell_elems; ++j)
+                        flat[static_cast<std::size_t>(base + j)] = vec(shape_plan.MapFlatIndex(j, static_cast<int>(k)));
+                } else {
+                    auto mat = m.as_matrix<std::string>();
+                    Index cols = m.shape()[1];
+                    for (Index j = 0; j < cell_elems; ++j) {
+                        Index sj = shape_plan.MapFlatIndex(j, static_cast<int>(k));
+                        flat[static_cast<std::size_t>(base + j)] = mat(sj / cols, sj % cols);
+                    }
                 }
-            }
-        } else {
-            const DataSeries& ds = ops[static_cast<size_t>(r)].as_array().data();
-            DataKind dk = ds.data_kind();
-            if (dk == DataKind::kScalar) {
-                std::string s = ds.scalar_at<std::string>(op_row);
-                for (Index j = 0; j < cell_elems; ++j)
-                    flat[static_cast<std::size_t>(base + j)] = s;
-            } else if (dk == DataKind::kVector) {
-                auto vec = ds.vector_at<std::string>(op_row);
-                for (Index j = 0; j < cell_elems; ++j)
-                    flat[static_cast<std::size_t>(base + j)] = vec(shape_plan.MapFlatIndex(j, static_cast<int>(r)));
             } else {
-                auto mat = ds.matrix_at<std::string>(op_row);
-                Index cols = ds.data_shape()[1];
-                for (Index j = 0; j < cell_elems; ++j) {
-                    Index sj = shape_plan.MapFlatIndex(j, static_cast<int>(r));
-                    flat[static_cast<std::size_t>(base + j)] = mat(sj / cols, sj % cols);
+                const DataSeries& ds = ops[k].as_array().data();
+                DataKind dk = ds.data_kind();
+                if (dk == DataKind::kScalar) {
+                    std::string s = ds.scalar_at<std::string>(op_row);
+                    for (Index j = 0; j < cell_elems; ++j)
+                        flat[static_cast<std::size_t>(base + j)] = s;
+                } else if (dk == DataKind::kVector) {
+                    auto vec = ds.vector_at<std::string>(op_row);
+                    for (Index j = 0; j < cell_elems; ++j)
+                        flat[static_cast<std::size_t>(base + j)] = vec(shape_plan.MapFlatIndex(j, static_cast<int>(k)));
+                } else {
+                    auto mat = ds.matrix_at<std::string>(op_row);
+                    Index cols = ds.data_shape()[1];
+                    for (Index j = 0; j < cell_elems; ++j) {
+                        Index sj = shape_plan.MapFlatIndex(j, static_cast<int>(k));
+                        flat[static_cast<std::size_t>(base + j)] = mat(sj / cols, sj % cols);
+                    }
                 }
             }
         }
@@ -1740,7 +1710,7 @@ Value ExecUnaryT(const ExecContextInfo& info,
     ExecUnaryLoop(info.rows, shape_plan, ptr, stride, out, op);
 
     if (is_meas) {
-        return Value(MakeMeasFromFlat(out, shape_plan, info.unit));
+        return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
         const DataArray& src = ops[0].as_array();
         return MakeArrayFromFlat(std::move(out_ds), src);
@@ -1784,8 +1754,7 @@ Value ExecuteUnaryNot(const ExecContextInfo& info,
             ds.append(m);
             auto logical_ds = std::unique_ptr<DataSeries>(new DataSeries(ds.as_logical()));
             v = Value(MakeMeasFromFlat(logical_ds->contiguous_data<int>(),
-                        ShapeBroadcastPlan::Make({m.shape()}, m.shape()),
-                        m.unit()));
+                        m.shape(), m.unit()));
         }
     } else {
         auto logical_ds = std::unique_ptr<DataSeries>(new DataSeries(ops[0].as_array().data().as_logical()));
@@ -1816,18 +1785,13 @@ Value ExecuteUnaryBitNot(const ExecContextInfo& info,
 template <typename T>
 static Mat<T> ComputeInverse(const T* B, Index n) {
     MatConstMap<T> Bmap(B, n, n);
-    Eigen::JacobiSVD<Mat<T>> svd(Bmap, Eigen::ComputeThinU | Eigen::ComputeThinV);
+    Eigen::FullPivLU<Mat<T>> lu(Bmap);
 
-    typedef typename Eigen::NumTraits<T>::Real RealScalar;
-    RealScalar sigma_max = svd.singularValues()(0);
-    RealScalar sigma_min = svd.singularValues()(static_cast<Index>(svd.singularValues().size()) - 1);
-
-    if (sigma_min <= Eigen::NumTraits<RealScalar>::epsilon() * sigma_max)
+    if (!lu.isInvertible())
         throw std::invalid_argument(
-            "RHS matrix is singular; division undefined "
-            "(condition number = " + std::to_string(sigma_max / sigma_min) + ")");
+            "RHS matrix is singular; division undefined");
 
-    return Bmap.inverse();
+    return lu.inverse();
 }
 
 // =========================================================================
@@ -1858,13 +1822,7 @@ Value ExecBinaryMatMulT(const ExecContextInfo& info,
     Index    l_stride = l_in.stride;
     Index    r_stride = r_in.stride;
 
-    const DataArray* out_src = NULL;
-    if (!l_meas && !r_meas)
-        out_src = &ops[0].as_array();
-    else if (l_meas && !r_meas)
-        out_src = &ops[1].as_array();
-    else if (!l_meas && r_meas)
-        out_src = &ops[0].as_array();
+    const DataArray* out_src = SelectOutputSource(l_meas, r_meas, ops);
 
     auto out_ds = std::unique_ptr<DataSeries>(
         new DataSeries(info.shape.kind(), DataTypeOf<T>::tag, info.shape));
@@ -1885,14 +1843,7 @@ Value ExecBinaryMatMulT(const ExecContextInfo& info,
     }
 
     if (l_meas && r_meas) {
-        ShapeBroadcastPlan sp;                            
-        sp.result_shape    = info.shape;
-        sp.result_elements = out_stride;
-        DataKind dk        = info.shape.kind();
-        sp.result_cols     = (dk == DataKind::kMatrix) ? info.shape[1]
-                           : (dk == DataKind::kVector) ? info.shape[0]
-                           : 1;
-        return Value(MakeMeasFromFlat(out, sp, info.unit));
+        return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
         return MakeArrayFromFlat(std::move(out_ds), *out_src);
     }
@@ -1927,13 +1878,7 @@ Value ExecBinaryDivT(const ExecContextInfo& info,
     Index    l_stride = l_in.stride;
     Index    r_stride = r_in.stride;
 
-    const DataArray* out_src = NULL;
-    if (!l_meas && !r_meas)
-        out_src = &ops[0].as_array();
-    else if (l_meas && !r_meas)
-        out_src = &ops[1].as_array();
-    else if (!l_meas && r_meas)
-        out_src = &ops[0].as_array();
+    const DataArray* out_src = SelectOutputSource(l_meas, r_meas, ops);
 
     auto out_ds = std::unique_ptr<DataSeries>(
         new DataSeries(info.shape.kind(), DataTypeOf<T>::tag, info.shape));
@@ -1956,14 +1901,7 @@ Value ExecBinaryDivT(const ExecContextInfo& info,
     }
 
     if (l_meas && r_meas) {
-        ShapeBroadcastPlan sp;
-        sp.result_shape    = info.shape;
-        sp.result_elements = out_stride;
-        DataKind dk        = info.shape.kind();
-        sp.result_cols     = (dk == DataKind::kMatrix) ? info.shape[1]
-                           : (dk == DataKind::kVector) ? info.shape[0]
-                           : 1;
-        return Value(MakeMeasFromFlat(out, sp, info.unit));
+        return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
         return MakeArrayFromFlat(std::move(out_ds), *out_src);
     }
@@ -2012,8 +1950,6 @@ Value ExecuteBinaryDiv(const ExecContextInfo& info,
             return ExecBinaryDivT<std::complex<double>>(info, ops);
         case DataType::kReal:
             return ExecBinaryDivT<double>(info, ops);
-        case DataType::kInteger:
-            return ExecBinaryDivT<double>(info, ops);
         default:
             throw std::invalid_argument("unsupported dtype for div");
     }
@@ -2047,7 +1983,7 @@ const OpTraits kOpDiv = {
 
 const OpTraits kOpMod = {
     OpCategory::kMod, 2, DeriveShapeBroadcast, DeriveRowsBroadcast,
-    DeriveDtypeMod, DeriveUnitDimless, ExecuteBinaryArith
+    DeriveDtypeMod, DeriveUnitSameDim, ExecuteBinaryArith
 };
 
 const OpTraits kOpPow = {
@@ -2120,12 +2056,12 @@ const OpTraits kOpBitXor = {
 
 const OpTraits kOpShl = {
     OpCategory::kShl, 2, DeriveShapeBroadcast, DeriveRowsBroadcast,
-    DeriveDtypeBitwise, DeriveUnitFirst, ExecuteBinaryShift
+    DeriveDtypeBitwise, DeriveUnitDimless, ExecuteBinaryShift
 };
 
 const OpTraits kOpShr = {
     OpCategory::kShr, 2, DeriveShapeBroadcast, DeriveRowsBroadcast,
-    DeriveDtypeBitwise, DeriveUnitFirst, ExecuteBinaryShift
+    DeriveDtypeBitwise, DeriveUnitDimless, ExecuteBinaryShift
 };
 
 // ---- unary ----------------------------------------------------------------
@@ -2149,7 +2085,7 @@ const OpTraits kOpBitNot = {
 
 const OpTraits kOpConditional = {
     OpCategory::kConditional, 3, DeriveShapeBroadcast, DeriveRowsBroadcast,
-    DeriveDtypePromote, DeriveUnitFirst, NULL
+    DeriveDtypePromote, DeriveUnitFirst, nullptr
 };
 
 // ---- variadic (TODO: execute) ----------------------------------------------
