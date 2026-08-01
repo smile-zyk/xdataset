@@ -72,6 +72,22 @@ public:
     Index     rows() const;         // Measurement = 1, DataArray = data().size()
     Index     element_count() const;
 
+    // ---- convenience queries -------------------------------------------
+
+    bool is_scalar() const { return data_kind() == DataKind::kScalar; }
+    bool is_vector() const { return data_kind() == DataKind::kVector; }
+    bool is_matrix() const { return data_kind() == DataKind::kMatrix; }
+
+    // ---- canonicalization ----------------------------------------------
+
+    /// Return a canonicalized copy (multiplier absorbed, unit = base SI).
+    /// Measurement: delegates to Measurement::canonicalized().
+    /// DataArray: canonicalizes kSelf DataSeries, preserves indep dims.
+    Value canonicalized() const;
+
+    /// True when already canonical (no-op for canonicalized()).
+    bool is_canonicalized() const;
+
     // ---- formatting ----------------------------------------------------
 
     /// Human-readable string.

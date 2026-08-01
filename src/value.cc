@@ -20,6 +20,8 @@ Value::Value(const DataArray& da)
 
 Value::Value(std::shared_ptr<DataArray> da) : storage_(std::move(da)) {}
 
+// ---- type queries ----------------------------------------------------------
+
 bool Value::is_measurement() const {
     return storage_.which() == 0;
 }
@@ -27,6 +29,8 @@ bool Value::is_measurement() const {
 bool Value::is_data_array() const {
     return storage_.which() == 1;
 }
+
+// ---- accessors -------------------------------------------------------------
 
 Measurement& Value::as_measurement() {
     return boost::get<Measurement>(storage_);
@@ -43,6 +47,8 @@ DataArray& Value::as_data_array() {
 const DataArray& Value::as_data_array() const {
     return *boost::get<std::shared_ptr<DataArray>>(storage_);
 }
+
+// ---- unified metadata ------------------------------------------------------
 
 DataKind Value::data_kind() const {
     if (is_measurement()) return as_measurement().data_kind();
@@ -74,6 +80,41 @@ Index Value::element_count() const {
     return as_data_array().element_count();
 }
 
+// ---- canonicalization ------------------------------------------------------
+
+Value Value::canonicalized() const
+{
+    if (is_measurement()) {
+        const Measurement& m = as_measurement();
+        if (m.is_canonicalized()) return *this;
+        return Value(m.canonicalized());
+    }
+    if (is_data_array()) {
+        const DataArray& da = as_data_array();
+        if (da.data().is_canonicalized()) return *this;
+
+        auto canonical_datas = da.datas();
+        canonical_datas[DataArray::kSelf] = da.data().canonicalized();
+
+        DataArrayCreateInfo info;
+        info.datas                = std::move(canonical_datas);
+        info.multi_dimension_spec = da.multi_dimension_spec();
+        info.kind                 = da.data_kind();
+
+        return Value(std::make_shared<DataArray>(std::move(info)));
+    }
+    return *this;
+}
+
+bool Value::is_canonicalized() const
+{
+    if (is_measurement()) return as_measurement().is_canonicalized();
+    if (is_data_array()) return as_data_array().data().is_canonicalized();
+    return true;
+}
+
+// ---- formatting ------------------------------------------------------------
+
 std::string Value::Format(const std::string& name, int max_rows) const
 {
     if (is_measurement())
@@ -87,6 +128,8 @@ std::string Value::Format(const std::string& name, int max_rows) const
     const std::string& header = name.empty() ? "data" : name;
     return da.GetOrCreateDataFrame(header).to_string(max_rows);
 }
+
+// ---- convenience factories -------------------------------------------------
 
 Value Value::Real(double v) {
     return Value(Measurement(v));

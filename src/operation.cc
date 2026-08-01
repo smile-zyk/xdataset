@@ -231,20 +231,27 @@ Value Operate(const std::vector<Value>& operands, const OpTraits& traits) {
         }
     }
 
-    // Extract per-operand metadata
+    // Canonicalize operands (absorb scale multipliers, convert to base SI)
+    std::vector<Value> canonical_ops;
+    canonical_ops.reserve(operands.size());
+    for (size_t i = 0; i < operands.size(); ++i) {
+        canonical_ops.push_back(operands[i].canonicalized());
+    }
+
+    // Extract per-operand metadata from canonicalized operands
     std::vector<DataShape> operand_shapes;
     std::vector<Index>     row_counts;
     std::vector<DataType>  dtypes;
     std::vector<Unit>      units;
 
-    for (size_t i = 0; i < operands.size(); ++i) {
-        operand_shapes.push_back(operands[i].data_shape());
-        row_counts.push_back(operands[i].rows());
-        dtypes.push_back(operands[i].data_type());
-        units.push_back(operands[i].unit());
+    for (size_t i = 0; i < canonical_ops.size(); ++i) {
+        operand_shapes.push_back(canonical_ops[i].data_shape());
+        row_counts.push_back(canonical_ops[i].rows());
+        dtypes.push_back(canonical_ops[i].data_type());
+        units.push_back(canonical_ops[i].unit());
     }
 
-    // Derive result metadata from operands
+    // Derive result metadata from canonicalized operands
     DataShape shape       = traits.derive_shape(operand_shapes);
     Index     rows        = traits.derive_rows(row_counts);
     DataType  dtype       = traits.derive_dtype(dtypes);
@@ -258,7 +265,7 @@ Value Operate(const std::vector<Value>& operands, const OpTraits& traits) {
     info.dtype = dtype;
     info.unit  = unit;
 
-    return traits.execute(info, operands);
+    return traits.execute(info, canonical_ops);
 }
 
 // =========================================================================
