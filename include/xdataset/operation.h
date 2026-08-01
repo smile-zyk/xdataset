@@ -70,7 +70,12 @@ XDATASET_API Value OperationOr(const Value& lhs, const Value& rhs);
 XDATASET_API Value OperationConditional(const Value& condition,
                                          const Value& true_value,
                                          const Value& false_value);
-
+/// If(cond0, val0, cond1, val1, ..., cond_{n-1}, val_{n-1}, else_val)
+/// — multi-branch if/elseif/else.  Takes 2n+1 operands (n >= 1).
+/// For each element, the first branch whose condition is non-zero provides
+/// the result; if no condition matches, the final else_val is used.
+/// This generalizes Conditional to an arbitrary number of branches.
+XDATASET_API Value OperationIf(const std::vector<Value>& operands);
 // =========================================================================
 // Variadic generators
 // =========================================================================

@@ -52,6 +52,7 @@ using xdataset::OperationBitXor;
 using xdataset::OperationShl;
 using xdataset::OperationShr;
 using xdataset::OperationConditional;
+using xdataset::OperationIf;
 using xdataset::OperationMatrix;
 using xdataset::OperationSweep;
 
@@ -1132,4 +1133,342 @@ TEST(OperationConditionalTest, StringMixedNumericThrows)
     Value t(xdataset::Measurement::String("s"));
     Value f(xdataset::Measurement(42));
     EXPECT_THROW(OperationConditional(cond, t, f), std::invalid_argument);
+}
+
+// =========================================================================
+//  OperationIf
+// =========================================================================
+
+TEST(OperationIfTest, ThreeOperandsEquivalentToConditionalTrue)
+{
+    // If(cond, true_val, else_val) === Conditional(cond, true_val, else_val)
+    Value cond(xdataset::Measurement(1));
+    Value t(xdataset::Measurement(42));
+    Value f(xdataset::Measurement(99));
+    Value result = OperationIf({cond, t, f});
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 42);
+}
+
+TEST(OperationIfTest, ThreeOperandsEquivalentToConditionalFalse)
+{
+    Value cond(xdataset::Measurement(0));
+    Value t(xdataset::Measurement(42));
+    Value f(xdataset::Measurement(99));
+    Value result = OperationIf({cond, t, f});
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 99);
+}
+
+TEST(OperationIfTest, FiveOperandsFirstBranchMatches)
+{
+    // If(cond1, val1, cond2, val2, else)
+    Value c1(xdataset::Measurement(1));   // true
+    Value v1(xdataset::Measurement(10));
+    Value c2(xdataset::Measurement(0));   // false
+    Value v2(xdataset::Measurement(20));
+    Value el(xdataset::Measurement(99));
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 10);
+}
+
+TEST(OperationIfTest, FiveOperandsSecondBranchMatches)
+{
+    Value c1(xdataset::Measurement(0));   // false
+    Value v1(xdataset::Measurement(10));
+    Value c2(xdataset::Measurement(1));   // true
+    Value v2(xdataset::Measurement(20));
+    Value el(xdataset::Measurement(99));
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 20);
+}
+
+TEST(OperationIfTest, FiveOperandsNoBranchMatches)
+{
+    Value c1(xdataset::Measurement(0));   // false
+    Value v1(xdataset::Measurement(10));
+    Value c2(xdataset::Measurement(0));   // false
+    Value v2(xdataset::Measurement(20));
+    Value el(xdataset::Measurement(99));
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 99);
+}
+
+TEST(OperationIfTest, SevenOperandsThirdBranchMatches)
+{
+    // If(c1,v1, c2,v2, c3,v3, else)
+    Value c1(xdataset::Measurement(0));   // false
+    Value v1(xdataset::Measurement(10));
+    Value c2(xdataset::Measurement(0));   // false
+    Value v2(xdataset::Measurement(20));
+    Value c3(xdataset::Measurement(1));   // true
+    Value v3(xdataset::Measurement(30));
+    Value el(xdataset::Measurement(99));
+    Value result = OperationIf({c1, v1, c2, v2, c3, v3, el});
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 30);
+}
+
+TEST(OperationIfTest, FirstTrueTakesPriority)
+{
+    // Both conditions true, first one wins
+    Value c1(xdataset::Measurement(1));
+    Value v1(xdataset::Measurement(10));
+    Value c2(xdataset::Measurement(1));
+    Value v2(xdataset::Measurement(20));
+    Value el(xdataset::Measurement(99));
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 10);
+}
+
+TEST(OperationIfTest, VectorElementWise)
+{
+    VecXd cv1(3); cv1 << 1.0, 0.0, 1.0;
+    VecXd cv2(3); cv2 << 0.0, 1.0, 0.0;
+    Value c1(xdataset::Measurement::Vector(cv1));
+    Value v1(xdataset::Measurement(10));
+    Value c2(xdataset::Measurement::Vector(cv2));
+    Value v2(xdataset::Measurement(20));
+    Value el(xdataset::Measurement(99));
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<int>();
+    EXPECT_EQ(vec(0), 10);  // c1 true
+    EXPECT_EQ(vec(1), 20);  // c2 true
+    EXPECT_EQ(vec(2), 10);  // c1 true
+}
+
+TEST(OperationIfTest, VectorElementWiseElseCase)
+{
+    VecXd cv1(3); cv1 << 0.0, 0.0, 0.0;
+    VecXd cv2(3); cv2 << 0.0, 0.0, 0.0;
+    Value c1(xdataset::Measurement::Vector(cv1));
+    Value v1(xdataset::Measurement(10));
+    Value c2(xdataset::Measurement::Vector(cv2));
+    Value v2(xdataset::Measurement(20));
+    Value el(xdataset::Measurement(99));
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<int>();
+    EXPECT_EQ(vec(0), 99);
+    EXPECT_EQ(vec(1), 99);
+    EXPECT_EQ(vec(2), 99);
+}
+
+TEST(OperationIfTest, ScalarCondVectorValues)
+{
+    Value c1(xdataset::Measurement(1));
+    VecXd vv1(3); vv1 << 1.0, 2.0, 3.0;
+    Value v1(xdataset::Measurement::Vector(vv1));
+    VecXd vv2(3); vv2 << 4.0, 5.0, 6.0;
+    Value v2(xdataset::Measurement::Vector(vv2));
+    Value el(xdataset::Measurement(99.0));
+    Value result = OperationIf({c1, v1, c1, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<double>();
+    EXPECT_DOUBLE_EQ(vec(0), 1.0);
+    EXPECT_DOUBLE_EQ(vec(1), 2.0);
+    EXPECT_DOUBLE_EQ(vec(2), 3.0);
+}
+
+TEST(OperationIfTest, MatrixElementWise)
+{
+    MatXd cm1(2, 2); cm1 << 1.0, 0.0, 0.0, 1.0;
+    MatXd cm2(2, 2); cm2 << 0.0, 1.0, 1.0, 0.0;
+    Value c1(xdataset::Measurement::Matrix(cm1));
+    Value v1(xdataset::Measurement(10));
+    Value c2(xdataset::Measurement::Matrix(cm2));
+    Value v2(xdataset::Measurement(20));
+    Value el(xdataset::Measurement(99));
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    auto mat = result.as_measurement().as_matrix<int>();
+    EXPECT_EQ(mat(0, 0), 10);  // c1 true
+    EXPECT_EQ(mat(0, 1), 20);  // c2 true
+    EXPECT_EQ(mat(1, 0), 20);  // c2 true
+    EXPECT_EQ(mat(1, 1), 10);  // c1 true
+}
+
+TEST(OperationIfTest, TypePromotion)
+{
+    Value c1(xdataset::Measurement(1));
+    Value v1(xdataset::Measurement(1));          // int
+    Value c2(xdataset::Measurement(0));
+    Value v2(xdataset::Measurement(1.5));        // real
+    Value el(xdataset::Measurement(2.5));        // real
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_DOUBLE_EQ(result.as_measurement().as_scalar<double>(), 1.0);
+}
+
+TEST(OperationIfTest, ComplexOperands)
+{
+    using namespace std::complex_literals;
+    Value c1(xdataset::Measurement(1));
+    Value v1(xdataset::Measurement(std::complex<double>(1.0, 2.0)));
+    Value c2(xdataset::Measurement(0));
+    Value v2(xdataset::Measurement(std::complex<double>(3.0, 4.0)));
+    Value el(xdataset::Measurement(std::complex<double>(5.0, 6.0)));
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    auto z = result.as_measurement().as_scalar<std::complex<double>>();
+    EXPECT_DOUBLE_EQ(z.real(), 1.0);
+    EXPECT_DOUBLE_EQ(z.imag(), 2.0);
+}
+
+TEST(OperationIfTest, BoolCondition)
+{
+    Value c1(xdataset::Measurement(true));
+    Value v1(xdataset::Measurement(42));
+    Value c2(xdataset::Measurement(false));
+    Value v2(xdataset::Measurement(99));
+    Value el(xdataset::Measurement(0));
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 42);
+}
+
+TEST(OperationIfTest, NegativeConditionTrue)
+{
+    // Non-zero is truthy, including negative
+    Value c1(xdataset::Measurement(-5));
+    Value v1(xdataset::Measurement(42));
+    Value el(xdataset::Measurement(99));
+    Value result = OperationIf({c1, v1, el});
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 42);
+}
+
+TEST(OperationIfTest, UnitPropagation)
+{
+    Unit u = Unit::parse("V");
+    Value c1(xdataset::Measurement(1));
+    Value v1(xdataset::Measurement(10.0, u));
+    Value c2(xdataset::Measurement(0));
+    Value v2(xdataset::Measurement(20.0, u));
+    Value el(xdataset::Measurement(99.0, u));
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_DOUBLE_EQ(result.as_measurement().as_scalar<double>(), 10.0);
+    EXPECT_TRUE(result.as_measurement().unit().same_dimension(u));
+}
+
+TEST(OperationIfTest, UnitMismatchThrows)
+{
+    Unit uv = Unit::parse("V");
+    Unit ua = Unit::parse("A");
+    Value c1(xdataset::Measurement(1));
+    Value v1(xdataset::Measurement(10.0, uv));
+    Value c2(xdataset::Measurement(0));
+    Value v2(xdataset::Measurement(20.0, ua));
+    Value el(xdataset::Measurement(99.0, uv));
+    EXPECT_THROW(OperationIf({c1, v1, c2, v2, el}), std::invalid_argument);
+}
+
+TEST(OperationIfTest, EvenArityThrows)
+{
+    Value a(xdataset::Measurement(1));
+    Value b(xdataset::Measurement(2));
+    // 2 operands is even, should throw
+    EXPECT_THROW(OperationIf({a, b}), std::invalid_argument);
+}
+
+TEST(OperationIfTest, SingleOperandThrows)
+{
+    Value a(xdataset::Measurement(1));
+    EXPECT_THROW(OperationIf({a}), std::invalid_argument);
+}
+
+TEST(OperationIfTest, EmptyThrows)
+{
+    EXPECT_THROW(OperationIf({}), std::invalid_argument);
+}
+
+// --- String path ---
+
+TEST(OperationIfTest, StringScalarFirstBranch)
+{
+    Value c1(xdataset::Measurement(1));
+    Value v1(xdataset::Measurement::String("first"));
+    Value c2(xdataset::Measurement(0));
+    Value v2(xdataset::Measurement::String("second"));
+    Value el(xdataset::Measurement::String("else"));
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<std::string>(), "first");
+}
+
+TEST(OperationIfTest, StringScalarSecondBranch)
+{
+    Value c1(xdataset::Measurement(0));
+    Value v1(xdataset::Measurement::String("first"));
+    Value c2(xdataset::Measurement(1));
+    Value v2(xdataset::Measurement::String("second"));
+    Value el(xdataset::Measurement::String("else"));
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<std::string>(), "second");
+}
+
+TEST(OperationIfTest, StringScalarElseBranch)
+{
+    Value c1(xdataset::Measurement(0));
+    Value v1(xdataset::Measurement::String("first"));
+    Value c2(xdataset::Measurement(0));
+    Value v2(xdataset::Measurement::String("second"));
+    Value el(xdataset::Measurement::String("else"));
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<std::string>(), "else");
+}
+
+TEST(OperationIfTest, StringVectorElementWise)
+{
+    VecXd cv1(3); cv1 << 1.0, 0.0, 0.0;
+    VecXd cv2(3); cv2 << 0.0, 1.0, 0.0;
+    Value c1(xdataset::Measurement::Vector(cv1));
+    VecXs sv1(3); sv1(0) = "a"; sv1(1) = "b"; sv1(2) = "c";
+    Value v1(xdataset::Measurement::Vector(sv1));
+    Value c2(xdataset::Measurement::Vector(cv2));
+    VecXs sv2(3); sv2(0) = "d"; sv2(1) = "e"; sv2(2) = "f";
+    Value v2(xdataset::Measurement::Vector(sv2));
+    VecXs se(3); se(0) = "x"; se(1) = "y"; se(2) = "z";
+    Value el(xdataset::Measurement::Vector(se));
+    Value result = OperationIf({c1, v1, c2, v2, el});
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<std::string>();
+    EXPECT_EQ(vec(0), "a");  // c1 true
+    EXPECT_EQ(vec(1), "e");  // c2 true
+    EXPECT_EQ(vec(2), "z");  // else
+}
+
+TEST(OperationIfTest, StringMixedNumericThrows)
+{
+    Value c1(xdataset::Measurement(1));
+    Value v1(xdataset::Measurement::String("s"));
+    Value c2(xdataset::Measurement(0));
+    Value v2(xdataset::Measurement(42));  // numeric!
+    Value el(xdataset::Measurement::String("else"));
+    EXPECT_THROW(OperationIf({c1, v1, c2, v2, el}), std::invalid_argument);
+}
+
+// --- DataArray path ---
+
+TEST(OperationIfTest, DataArrayElseTaken)
+{
+    auto ds = xdataset::DataSeries::CreateScalarFromVector<int>({99});
+    Value arr_val(xdataset::DataArray::CreateIndependent(std::move(ds)));
+
+    Value c1(xdataset::Measurement(0));
+    Value v1(xdataset::Measurement(42));
+
+    Value result = OperationIf({c1, v1, arr_val});
+    ASSERT_FALSE(result.is_measurement());
+    auto& data = result.as_data_array().data();
+    EXPECT_EQ(data.size(), 1u);
+    EXPECT_EQ(data.scalar_at<int>(0), 99);
 }
