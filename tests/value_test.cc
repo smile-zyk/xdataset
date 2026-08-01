@@ -32,23 +32,23 @@ using xdataset::Value;
 TEST(ValueTest, DefaultIsMeasurement)
 {
     Value v;
-    EXPECT_TRUE(v.is_meas());
-    EXPECT_FALSE(v.is_array());
+    EXPECT_TRUE(v.is_measurement());
+    EXPECT_FALSE(v.is_data_array());
 }
 
 TEST(ValueTest, ConstructFromMeasurement)
 {
     xdataset::Measurement m(3.14, Unit::parse("meter"));
     Value v(m);
-    EXPECT_TRUE(v.is_meas());
-    EXPECT_DOUBLE_EQ(v.as_meas().as_scalar<double>(), 3.14);
+    EXPECT_TRUE(v.is_measurement());
+    EXPECT_DOUBLE_EQ(v.as_measurement().as_scalar<double>(), 3.14);
 }
 
 TEST(ValueTest, ConstructFromMeasurementInPlace)
 {
     Value v(xdataset::Measurement(42));
-    EXPECT_TRUE(v.is_meas());
-    EXPECT_EQ(v.as_meas().as_scalar<int>(), 42);
+    EXPECT_TRUE(v.is_measurement());
+    EXPECT_EQ(v.as_measurement().as_scalar<int>(), 42);
 }
 
 TEST(ValueTest, ConstructFromDataArray)
@@ -56,8 +56,8 @@ TEST(ValueTest, ConstructFromDataArray)
     auto ds = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
     auto da = xdataset::DataArray::CreateIndependent(std::move(ds));
     Value v(da);
-    EXPECT_TRUE(v.is_array());
-    EXPECT_EQ(v.as_array().data().size(), 3u);
+    EXPECT_TRUE(v.is_data_array());
+    EXPECT_EQ(v.as_data_array().data().size(), 3u);
 }
 
 // =========================================================================
@@ -71,7 +71,7 @@ TEST(ValueTest, MetadataMeas)
     Value v(m);
     EXPECT_EQ(v.data_kind(), DataKind::kVector);
     EXPECT_EQ(v.data_type(), DataType::kReal);
-    EXPECT_EQ(v.shape(), xdataset::DataShape{5});
+    EXPECT_EQ(v.data_shape(), xdataset::DataShape{5});
     EXPECT_TRUE(v.unit().same_dimension(Unit::parse("Hz")));
     EXPECT_EQ(v.rows(), 1);
 }
@@ -84,7 +84,7 @@ TEST(ValueTest, MetadataArray)
     Value v(da);
     EXPECT_EQ(v.data_kind(), DataKind::kScalar);
     EXPECT_EQ(v.data_type(), DataType::kReal);
-    EXPECT_TRUE(v.shape().empty());
+    EXPECT_TRUE(v.data_shape().empty());
     EXPECT_TRUE(v.unit().same_dimension(Unit::parse("V")));
     EXPECT_EQ(v.rows(), 3);
 }

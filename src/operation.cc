@@ -238,7 +238,7 @@ Value Operate(const std::vector<Value>& operands, const OpTraits& traits) {
     std::vector<Unit>      units;
 
     for (size_t i = 0; i < operands.size(); ++i) {
-        operand_shapes.push_back(operands[i].shape());
+        operand_shapes.push_back(operands[i].data_shape());
         row_counts.push_back(operands[i].rows());
         dtypes.push_back(operands[i].data_type());
         units.push_back(operands[i].unit());
@@ -874,9 +874,9 @@ Value MakeArrayFromFlat(std::unique_ptr<DataSeries> ds, const DataArray& src) {
 /// metadata (MultiDimensionSpec, DataArrayKind) to inherit.
 static const DataArray* SelectOutputSource(bool l_meas, bool r_meas,
                                             const std::vector<Value>& ops) {
-    if (!l_meas && !r_meas) return &ops[0].as_array();
-    if (l_meas && !r_meas) return &ops[1].as_array();
-    if (!l_meas && r_meas) return &ops[0].as_array();
+    if (!l_meas && !r_meas) return &ops[0].as_data_array();
+    if (l_meas && !r_meas) return &ops[1].as_data_array();
+    if (!l_meas && r_meas) return &ops[0].as_data_array();
     return nullptr;
 }
 
@@ -924,9 +924,9 @@ struct FlatInput {
 
 template <typename T>
 FlatInput<T> FlatInput<T>::Acquire(const Value& v) {
-    if (v.is_meas()) {
+    if (v.is_measurement()) {
         FlatInput fi;
-        const Measurement& m = v.as_meas();
+        const Measurement& m = v.as_measurement();
 
         // Boolean is Measurement-only; DataSeries doesn't support it.
         // Build a single-row DataSeries directly in the target dtype.
@@ -954,7 +954,7 @@ FlatInput<T> FlatInput<T>::Acquire(const Value& v) {
 
     // DataArray
     FlatInput fi;
-    const DataSeries& src = v.as_array().data();
+    const DataSeries& src = v.as_data_array().data();
     if (src.data_type() == DataTypeOf<T>::tag) {
         // borrow directly -- no copy
         fi.ptr    = src.contiguous_data<T>();
@@ -983,12 +983,12 @@ Value ExecBinaryArithT(const ExecContextInfo& info,
                         const std::vector<Value>& ops,
                         ElemOp<T> elem_op)
 {
-    bool l_meas = ops[0].is_meas();
-    bool r_meas = ops[1].is_meas();
+    bool l_meas = ops[0].is_measurement();
+    bool r_meas = ops[1].is_measurement();
 
     // --- 提取 per-operand shape/rows ---
-    DataShape l_shape = ops[0].shape();
-    DataShape r_shape = ops[1].shape();
+    DataShape l_shape = ops[0].data_shape();
+    DataShape r_shape = ops[1].data_shape();
     std::vector<DataShape> op_shapes = {l_shape, r_shape};
 
     Index l_rows = ops[0].rows();
@@ -1073,11 +1073,11 @@ template <typename T>
 Value ExecBinaryCmpT(const ExecContextInfo& info,
                       const std::vector<Value>& ops)
 {
-    bool l_meas = ops[0].is_meas();
-    bool r_meas = ops[1].is_meas();
+    bool l_meas = ops[0].is_measurement();
+    bool r_meas = ops[1].is_measurement();
 
-    DataShape l_shape = ops[0].shape();
-    DataShape r_shape = ops[1].shape();
+    DataShape l_shape = ops[0].data_shape();
+    DataShape r_shape = ops[1].data_shape();
     std::vector<DataShape> op_shapes = {l_shape, r_shape};
 
     Index l_rows = ops[0].rows();
@@ -1125,11 +1125,11 @@ Value ExecBinaryCmpT(const ExecContextInfo& info,
 static Value ExecBinaryCmpString(const ExecContextInfo& info,
                                   const std::vector<Value>& ops) {
     // Read strings directly; comparison at string type, output int
-    bool l_meas = ops[0].is_meas();
-    bool r_meas = ops[1].is_meas();
+    bool l_meas = ops[0].is_measurement();
+    bool r_meas = ops[1].is_measurement();
 
-    DataShape l_shape = ops[0].shape();
-    DataShape r_shape = ops[1].shape();
+    DataShape l_shape = ops[0].data_shape();
+    DataShape r_shape = ops[1].data_shape();
     std::vector<DataShape> op_shapes = {l_shape, r_shape};
 
     Index l_rows = ops[0].rows();
@@ -1150,8 +1150,8 @@ static Value ExecBinaryCmpString(const ExecContextInfo& info,
     auto read_flat = [](const Value& v, Index rows, Index stride,
                         std::vector<std::string>& out) {
         out.resize(static_cast<std::size_t>(rows * stride));
-        if (v.is_meas()) {
-            const Measurement& m = v.as_meas();
+        if (v.is_measurement()) {
+            const Measurement& m = v.as_measurement();
             DataKind dk = m.data_kind();
             if (dk == DataKind::kScalar) {
                 std::string s = m.as_scalar<std::string>();
@@ -1170,7 +1170,7 @@ static Value ExecBinaryCmpString(const ExecContextInfo& info,
                         out[static_cast<std::size_t>(i * stride + j)] = mat(j / cols, j % cols);
             }
         } else {
-            const DataSeries& ds = v.as_array().data();
+            const DataSeries& ds = v.as_data_array().data();
             DataKind dk = ds.data_kind();
             for (Index i = 0; i < rows; ++i) {
                 Index src_row = i;
@@ -1256,8 +1256,8 @@ Value ExecuteBinaryLogical(const ExecContextInfo& info,
 
     // Build int operands via as_logical()
     auto make_logical = [](const Value& v) -> Value {
-        if (v.is_meas()) {
-            const Measurement& m = v.as_meas();
+        if (v.is_measurement()) {
+            const Measurement& m = v.as_measurement();
             if (m.data_type() == DataType::kBoolean) {
                 return Value(Measurement(static_cast<int>(m.as_scalar<bool>() ? 1 : 0)));
             }
@@ -1267,8 +1267,8 @@ Value ExecuteBinaryLogical(const ExecContextInfo& info,
             return Value(MakeMeasFromFlat(logical_ds->contiguous_data<int>(),
                         m.shape(), m.unit()));
         } else {
-            auto logical_ds = std::unique_ptr<DataSeries>(new DataSeries(v.as_array().data().as_logical()));
-            return MakeArrayFromFlat(std::move(logical_ds), v.as_array());
+            auto logical_ds = std::unique_ptr<DataSeries>(new DataSeries(v.as_data_array().data().as_logical()));
+            return MakeArrayFromFlat(std::move(logical_ds), v.as_data_array());
         }
     };
     Value li = make_logical(ops[0]);
@@ -1277,9 +1277,9 @@ Value ExecuteBinaryLogical(const ExecContextInfo& info,
     Value result = ExecBinaryArithT<int>(info, {li, ri},
         GetLogicalElemOp<int>(info.op));
 
-    if (ops[0].is_meas() && ops[1].is_meas() &&
+    if (ops[0].is_measurement() && ops[1].is_measurement() &&
         info.shape.kind() == DataKind::kScalar) {
-        return Value(Measurement::Boolean(result.as_meas().as_scalar<int>() != 0));
+        return Value(Measurement::Boolean(result.as_measurement().as_scalar<int>() != 0));
     }
     return result;
 }
@@ -1317,7 +1317,7 @@ static Value ExecMatrixT(const ExecContextInfo& info,
 
     bool all_meas = true;
     for (size_t i = 0; i < ops.size(); ++i)
-        if (!ops[i].is_meas()) { all_meas = false; break; }
+        if (!ops[i].is_measurement()) { all_meas = false; break; }
 
     std::vector<Index> row_counts;
     for (size_t i = 0; i < ops.size(); ++i)
@@ -1341,7 +1341,7 @@ static Value ExecMatrixT(const ExecContextInfo& info,
     for (Index r = 0; r < result_rows; ++r) {
         Index out_off = r * row_stride;
         for (Index k = 0; k < N; ++k) {
-            Index op_row = (ops[static_cast<size_t>(k)].is_meas())
+            Index op_row = (ops[static_cast<size_t>(k)].is_measurement())
                            ? 0
                            : (row_plan.broadcast[static_cast<size_t>(k)] ? 0 : r);
             const T* src = inputs[static_cast<size_t>(k)].ptr + op_row * inputs[static_cast<size_t>(k)].stride;
@@ -1357,7 +1357,7 @@ static Value ExecMatrixT(const ExecContextInfo& info,
     // Preserve metadata from first DataArray operand
     const DataArray* tmpl = nullptr;
     for (size_t i = 0; i < ops.size(); ++i)
-        if (ops[i].is_array()) { tmpl = &ops[i].as_array(); break; }
+        if (ops[i].is_data_array()) { tmpl = &ops[i].as_data_array(); break; }
     if (tmpl)
         return MakeArrayFromFlat(std::move(out_ds), *tmpl);
 
@@ -1372,14 +1372,14 @@ static Value ExecMatrixString(const ExecContextInfo& info,
 
     bool all_meas = true;
     for (size_t i = 0; i < ops.size(); ++i)
-        if (!ops[i].is_meas()) { all_meas = false; break; }
+        if (!ops[i].is_measurement()) { all_meas = false; break; }
 
     std::vector<Index> row_counts;
     for (size_t i = 0; i < ops.size(); ++i)
         row_counts.push_back(ops[i].rows());
     RowBroadcastPlan row_plan = RowBroadcastPlan::Compute(row_counts);
 
-    Index cell_elems = ops[0].shape().element_count();
+    Index cell_elems = ops[0].data_shape().element_count();
     Index result_rows = info.rows;
     Index total = result_rows * cell_elems * N;
 
@@ -1393,8 +1393,8 @@ static Value ExecMatrixString(const ExecContextInfo& info,
             Index op_row = row_plan.broadcast[static_cast<size_t>(k)] ? 0 : r;
             Index base = static_cast<Index>(static_cast<std::size_t>(out_off) + static_cast<std::size_t>(k) * static_cast<std::size_t>(cell_elems));
 
-            if (ops[static_cast<size_t>(k)].is_meas()) {
-                const Measurement& m = ops[static_cast<size_t>(k)].as_meas();
+            if (ops[static_cast<size_t>(k)].is_measurement()) {
+                const Measurement& m = ops[static_cast<size_t>(k)].as_measurement();
                 DataKind dk = m.data_kind();
                 if (dk == DataKind::kScalar) {
                     std::string s = m.as_scalar<std::string>();
@@ -1411,7 +1411,7 @@ static Value ExecMatrixString(const ExecContextInfo& info,
                         flat[static_cast<std::size_t>(base + j)] = mat(j / cols, j % cols);
                 }
             } else {
-                const DataSeries& ds = ops[static_cast<size_t>(k)].as_array().data();
+                const DataSeries& ds = ops[static_cast<size_t>(k)].as_data_array().data();
                 DataKind dk = ds.data_kind();
                 if (dk == DataKind::kScalar) {
                     std::string s = ds.scalar_at<std::string>(op_row);
@@ -1469,7 +1469,7 @@ static Value ExecMatrixString(const ExecContextInfo& info,
     // DataArray output: preserve metadata from first DataArray operand
     const DataArray* tmpl = nullptr;
     for (size_t i = 0; i < ops.size(); ++i)
-        if (ops[i].is_array()) { tmpl = &ops[i].as_array(); break; }
+        if (ops[i].is_data_array()) { tmpl = &ops[i].as_data_array(); break; }
     if (tmpl)
         return MakeArrayFromFlat(std::move(out_ds), *tmpl);
     return Value(DataArray::CreateIndependent(std::move(*out_ds)));
@@ -1508,7 +1508,7 @@ static Value ExecSweepT(const ExecContextInfo& info,
     std::vector<DataShape> op_shapes;
     std::vector<Index> row_counts;
     for (size_t i = 0; i < ops.size(); ++i) {
-        op_shapes.push_back(ops[i].shape());
+        op_shapes.push_back(ops[i].data_shape());
         row_counts.push_back(ops[i].rows());
     }
 
@@ -1532,7 +1532,7 @@ static Value ExecSweepT(const ExecContextInfo& info,
     for (size_t k = 0; k < ops.size(); ++k) {
         Index n_rows = ops[k].rows();
         for (Index local_r = 0; local_r < n_rows; ++local_r, ++out_row) {
-            Index op_row = (ops[k].is_meas())
+            Index op_row = (ops[k].is_measurement())
                            ? 0
                            : (row_plan.broadcast[k] ? 0 : local_r);
             const T* src = inputs[k].ptr + op_row * inputs[k].stride;
@@ -1559,7 +1559,7 @@ static Value ExecSweepString(const ExecContextInfo& info,
     std::vector<DataShape> op_shapes;
     std::vector<Index> row_counts;
     for (size_t i = 0; i < ops.size(); ++i) {
-        op_shapes.push_back(ops[i].shape());
+        op_shapes.push_back(ops[i].data_shape());
         row_counts.push_back(ops[i].rows());
     }
 
@@ -1579,8 +1579,8 @@ static Value ExecSweepString(const ExecContextInfo& info,
             Index op_row = row_plan.broadcast[k] ? 0 : local_r;
             Index base = out_row * cell_elems;
 
-            if (ops[k].is_meas()) {
-                const Measurement& m = ops[k].as_meas();
+            if (ops[k].is_measurement()) {
+                const Measurement& m = ops[k].as_measurement();
                 DataKind dk = m.data_kind();
                 if (dk == DataKind::kScalar) {
                     std::string s = m.as_scalar<std::string>();
@@ -1599,7 +1599,7 @@ static Value ExecSweepString(const ExecContextInfo& info,
                     }
                 }
             } else {
-                const DataSeries& ds = ops[k].as_array().data();
+                const DataSeries& ds = ops[k].as_data_array().data();
                 DataKind dk = ds.data_kind();
                 if (dk == DataKind::kScalar) {
                     std::string s = ds.scalar_at<std::string>(op_row);
@@ -1692,9 +1692,9 @@ Value ExecUnaryT(const ExecContextInfo& info,
                   const std::vector<Value>& ops,
                   UnaryOp<T> op)
 {
-    bool is_meas = ops[0].is_meas();
+    bool is_meas = ops[0].is_measurement();
 
-    DataShape op_shape = ops[0].shape();
+    DataShape op_shape = ops[0].data_shape();
     ShapeBroadcastPlan shape_plan = ShapeBroadcastPlan::Make({op_shape}, info.shape);
 
     auto in = FlatInput<T>::Acquire(ops[0]);
@@ -1712,7 +1712,7 @@ Value ExecUnaryT(const ExecContextInfo& info,
     if (is_meas) {
         return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
-        const DataArray& src = ops[0].as_array();
+        const DataArray& src = ops[0].as_data_array();
         return MakeArrayFromFlat(std::move(out_ds), src);
     }
 }
@@ -1745,8 +1745,8 @@ Value ExecuteUnaryNot(const ExecContextInfo& info,
     // then apply NOT.  Scalar Meas → upgrade to Boolean.
 
     Value v;
-    if (ops[0].is_meas()) {
-        const Measurement& m = ops[0].as_meas();
+    if (ops[0].is_measurement()) {
+        const Measurement& m = ops[0].as_measurement();
         if (m.data_type() == DataType::kBoolean) {
             v = Value(Measurement(static_cast<int>(m.as_scalar<bool>() ? 1 : 0)));
         } else {
@@ -1757,14 +1757,14 @@ Value ExecuteUnaryNot(const ExecContextInfo& info,
                         m.shape(), m.unit()));
         }
     } else {
-        auto logical_ds = std::unique_ptr<DataSeries>(new DataSeries(ops[0].as_array().data().as_logical()));
-        v = MakeArrayFromFlat(std::move(logical_ds), ops[0].as_array());
+        auto logical_ds = std::unique_ptr<DataSeries>(new DataSeries(ops[0].as_data_array().data().as_logical()));
+        v = MakeArrayFromFlat(std::move(logical_ds), ops[0].as_data_array());
     }
 
     Value result = ExecUnaryT<int>(info, {v}, op_not<int>);
 
-    if (ops[0].is_meas() && info.shape.kind() == DataKind::kScalar) {
-        return Value(Measurement::Boolean(result.as_meas().as_scalar<int>() != 0));
+    if (ops[0].is_measurement() && info.shape.kind() == DataKind::kScalar) {
+        return Value(Measurement::Boolean(result.as_measurement().as_scalar<int>() != 0));
     }
     return result;
 }
@@ -1802,11 +1802,11 @@ template <typename T>
 Value ExecBinaryMatMulT(const ExecContextInfo& info,
                          const std::vector<Value>& ops)
 {
-    bool l_meas = ops[0].is_meas();
-    bool r_meas = ops[1].is_meas();
+    bool l_meas = ops[0].is_measurement();
+    bool r_meas = ops[1].is_measurement();
 
-    auto rcA = EffectiveRC(ops[0].shape());
-    auto rcB = EffectiveRC(ops[1].shape());
+    auto rcA = EffectiveRC(ops[0].data_shape());
+    auto rcB = EffectiveRC(ops[1].data_shape());
     Index rA = rcA.first, cA = rcA.second;
     Index rB = rcB.first, cB = rcB.second;
     Index rC = rA, cC = cB;
@@ -1857,11 +1857,11 @@ template <typename T>
 Value ExecBinaryDivT(const ExecContextInfo& info,
                       const std::vector<Value>& ops)
 {
-    bool l_meas = ops[0].is_meas();
-    bool r_meas = ops[1].is_meas();
+    bool l_meas = ops[0].is_measurement();
+    bool r_meas = ops[1].is_measurement();
 
-    auto rcA = EffectiveRC(ops[0].shape());
-    auto rcB = EffectiveRC(ops[1].shape());
+    auto rcA = EffectiveRC(ops[0].data_shape());
+    auto rcB = EffectiveRC(ops[1].data_shape());
     Index rA = rcA.first, cA = rcA.second;
     Index rB = rcB.first, cB = rcB.second;
     // inv(B): effective shape (cB, rB), so A x inv(B) -> (rA, rB)
@@ -1914,8 +1914,8 @@ Value ExecBinaryDivT(const ExecContextInfo& info,
 Value ExecuteBinaryMul(const ExecContextInfo& info,
                         const std::vector<Value>& ops) {
     // Scalar path: either operand is scalar -> element-wise broadcast
-    if (ops[0].shape().kind() == DataKind::kScalar ||
-        ops[1].shape().kind() == DataKind::kScalar) {
+    if (ops[0].data_shape().kind() == DataKind::kScalar ||
+        ops[1].data_shape().kind() == DataKind::kScalar) {
         return ExecuteBinaryArith(info, ops);
     }
 
@@ -1939,7 +1939,7 @@ Value ExecuteBinaryMul(const ExecContextInfo& info,
 Value ExecuteBinaryDiv(const ExecContextInfo& info,
                         const std::vector<Value>& ops) {
     // Scalar path: RHS is scalar -> element-wise broadcast
-    if (ops[1].shape().kind() == DataKind::kScalar) {
+    if (ops[1].data_shape().kind() == DataKind::kScalar) {
         return ExecuteBinaryArith(info, ops);
     }
 

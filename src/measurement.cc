@@ -591,36 +591,36 @@ MeasurementDataFrame Measurement::to_dataframe(const std::string& name) const
 // Unary operators (via OperationXxx)
 // =========================================================================
 
-Measurement Measurement::operator-() const { return OperationNegate(Value(*this)).as_meas(); }
-Measurement Measurement::operator!() const { return OperationNot(Value(*this)).as_meas(); }
-Measurement Measurement::operator~() const { return OperationBitNot(Value(*this)).as_meas(); }
+Measurement Measurement::operator-() const { return OperationNegate(Value(*this)).as_measurement(); }
+Measurement Measurement::operator!() const { return OperationNot(Value(*this)).as_measurement(); }
+Measurement Measurement::operator~() const { return OperationBitNot(Value(*this)).as_measurement(); }
 
 // =========================================================================
 // Binary operators (via OperationXxx)
 // =========================================================================
 
-Measurement operator+(const Measurement& a, const Measurement& b) { return OperationAdd(Value(a),Value(b)).as_meas(); }
-Measurement operator-(const Measurement& a, const Measurement& b) { return OperationSub(Value(a),Value(b)).as_meas(); }
-Measurement operator*(const Measurement& a, const Measurement& b) { return OperationMul(Value(a),Value(b)).as_meas(); }
-Measurement operator/(const Measurement& a, const Measurement& b) { return OperationDiv(Value(a),Value(b)).as_meas(); }
-Measurement operator%(const Measurement& a, const Measurement& b) { return OperationMod(Value(a),Value(b)).as_meas(); }
+Measurement operator+(const Measurement& a, const Measurement& b) { return OperationAdd(Value(a),Value(b)).as_measurement(); }
+Measurement operator-(const Measurement& a, const Measurement& b) { return OperationSub(Value(a),Value(b)).as_measurement(); }
+Measurement operator*(const Measurement& a, const Measurement& b) { return OperationMul(Value(a),Value(b)).as_measurement(); }
+Measurement operator/(const Measurement& a, const Measurement& b) { return OperationDiv(Value(a),Value(b)).as_measurement(); }
+Measurement operator%(const Measurement& a, const Measurement& b) { return OperationMod(Value(a),Value(b)).as_measurement(); }
 
-Measurement pow(const Measurement& base, const Measurement& exp) { return OperationPow(Value(base),Value(exp)).as_meas(); }
+Measurement pow(const Measurement& base, const Measurement& exp) { return OperationPow(Value(base),Value(exp)).as_measurement(); }
 
-Measurement operator==(const Measurement& a, const Measurement& b) { return OperationEq(Value(a),Value(b)).as_meas(); }
-Measurement operator!=(const Measurement& a, const Measurement& b) { return OperationNeq(Value(a),Value(b)).as_meas(); }
-Measurement operator<(const Measurement& a, const Measurement& b)  { return OperationLt(Value(a),Value(b)).as_meas(); }
-Measurement operator>(const Measurement& a, const Measurement& b)  { return OperationGt(Value(a),Value(b)).as_meas(); }
-Measurement operator<=(const Measurement& a, const Measurement& b) { return OperationLe(Value(a),Value(b)).as_meas(); }
-Measurement operator>=(const Measurement& a, const Measurement& b) { return OperationGe(Value(a),Value(b)).as_meas(); }
+Measurement operator==(const Measurement& a, const Measurement& b) { return OperationEq(Value(a),Value(b)).as_measurement(); }
+Measurement operator!=(const Measurement& a, const Measurement& b) { return OperationNeq(Value(a),Value(b)).as_measurement(); }
+Measurement operator<(const Measurement& a, const Measurement& b)  { return OperationLt(Value(a),Value(b)).as_measurement(); }
+Measurement operator>(const Measurement& a, const Measurement& b)  { return OperationGt(Value(a),Value(b)).as_measurement(); }
+Measurement operator<=(const Measurement& a, const Measurement& b) { return OperationLe(Value(a),Value(b)).as_measurement(); }
+Measurement operator>=(const Measurement& a, const Measurement& b) { return OperationGe(Value(a),Value(b)).as_measurement(); }
 
-Measurement operator&&(const Measurement& a, const Measurement& b) { return OperationAnd(Value(a),Value(b)).as_meas(); }
-Measurement operator||(const Measurement& a, const Measurement& b) { return OperationOr(Value(a),Value(b)).as_meas(); }
+Measurement operator&&(const Measurement& a, const Measurement& b) { return OperationAnd(Value(a),Value(b)).as_measurement(); }
+Measurement operator||(const Measurement& a, const Measurement& b) { return OperationOr(Value(a),Value(b)).as_measurement(); }
 
-Measurement operator&(const Measurement& a, const Measurement& b)  { return OperationBitAnd(Value(a),Value(b)).as_meas(); }
-Measurement operator|(const Measurement& a, const Measurement& b)  { return OperationBitOr(Value(a),Value(b)).as_meas(); }
-Measurement operator^(const Measurement& a, const Measurement& b)  { return OperationBitXor(Value(a),Value(b)).as_meas(); }
-Measurement operator<<(const Measurement& a, const Measurement& b) { return OperationShl(Value(a),Value(b)).as_meas(); }
-Measurement operator>>(const Measurement& a, const Measurement& b) { return OperationShr(Value(a),Value(b)).as_meas(); }
+Measurement operator&(const Measurement& a, const Measurement& b)  { return OperationBitAnd(Value(a),Value(b)).as_measurement(); }
+Measurement operator|(const Measurement& a, const Measurement& b)  { return OperationBitOr(Value(a),Value(b)).as_measurement(); }
+Measurement operator^(const Measurement& a, const Measurement& b)  { return OperationBitXor(Value(a),Value(b)).as_measurement(); }
+Measurement operator<<(const Measurement& a, const Measurement& b) { return OperationShl(Value(a),Value(b)).as_measurement(); }
+Measurement operator>>(const Measurement& a, const Measurement& b) { return OperationShr(Value(a),Value(b)).as_measurement(); }
 
 } // namespace xdataset

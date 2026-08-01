@@ -1,53 +1,93 @@
-#ifndef XDATASET_VALUE_H
-#define XDATASET_VALUE_H
+#pragma once
 
+#include <boost/variant.hpp>
+
+#include <memory>
+#include <string>
 #include "data_array.h"
 #include "measurement.h"
 #include "xdataset_predefine.h"
 #include "unit.h"
 
-#include <boost/variant.hpp>
-#include <memory>
-#include <string>
-#include <vector>
-
 namespace xdataset {
 
 // =========================================================================
-// Value -- unified value type for Measurement and DataArray
+//  Value — unified value type for Measurement and DataArray
 // =========================================================================
 //
-// Internally uses boost::variant<Measurement, shared_ptr<DataArray>>.
-// Measurement stored on the stack (value semantics); DataArray uses shared_ptr (reference semantics).
+//  Value is a two-way variant:
+//    Measurement                 — scalar / vector / matrix + unit (by value)
+//    shared_ptr<DataArray>       — named variable with coordinate axes
 //
-// Metadata access (data_kind / data_type / shape / unit / rows) provided uniformly for both types.
+//  Measurement is stored by value (~64 bytes on the stack); DataArray is
+//  stored via shared_ptr to avoid deep copies when the same array is
+//  returned through multiple evaluation paths.
 
-class XDATASET_API Value {
+class XDATASET_API Value
+{
 public:
-    /// Default: empty Measurement (kReal scalar 0, dimensionless)
+    // ---- construction --------------------------------------------------
+
+    /// Default: Measurement Integer 0
     Value();
 
-    /// Implicitly construct from Measurement
-    Value(Measurement m);              // NOLINT
+    /// Implicit from Measurement.
+    Value(Measurement m);  // NOLINT(runtime/explicit)
 
-    /// Construct from DataArray (internal shared_ptr)
-    explicit Value(const DataArray& da);
+    /// Implicit from DataArray (wraps in shared_ptr).
+    Value(const DataArray& da);  // NOLINT(runtime/explicit)
 
-    // ---- Type queries -----------------------------------------------------
-    bool is_meas()  const;
-    bool is_array() const;
+    /// Implicit from DataArray shared_ptr.
+    Value(std::shared_ptr<DataArray> da);  // NOLINT(runtime/explicit)
 
-    // ---- Unwrap ---------------------------------------------------------
-    const Measurement& as_meas()  const;
-    const DataArray&   as_array() const;
+    // Copy / move: compiler-generated is fine (variant + shared_ptr are
+    // both deep-copyable / movable).
+    Value(const Value&) = default;
+    Value& operator=(const Value&) = default;
+    Value(Value&&) = default;
+    Value& operator=(Value&&) = default;
 
-    // ---- Metadata (unified for both types) ----------------------------------------
-    DataKind           data_kind() const;
-    DataType           data_type() const;
-    DataShape          shape() const;
-    const Unit&        unit() const;
-    Index              rows() const;   // Measurement = 1, DataArray = data().size()
-    Index              element_count() const;
+    // ---- type queries --------------------------------------------------
+
+    /// True when this Value holds a Measurement.
+    bool is_measurement() const;
+
+    /// True when this Value holds a DataArray.
+    bool is_data_array() const;
+
+    // ---- accessors (throw boost::bad_get on type mismatch) -------------
+
+    Measurement& as_measurement();
+    const Measurement& as_measurement() const;
+
+    DataArray& as_data_array();
+    const DataArray& as_data_array() const;
+
+    // ---- unified metadata ----------------------------------------------
+
+    DataKind  data_kind() const;
+    DataType  data_type() const;
+    DataShape data_shape() const;
+    const Unit& unit() const;
+    Index     rows() const;         // Measurement = 1, DataArray = data().size()
+    Index     element_count() const;
+
+    // ---- formatting ----------------------------------------------------
+
+    /// Human-readable string.
+    /// When `name` is empty: Measurement renders inline (e.g. "3.14 GHz"),
+    /// DataArray renders as DataFrame with a default header.
+    /// When `name` is given: Measurement is wrapped in a named DataFrame;
+    /// DataArray uses the name as its header.  `max_rows` caps output rows
+    /// (0 = no limit).
+    std::string Format(const std::string& name = "data", int max_rows = 32) const;
+
+    // ---- convenience factories -----------------------------------------
+
+    static Value Real(double v);
+    static Value Integer(int v);
+    static Value BooleanValue(bool b);
+    static Value String(const std::string& s);
 
 private:
     typedef boost::variant<
@@ -57,13 +97,9 @@ private:
     Storage storage_;
 };
 
-}  // namespace xdataset
-
 // =========================================================================
 //  Value operators (delegate to OperationXxx)
 // =========================================================================
-
-namespace xdataset {
 
 XDATASET_API Value operator+(const Value& lhs, const Value& rhs);
 XDATASET_API Value operator-(const Value& lhs, const Value& rhs);
@@ -94,5 +130,3 @@ XDATASET_API Value operator~(const Value& v);
 XDATASET_API Value pow(const Value& base, const Value& exponent);
 
 }  // namespace xdataset
-
-#endif  // XDATASET_VALUE_H

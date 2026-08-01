@@ -55,8 +55,8 @@ using xdataset::OperationMatrix;
 using xdataset::OperationSweep;
 
 #define EXPECT_MEAS_SCALAR_DOUBLE(val, expected) do { \
-    ASSERT_TRUE((val).is_meas()); \
-    EXPECT_DOUBLE_EQ((val).as_meas().as_scalar<double>(), (expected)); \
+    ASSERT_TRUE((val).is_measurement()); \
+    EXPECT_DOUBLE_EQ((val).as_measurement().as_scalar<double>(), (expected)); \
 } while(0)
 
 // =========================================================================
@@ -85,8 +85,8 @@ TEST(OperationAddTest, MeasMeasScalarVectorBroadcast)
     VecXd ev(3); ev << 1.0, 2.0, 3.0;
     Value v2(xdataset::Measurement::Vector(ev));
     Value result = OperationAdd(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    auto vec = result.as_meas().as_vector<double>();
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<double>();
     EXPECT_DOUBLE_EQ(vec(0), 3.0);
     EXPECT_DOUBLE_EQ(vec(1), 4.0);
     EXPECT_DOUBLE_EQ(vec(2), 5.0);
@@ -98,7 +98,7 @@ TEST(OperationAddTest, MeasMeasVectorVector)
     VecXd b(3); b << 4.0, 5.0, 6.0;
     Value result = OperationAdd(Value(xdataset::Measurement::Vector(a)),
                                  Value(xdataset::Measurement::Vector(b)));
-    auto vec = result.as_meas().as_vector<double>();
+    auto vec = result.as_measurement().as_vector<double>();
     EXPECT_DOUBLE_EQ(vec(0), 5.0);
     EXPECT_DOUBLE_EQ(vec(1), 7.0);
     EXPECT_DOUBLE_EQ(vec(2), 9.0);
@@ -120,8 +120,8 @@ TEST(OperationAddTest, MeasScalarArrayScalar)
     auto ds = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, 2.0, 3.0});
     Value v2(xdataset::DataArray::CreateIndependent(std::move(ds)));
     Value result = OperationAdd(v1, v2);
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
+    ASSERT_TRUE(result.is_data_array());
+    const auto& arr = result.as_data_array().data();
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 6.0);
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 7.0);
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(2), 8.0);
@@ -133,8 +133,8 @@ TEST(OperationAddTest, ArrayScalarMeasScalar)
     Value v1(xdataset::DataArray::CreateIndependent(std::move(ds)));
     Value v2(xdataset::Measurement(5.0));
     Value result = OperationAdd(v1, v2);
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
+    ASSERT_TRUE(result.is_data_array());
+    const auto& arr = result.as_data_array().data();
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 6.0);
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 7.0);
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(2), 8.0);
@@ -147,8 +147,8 @@ TEST(OperationAddTest, ArrayArrayScalarSameRows)
     Value v1(xdataset::DataArray::CreateIndependent(std::move(ds1)));
     Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
     Value result = OperationAdd(v1, v2);
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
+    ASSERT_TRUE(result.is_data_array());
+    const auto& arr = result.as_data_array().data();
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 11.0);
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 22.0);
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(2), 33.0);
@@ -172,8 +172,8 @@ TEST(OperationMulTest, MeasMeasVectorxMatrix)
     m << 1.0, 2.0, 3.0, 4.0, 5.0, 6.0;
     Value result = OperationMul(Value(xdataset::Measurement::Vector(v)),
                                  Value(xdataset::Measurement::Matrix(m)));
-    ASSERT_TRUE(result.is_meas());
-    auto vec = result.as_meas().as_vector<double>();
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<double>();
     EXPECT_DOUBLE_EQ(vec(0), 9.0);
     EXPECT_DOUBLE_EQ(vec(1), 12.0);
     EXPECT_DOUBLE_EQ(vec(2), 15.0);
@@ -184,8 +184,8 @@ TEST(OperationMulTest, MatrixMulByScalarIsElementwise)
     MatXd m(2, 2); m << 1.0, 2.0, 3.0, 4.0;
     Value result = OperationMul(Value(xdataset::Measurement::Matrix(m)),
                                  Value(xdataset::Measurement(2.0)));
-    ASSERT_TRUE(result.is_meas());
-    auto mat = result.as_meas().as_matrix<double>();
+    ASSERT_TRUE(result.is_measurement());
+    auto mat = result.as_measurement().as_matrix<double>();
     EXPECT_DOUBLE_EQ(mat(0, 0), 2.0);
     EXPECT_DOUBLE_EQ(mat(1, 1), 8.0);
 }
@@ -197,8 +197,8 @@ TEST(OperationMulTest, ArrayArrayScalarSameRows)
     Value result = OperationMul(
         Value(xdataset::DataArray::CreateIndependent(std::move(ds1))),
         Value(xdataset::DataArray::CreateIndependent(std::move(ds2))));
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
+    ASSERT_TRUE(result.is_data_array());
+    const auto& arr = result.as_data_array().data();
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 8.0);
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 15.0);
 }
@@ -227,8 +227,8 @@ TEST(OperationDivTest, MeasMeasVectorDivMatrix)
     MatXd m(2, 2); m << 2.0, 0.0, 0.0, 4.0;
     Value result = OperationDiv(Value(xdataset::Measurement::Vector(v)),
                                  Value(xdataset::Measurement::Matrix(m)));
-    ASSERT_TRUE(result.is_meas());
-    auto vec = result.as_meas().as_vector<double>();
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<double>();
     EXPECT_DOUBLE_EQ(vec(0), 3.0);
     EXPECT_DOUBLE_EQ(vec(1), 2.0);
 }
@@ -241,8 +241,8 @@ TEST(OperationModTest, MeasMeasIntScalarScalar)
 {
     Value result = OperationMod(Value(xdataset::Measurement(10)),
                                  Value(xdataset::Measurement(3)));
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<int>(), 1);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 1);
 }
 
 TEST(OperationModTest, MeasMeasDoubleScalarScalar)
@@ -276,8 +276,8 @@ TEST(OperationPowTest, MeasMeasScalarVectorBroadcast)
     VecXd ev(3); ev << 1.0, 2.0, 3.0;
     Value v2(xdataset::Measurement::Vector(ev));
     Value result = OperationPow(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    auto vec = result.as_meas().as_vector<double>();
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<double>();
     EXPECT_DOUBLE_EQ(vec(0), 2.0);
     EXPECT_DOUBLE_EQ(vec(1), 4.0);
     EXPECT_DOUBLE_EQ(vec(2), 8.0);
@@ -298,8 +298,8 @@ TEST(OperationNegateTest, ArrayScalar)
     auto ds = xdataset::DataSeries::CreateScalarFromVector<double>({1.0, -2.0, 3.0});
     Value v(xdataset::DataArray::CreateIndependent(std::move(ds)));
     Value result = OperationNegate(v);
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
+    ASSERT_TRUE(result.is_data_array());
+    const auto& arr = result.as_data_array().data();
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), -1.0);
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 2.0);
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(2), -3.0);
@@ -312,15 +312,15 @@ TEST(OperationNegateTest, ArrayScalar)
 TEST(OperationNotTest, MeasScalarZero)
 {
     Value result = OperationNot(Value(xdataset::Measurement(0.0)));
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 TEST(OperationNotTest, MeasScalarNonZero)
 {
     Value result = OperationNot(Value(xdataset::Measurement(3.5)));
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), false);
 }
 
 // =========================================================================
@@ -330,8 +330,8 @@ TEST(OperationNotTest, MeasScalarNonZero)
 TEST(OperationBitNotTest, MeasScalar)
 {
     Value result = OperationBitNot(Value(xdataset::Measurement(0)));
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<int>(), ~0);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), ~0);
 }
 
 // =========================================================================
@@ -342,40 +342,40 @@ TEST(OperationEqTest, MeasMeasScalarEqual)
 {
     Value result = OperationEq(Value(xdataset::Measurement(3.0)),
                                 Value(xdataset::Measurement(3.0)));
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 TEST(OperationEqTest, MeasMeasScalarNotEqual)
 {
     Value result = OperationEq(Value(xdataset::Measurement(3.0)),
                                 Value(xdataset::Measurement(4.0)));
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), false);
 }
 
 TEST(OperationNeqTest, MeasMeasScalar)
 {
     Value result = OperationNeq(Value(xdataset::Measurement(3.0)),
                                  Value(xdataset::Measurement(4.0)));
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 TEST(OperationLtTest, MeasMeasScalar)
 {
     Value result = OperationLt(Value(xdataset::Measurement(2.0)),
                                 Value(xdataset::Measurement(5.0)));
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 TEST(OperationGtTest, MeasMeasScalar)
 {
     Value result = OperationGt(Value(xdataset::Measurement(5.0)),
                                 Value(xdataset::Measurement(2.0)));
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 // ---- Cmp: int (eq/ne/lt/gt/le/ge) --------------------------------------
@@ -385,8 +385,8 @@ TEST(OperationLtTest, IntScalar)
     Value v1(xdataset::Measurement(3));
     Value v2(xdataset::Measurement(7));
     Value result = OperationLt(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 TEST(OperationGtTest, IntScalar)
@@ -394,8 +394,8 @@ TEST(OperationGtTest, IntScalar)
     Value v1(xdataset::Measurement(7));
     Value v2(xdataset::Measurement(3));
     Value result = OperationGt(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 TEST(OperationLeTest, IntScalar)
@@ -403,8 +403,8 @@ TEST(OperationLeTest, IntScalar)
     Value v1(xdataset::Measurement(3));
     Value v2(xdataset::Measurement(3));
     Value result = OperationLe(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 // ---- Cmp: complex (abs() for < <= > >=) --------------------------------
@@ -414,8 +414,8 @@ TEST(OperationEqTest, ComplexEqual)
     Value v1(xdataset::Measurement(std::complex<double>(1.0, 2.0)));
     Value v2(xdataset::Measurement(std::complex<double>(1.0, 2.0)));
     Value result = OperationEq(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 TEST(OperationNeqTest, ComplexNotEqual)
@@ -423,8 +423,8 @@ TEST(OperationNeqTest, ComplexNotEqual)
     Value v1(xdataset::Measurement(std::complex<double>(1.0, 2.0)));
     Value v2(xdataset::Measurement(std::complex<double>(3.0, 4.0)));
     Value result = OperationNeq(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 TEST(OperationLtTest, ComplexAbs)
@@ -433,8 +433,8 @@ TEST(OperationLtTest, ComplexAbs)
     Value v1(xdataset::Measurement(std::complex<double>(3.0, 4.0)));
     Value v2(xdataset::Measurement(std::complex<double>(6.0, 0.0)));
     Value result = OperationLt(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 TEST(OperationGtTest, ComplexAbs)
@@ -443,8 +443,8 @@ TEST(OperationGtTest, ComplexAbs)
     Value v1(xdataset::Measurement(std::complex<double>(5.0, 0.0)));
     Value v2(xdataset::Measurement(std::complex<double>(3.0, 4.0)));
     Value result = OperationGt(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), false);
 }
 
 TEST(OperationLeTest, ComplexAbs)
@@ -452,8 +452,8 @@ TEST(OperationLeTest, ComplexAbs)
     Value v1(xdataset::Measurement(std::complex<double>(3.0, 4.0)));
     Value v2(xdataset::Measurement(std::complex<double>(5.0, 0.0)));
     Value result = OperationLe(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);  // 5 <= 5
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);  // 5 <= 5
 }
 
 // ---- Cmp: string -------------------------------------------------------
@@ -463,8 +463,8 @@ TEST(OperationEqTest, StringEqual)
     Value v1(xdataset::Measurement::String("abc"));
     Value v2(xdataset::Measurement::String("abc"));
     Value result = OperationEq(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 TEST(OperationNeqTest, StringNotEqual)
@@ -472,8 +472,8 @@ TEST(OperationNeqTest, StringNotEqual)
     Value v1(xdataset::Measurement::String("abc"));
     Value v2(xdataset::Measurement::String("xyz"));
     Value result = OperationNeq(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 TEST(OperationLtTest, StringLex)
@@ -481,8 +481,8 @@ TEST(OperationLtTest, StringLex)
     Value v1(xdataset::Measurement::String("abc"));
     Value v2(xdataset::Measurement::String("xyz"));
     Value result = OperationLt(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 TEST(OperationGtTest, StringLex)
@@ -490,8 +490,8 @@ TEST(OperationGtTest, StringLex)
     Value v1(xdataset::Measurement::String("xyz"));
     Value v2(xdataset::Measurement::String("abc"));
     Value result = OperationGt(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 // ---- Cmp: mixed types (int↔double compare directly) ---------------------
@@ -501,8 +501,8 @@ TEST(OperationEqTest, IntAndDouble)
     Value v1(xdataset::Measurement(3));
     Value v2(xdataset::Measurement(3.0));
     Value result = OperationEq(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 TEST(OperationLtTest, IntAndDouble)
@@ -510,8 +510,8 @@ TEST(OperationLtTest, IntAndDouble)
     Value v1(xdataset::Measurement(3));
     Value v2(xdataset::Measurement(5.5));
     Value result = OperationLt(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 // ---- Cmp: mixed complex↔real (promote to complex, use abs() for < >) -----
@@ -522,8 +522,8 @@ TEST(OperationLtTest, ComplexAndReal)
     Value v1(xdataset::Measurement(std::complex<double>(3.0, 4.0)));
     Value v2(xdataset::Measurement(5.0));
     Value result = OperationLt(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);  // 5 < 5 → false
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), false);  // 5 < 5 → false
 }
 
 // ---- Cmp: row broadcast (Array x Array) ---------------------------------
@@ -535,8 +535,8 @@ TEST(OperationEqTest, ArrayArrayScalarSameRows)
     Value v1(xdataset::DataArray::CreateIndependent(std::move(ds1)));
     Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
     Value result = OperationEq(v1, v2);
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
+    ASSERT_TRUE(result.is_data_array());
+    const auto& arr = result.as_data_array().data();
     EXPECT_EQ(arr.scalar_at<int>(0), 1);
     EXPECT_EQ(arr.scalar_at<int>(1), 1);
     EXPECT_EQ(arr.scalar_at<int>(2), 1);
@@ -549,8 +549,8 @@ TEST(OperationLtTest, ArrayArrayBroadcastRows)
     Value v1(xdataset::DataArray::CreateIndependent(std::move(ds1)));
     Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
     Value result = OperationLt(v1, v2);
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
+    ASSERT_TRUE(result.is_data_array());
+    const auto& arr = result.as_data_array().data();
     EXPECT_EQ(arr.size(), 2u);
     EXPECT_EQ(arr.scalar_at<int>(0), 0);  // 3 < 1 → 0
     EXPECT_EQ(arr.scalar_at<int>(1), 1);  // 3 < 5 → 1
@@ -564,8 +564,8 @@ TEST(OperationEqTest, MeasVectorMeasScalarBroadcast)
     Value v1(xdataset::Measurement::Vector(a));
     Value v2(xdataset::Measurement(2.0));
     Value result = OperationEq(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    auto vec = result.as_meas().as_vector<int>();
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<int>();
     EXPECT_EQ(vec(0), 1); EXPECT_EQ(vec(1), 1); EXPECT_EQ(vec(2), 1);
 }
 
@@ -578,8 +578,8 @@ TEST(OperationAndTest, ArrayArrayBroadcastRows)
     Value v1(xdataset::DataArray::CreateIndependent(std::move(ds1)));
     Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
     Value result = OperationAnd(v1, v2);
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
+    ASSERT_TRUE(result.is_data_array());
+    const auto& arr = result.as_data_array().data();
     EXPECT_EQ(arr.size(), 2u);
     EXPECT_EQ(arr.scalar_at<int>(0), 0);  // 1 && 0 = 0
     EXPECT_EQ(arr.scalar_at<int>(1), 1);  // 1 && 1 = 1
@@ -592,8 +592,8 @@ TEST(OperationNotTest, ArrayScalar)
     auto ds = xdataset::DataSeries::CreateScalarFromVector<double>({0.0, 5.0, -3.0});
     Value v(xdataset::DataArray::CreateIndependent(std::move(ds)));
     Value result = OperationNot(v);
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
+    ASSERT_TRUE(result.is_data_array());
+    const auto& arr = result.as_data_array().data();
     EXPECT_EQ(arr.scalar_at<int>(0), 1);
     EXPECT_EQ(arr.scalar_at<int>(1), 0);
     EXPECT_EQ(arr.scalar_at<int>(2), 0);
@@ -608,8 +608,8 @@ TEST(OperationAndTest, MeasMeasScalarScalar)
     Value v1(xdataset::Measurement(0.0));
     Value v2(xdataset::Measurement(1.0));
     Value result = OperationAnd(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), false);
 }
 
 TEST(OperationAndTest, BoolOperands)
@@ -617,8 +617,8 @@ TEST(OperationAndTest, BoolOperands)
     Value v1(xdataset::Measurement::Boolean(true));
     Value v2(xdataset::Measurement::Boolean(false));
     Value result = OperationAnd(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), false);
 }
 
 TEST(OperationOrTest, BoolOperands)
@@ -626,8 +626,8 @@ TEST(OperationOrTest, BoolOperands)
     Value v1(xdataset::Measurement::Boolean(true));
     Value v2(xdataset::Measurement::Boolean(false));
     Value result = OperationOr(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 // ---- Logic: real/complex operands (as_logical: non-zero→1) --------------
@@ -637,8 +637,8 @@ TEST(OperationAndTest, RealOperands)
     Value v1(xdataset::Measurement(3.5));
     Value v2(xdataset::Measurement(0.0));
     Value result = OperationAnd(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);  // 1 && 0 = 0
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), false);  // 1 && 0 = 0
 }
 
 TEST(OperationOrTest, RealOperands)
@@ -646,8 +646,8 @@ TEST(OperationOrTest, RealOperands)
     Value v1(xdataset::Measurement(0.0));
     Value v2(xdataset::Measurement(-2.0));
     Value result = OperationOr(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);  // 0 || 1 = 1
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);  // 0 || 1 = 1
 }
 
 TEST(OperationAndTest, ComplexOperands)
@@ -656,8 +656,8 @@ TEST(OperationAndTest, ComplexOperands)
     Value v1(xdataset::Measurement(std::complex<double>(1.0, 0.0)));
     Value v2(xdataset::Measurement(std::complex<double>(0.0, 0.0)));
     Value result = OperationAnd(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);  // 1 && 0 = 0
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), false);  // 1 && 0 = 0
 }
 
 TEST(OperationOrTest, ComplexOperands)
@@ -666,8 +666,8 @@ TEST(OperationOrTest, ComplexOperands)
     Value v1(xdataset::Measurement(std::complex<double>(0.0, 5.0)));
     Value v2(xdataset::Measurement(std::complex<double>(0.0, 0.0)));
     Value result = OperationOr(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);  // 1 || 0 = 1
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);  // 1 || 0 = 1
 }
 
 // ---- Logic: vector operands (as_logical broadcasts) ---------------------
@@ -679,8 +679,8 @@ TEST(OperationAndTest, VectorOperands)
     Value v1(xdataset::Measurement::Vector(a));
     Value v2(xdataset::Measurement::Vector(b));
     Value result = OperationAnd(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    auto vec = result.as_meas().as_vector<int>();
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<int>();
     EXPECT_EQ(vec(0), 0);  // 0 && 1
     EXPECT_EQ(vec(1), 0);  // 1 && 0
 }
@@ -690,23 +690,23 @@ TEST(OperationAndTest, VectorOperands)
 TEST(OperationNotTest, RealOperand)
 {
     Value result = OperationNot(Value(xdataset::Measurement(3.5)));
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);  // !1 = 0
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), false);  // !1 = 0
 }
 
 TEST(OperationNotTest, ComplexOperand)
 {
     // (0+5i) non-zero → !1 = 0
     Value result = OperationNot(Value(xdataset::Measurement(std::complex<double>(0.0, 5.0))));
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), false);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), false);
 }
 
 TEST(OperationNotTest, BoolOperand)
 {
     Value result = OperationNot(Value(xdataset::Measurement::Boolean(false)));
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<bool>(), true);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<bool>(), true);
 }
 
 // =========================================================================
@@ -718,8 +718,8 @@ TEST(OperationBitAndTest, MeasMeasScalar)
     Value v1(xdataset::Measurement(6));   // 110
     Value v2(xdataset::Measurement(3));   // 011
     Value result = OperationBitAnd(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<int>(), 2);  // 010
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 2);  // 010
 }
 
 TEST(OperationBitOrTest, MeasMeasScalar)
@@ -727,8 +727,8 @@ TEST(OperationBitOrTest, MeasMeasScalar)
     Value v1(xdataset::Measurement(6));
     Value v2(xdataset::Measurement(3));
     Value result = OperationBitOr(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<int>(), 7);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 7);
 }
 
 TEST(OperationBitXorTest, MeasMeasScalar)
@@ -736,8 +736,8 @@ TEST(OperationBitXorTest, MeasMeasScalar)
     Value v1(xdataset::Measurement(6));
     Value v2(xdataset::Measurement(3));
     Value result = OperationBitXor(v1, v2);
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<int>(), 5);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 5);
 }
 
 // =========================================================================
@@ -748,16 +748,16 @@ TEST(OperationShlTest, MeasMeasScalar)
 {
     Value result = OperationShl(Value(xdataset::Measurement(1)),
                                  Value(xdataset::Measurement(3)));
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<int>(), 8);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 8);
 }
 
 TEST(OperationShrTest, MeasMeasScalar)
 {
     Value result = OperationShr(Value(xdataset::Measurement(16)),
                                  Value(xdataset::Measurement(2)));
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_EQ(result.as_meas().as_scalar<int>(), 4);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 4);
 }
 
 // =========================================================================
@@ -768,8 +768,8 @@ TEST(OperationMatrixTest, IntAndRealPromote)
 {
     Value result = OperationMatrix({Value(xdataset::Measurement(1)),
                                      Value(xdataset::Measurement(2.5))});
-    ASSERT_TRUE(result.is_meas());
-    auto vec = result.as_meas().as_vector<double>();
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<double>();
     EXPECT_DOUBLE_EQ(vec(0), 1.0);
     EXPECT_DOUBLE_EQ(vec(1), 2.5);
 }
@@ -779,8 +779,8 @@ TEST(OperationMatrixTest, StringScalarsToVector)
     Value v1(xdataset::Measurement::String("hello"));
     Value v2(xdataset::Measurement::String("world"));
     Value result = OperationMatrix({v1, v2});
-    ASSERT_TRUE(result.is_meas());
-    auto vec = result.as_meas().as_vector<std::string>();
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<std::string>();
     EXPECT_EQ(vec(0), "hello");
     EXPECT_EQ(vec(1), "world");
 }
@@ -790,8 +790,8 @@ TEST(OperationMatrixTest, SameUnit)
     Unit u = Unit::parse("V");
     Value result = OperationMatrix({Value(xdataset::Measurement(1.0, u)),
                                      Value(xdataset::Measurement(2.0, u))});
-    ASSERT_TRUE(result.is_meas());
-    EXPECT_TRUE(result.as_meas().unit().same_dimension(u));
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_TRUE(result.as_measurement().unit().same_dimension(u));
 }
 
 TEST(OperationMatrixTest, IncompatibleUnitsThrows)
@@ -815,8 +815,8 @@ TEST(OperationMatrixTest, DataArraysSameKindSameShape)
     Value v1(xdataset::DataArray::CreateIndependent(std::move(ds1)));
     Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
     Value result = OperationMatrix({v1, v2});
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
+    ASSERT_TRUE(result.is_data_array());
+    const auto& arr = result.as_data_array().data();
     EXPECT_EQ(arr.size(), 2u);
 }
 
@@ -828,8 +828,8 @@ TEST(OperationMatrixTest, PreservesFirstDataArrayMetadata)
     auto ds2 = xdataset::DataSeries::CreateScalarFromVector<double>({3.0});
     Value v2(xdataset::DataArray::CreateIndependent(std::move(ds2)));
     Value result = OperationMatrix({v1, v2});
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array();
+    ASSERT_TRUE(result.is_data_array());
+    const auto& arr = result.as_data_array();
     EXPECT_EQ(arr.multi_dimension_spec().rank(), 2u);
     EXPECT_EQ(arr.data_kind(), DataArrayKind::kDependent);
 }
@@ -844,8 +844,8 @@ TEST(OperationSweepTest, ScalarOnly)
     Value v2(xdataset::Measurement(2.0));
     Value v3(xdataset::Measurement(3.0));
     Value result = OperationSweep({v1, v2, v3});
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
+    ASSERT_TRUE(result.is_data_array());
+    const auto& arr = result.as_data_array().data();
     EXPECT_EQ(arr.size(), 3u);
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 1.0);
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 2.0);
@@ -858,8 +858,8 @@ TEST(OperationSweepTest, VectorOnly)
     VecXd b(2); b << 3.0, 4.0;
     Value result = OperationSweep({Value(xdataset::Measurement::Vector(a)),
                                     Value(xdataset::Measurement::Vector(b))});
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
+    ASSERT_TRUE(result.is_data_array());
+    const auto& arr = result.as_data_array().data();
     EXPECT_EQ(arr.size(), 2u);
     EXPECT_DOUBLE_EQ(arr.vector_at<double>(0)(0), 1.0);
     EXPECT_DOUBLE_EQ(arr.vector_at<double>(0)(1), 2.0);
@@ -869,8 +869,8 @@ TEST(OperationSweepTest, IntAndRealPromote)
 {
     Value result = OperationSweep({Value(xdataset::Measurement(1)),
                                     Value(xdataset::Measurement(2.5))});
-    ASSERT_TRUE(result.is_array());
-    const auto& arr = result.as_array().data();
+    ASSERT_TRUE(result.is_data_array());
+    const auto& arr = result.as_data_array().data();
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(0), 1.0);
     EXPECT_DOUBLE_EQ(arr.scalar_at<double>(1), 2.5);
 }
