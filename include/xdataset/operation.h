@@ -60,6 +60,18 @@ XDATASET_API Value OperationAnd(const Value& lhs, const Value& rhs);
 XDATASET_API Value OperationOr(const Value& lhs, const Value& rhs);
 
 // =========================================================================
+// Ternary
+// =========================================================================
+
+/// Conditional(condition, true_value, false_value) — ternary operator.
+/// condition is evaluated as logical (non-zero → 1, zero → 0).
+/// For each element, if condition is 1 the result is taken from true_value,
+/// otherwise from false_value.  Supports row broadcast and shape broadcast.
+XDATASET_API Value OperationConditional(const Value& condition,
+                                         const Value& true_value,
+                                         const Value& false_value);
+
+// =========================================================================
 // Variadic generators
 // =========================================================================
 

@@ -51,6 +51,7 @@ using xdataset::OperationBitOr;
 using xdataset::OperationBitXor;
 using xdataset::OperationShl;
 using xdataset::OperationShr;
+using xdataset::OperationConditional;
 using xdataset::OperationMatrix;
 using xdataset::OperationSweep;
 
@@ -887,4 +888,248 @@ TEST(OperationSweepTest, IncompatibleUnitsThrows)
     EXPECT_THROW(OperationSweep({Value(xdataset::Measurement(1.0, uv)),
                                   Value(xdataset::Measurement(2.0, ua))}),
                  std::invalid_argument);
+}
+
+// =========================================================================
+//  OperationConditional
+// =========================================================================
+
+// ---- Scalar: basic ternary -----------------------------------------------
+
+TEST(OperationConditionalTest, ScalarTruePath)
+{
+    Value cond(xdataset::Measurement(1));
+    Value t(xdataset::Measurement(10.0));
+    Value f(xdataset::Measurement(20.0));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_DOUBLE_EQ(result.as_measurement().as_scalar<double>(), 10.0);
+}
+
+TEST(OperationConditionalTest, ScalarFalsePath)
+{
+    Value cond(xdataset::Measurement(0));
+    Value t(xdataset::Measurement(10.0));
+    Value f(xdataset::Measurement(20.0));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_DOUBLE_EQ(result.as_measurement().as_scalar<double>(), 20.0);
+}
+
+TEST(OperationConditionalTest, ScalarNegativeCondition)
+{
+    // non-zero (negative) → true path
+    Value cond(xdataset::Measurement(-3));
+    Value t(xdataset::Measurement(100));
+    Value f(xdataset::Measurement(200));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 100);
+}
+
+// ---- Bool condition ------------------------------------------------------
+
+TEST(OperationConditionalTest, BoolConditionTrue)
+{
+    Value cond(xdataset::Measurement::Boolean(true));
+    Value t(xdataset::Measurement(42));
+    Value f(xdataset::Measurement(99));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 42);
+}
+
+TEST(OperationConditionalTest, BoolConditionFalse)
+{
+    Value cond(xdataset::Measurement::Boolean(false));
+    Value t(xdataset::Measurement(42));
+    Value f(xdataset::Measurement(99));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 99);
+}
+
+// ---- Scalar condition, vector operands (broadcast) -----------------------
+
+TEST(OperationConditionalTest, ScalarCondVectorTF)
+{
+    Value cond(xdataset::Measurement(1));
+    VecXd tv(3); tv << 10.0, 20.0, 30.0;
+    VecXd fv(3); fv << 1.0, 2.0, 3.0;
+    Value t(xdataset::Measurement::Vector(tv));
+    Value f(xdataset::Measurement::Vector(fv));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<double>();
+    EXPECT_DOUBLE_EQ(vec(0), 10.0);
+    EXPECT_DOUBLE_EQ(vec(1), 20.0);
+    EXPECT_DOUBLE_EQ(vec(2), 30.0);
+}
+
+// ---- Vector condition, scalar true/false ---------------------------------
+
+TEST(OperationConditionalTest, VectorCondScalarTF)
+{
+    VecXd cv(4); cv << 1.0, 0.0, 1.0, 0.0;
+    Value cond(xdataset::Measurement::Vector(cv));
+    Value t(xdataset::Measurement(10));
+    Value f(xdataset::Measurement(20));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<int>();
+    EXPECT_EQ(vec(0), 10);
+    EXPECT_EQ(vec(1), 20);
+    EXPECT_EQ(vec(2), 10);
+    EXPECT_EQ(vec(3), 20);
+}
+
+// ---- Vector condition, vector true/false (element-wise) ------------------
+
+TEST(OperationConditionalTest, VectorElementWise)
+{
+    VecXd cv(3); cv << 1.0, 0.0, 2.0;  // non-zero counts as true
+    VecXd tv(3); tv << 100.0, 200.0, 300.0;
+    VecXd fv(3); fv << -1.0, -2.0, -3.0;
+    Value cond(xdataset::Measurement::Vector(cv));
+    Value t(xdataset::Measurement::Vector(tv));
+    Value f(xdataset::Measurement::Vector(fv));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<double>();
+    EXPECT_DOUBLE_EQ(vec(0), 100.0);  // 1 → true
+    EXPECT_DOUBLE_EQ(vec(1), -2.0);   // 0 → false
+    EXPECT_DOUBLE_EQ(vec(2), 300.0);  // 2 → true
+}
+
+// ---- Matrix condition (scalar tf broadcast) ------------------------------
+
+TEST(OperationConditionalTest, MatrixCondScalarTF)
+{
+    MatXd cm(2, 2); cm << 1.0, 0.0, 0.0, 1.0;
+    Value cond(xdataset::Measurement::Matrix(cm));
+    Value t(xdataset::Measurement(99));
+    Value f(xdataset::Measurement(-1));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    auto mat = result.as_measurement().as_matrix<int>();
+    EXPECT_EQ(mat(0, 0), 99);
+    EXPECT_EQ(mat(0, 1), -1);
+    EXPECT_EQ(mat(1, 0), -1);
+    EXPECT_EQ(mat(1, 1), 99);
+}
+
+// ---- Matrix × Matrix element-wise ----------------------------------------
+
+TEST(OperationConditionalTest, MatrixElementWise)
+{
+    MatXd cm(2, 2); cm << 1.0, 0.0, 3.0, 0.0;
+    MatXd tm(2, 2); tm << 10.0, 20.0, 30.0, 40.0;
+    MatXd fm(2, 2); fm << 1.0, 2.0, 3.0, 4.0;
+    Value cond(xdataset::Measurement::Matrix(cm));
+    Value t(xdataset::Measurement::Matrix(tm));
+    Value f(xdataset::Measurement::Matrix(fm));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    auto mat = result.as_measurement().as_matrix<double>();
+    EXPECT_DOUBLE_EQ(mat(0, 0), 10.0);
+    EXPECT_DOUBLE_EQ(mat(0, 1), 2.0);
+    EXPECT_DOUBLE_EQ(mat(1, 0), 30.0);
+    EXPECT_DOUBLE_EQ(mat(1, 1), 4.0);
+}
+
+// ---- Complex operands ----------------------------------------------------
+
+TEST(OperationConditionalTest, ComplexOperands)
+{
+    Value cond(xdataset::Measurement(1));
+    Value t(xdataset::Measurement(std::complex<double>(1.0, 2.0)));
+    Value f(xdataset::Measurement(std::complex<double>(3.0, 4.0)));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    auto c = result.as_measurement().as_scalar<std::complex<double>>();
+    EXPECT_DOUBLE_EQ(c.real(), 1.0);
+    EXPECT_DOUBLE_EQ(c.imag(), 2.0);
+}
+
+// ---- Type promotion (int + real → real) ----------------------------------
+
+TEST(OperationConditionalTest, TypePromotion)
+{
+    Value cond(xdataset::Measurement(1));
+    Value t(xdataset::Measurement(1));     // int
+    Value f(xdataset::Measurement(2.5));    // real → promotes to real
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    // Should promote to double
+    EXPECT_DOUBLE_EQ(result.as_measurement().as_scalar<double>(), 1.0);
+}
+
+// ---- Unit propagation (from true/false, not condition) -------------------
+
+TEST(OperationConditionalTest, UnitPropagation)
+{
+    Unit uv = Unit::parse("V");
+    Value cond(xdataset::Measurement(1));
+    Value t(xdataset::Measurement(10.0, uv));
+    Value f(xdataset::Measurement(20.0, uv));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_TRUE(result.unit().same_dimension(uv));
+    EXPECT_DOUBLE_EQ(result.as_measurement().as_scalar<double>(), 10.0);
+}
+
+TEST(OperationConditionalTest, UnitMismatchThrows)
+{
+    Unit uv = Unit::parse("V");
+    Unit ua = Unit::parse("A");
+    Value cond(xdataset::Measurement(1));
+    Value t(xdataset::Measurement(10.0, uv));
+    Value f(xdataset::Measurement(20.0, ua));
+    EXPECT_THROW(OperationConditional(cond, t, f), std::invalid_argument);
+}
+
+// ---- String operands -----------------------------------------------------
+
+TEST(OperationConditionalTest, StringScalar)
+{
+    Value cond(xdataset::Measurement(1));
+    Value t(xdataset::Measurement::String("yes"));
+    Value f(xdataset::Measurement::String("no"));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<std::string>(), "yes");
+}
+
+TEST(OperationConditionalTest, StringFalsePath)
+{
+    Value cond(xdataset::Measurement(0));
+    Value t(xdataset::Measurement::String("yes"));
+    Value f(xdataset::Measurement::String("no"));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    EXPECT_EQ(result.as_measurement().as_scalar<std::string>(), "no");
+}
+
+TEST(OperationConditionalTest, StringVectorElementWise)
+{
+    VecXd cv(3); cv << 1.0, 0.0, 1.0;
+    Value cond(xdataset::Measurement::Vector(cv));
+    VecXs tv(3); tv(0) = "a"; tv(1) = "b"; tv(2) = "c";
+    VecXs fv(3); fv(0) = "x"; fv(1) = "y"; fv(2) = "z";
+    Value t(xdataset::Measurement::Vector(tv));
+    Value f(xdataset::Measurement::Vector(fv));
+    Value result = OperationConditional(cond, t, f);
+    ASSERT_TRUE(result.is_measurement());
+    auto vec = result.as_measurement().as_vector<std::string>();
+    EXPECT_EQ(vec(0), "a");
+    EXPECT_EQ(vec(1), "y");
+    EXPECT_EQ(vec(2), "c");
+}
+
+TEST(OperationConditionalTest, StringMixedNumericThrows)
+{
+    Value cond(xdataset::Measurement(1));
+    Value t(xdataset::Measurement::String("s"));
+    Value f(xdataset::Measurement(42));
+    EXPECT_THROW(OperationConditional(cond, t, f), std::invalid_argument);
 }

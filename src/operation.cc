@@ -604,6 +604,42 @@ Unit DeriveUnitFirst(const std::vector<Unit>& units) {
     return units[0];
 }
 
+// -- DeriveDtypeConditional --
+
+DataType DeriveDtypeConditional(const std::vector<DataType>& dtypes) {
+    // Only promote from true (index 1) and false (index 2).
+    // Condition (index 0) is interpreted as logical int.
+    // String is allowed only when both true and false are strings.
+    bool all_string = true, any_string = false;
+    DataType res = DataType::kInteger;
+    for (size_t i = 1; i < dtypes.size(); ++i) {
+        DataType dt = dtypes[i];
+        if (dt == DataType::kBoolean)
+            dt = DataType::kInteger;
+        if (dt == DataType::kString) {
+            any_string = true;
+            continue;
+        }
+        all_string = false;
+        if (dt == DataType::kComplex)
+            res = DataType::kComplex;
+        else if (dt == DataType::kReal && res != DataType::kComplex)
+            res = DataType::kReal;
+    }
+    if (any_string && !all_string)
+        throw std::invalid_argument(
+            "conditional: cannot mix string with numeric types");
+    return all_string ? DataType::kString : res;
+}
+
+// -- DeriveUnitConditional --
+
+Unit DeriveUnitConditional(const std::vector<Unit>& units) {
+    // Only consider true (index 1) and false (index 2) for unit derivation
+    std::vector<Unit> tf_units = {units[1], units[2]};
+    return DeriveUnitSameDim(tf_units);
+}
+
 // =========================================================================
 //  Element-wise operators
 // =========================================================================
@@ -1963,6 +1999,303 @@ Value ExecuteBinaryDiv(const ExecContextInfo& info,
 }
 
 // =========================================================================
+//  ExecuteConditional -- ternary conditional (condition ? true_val : false_val)
+// =========================================================================
+//
+//  Converts condition to logical int (0/1) via as_logical(), then for each
+//  element picks from true_val (condition != 0) or false_val (condition == 0).
+//  Supports both row broadcast and shape broadcast across all three operands.
+
+template <typename T>
+static Value ExecConditionalT(const ExecContextInfo& info,
+                               const std::vector<Value>& ops,
+                               const Value& cond,
+                               const DataArray* out_src,
+                               bool c_meas, bool t_meas, bool f_meas) {
+    DataShape c_shape = cond.data_shape();
+    DataShape t_shape = ops[1].data_shape();
+    DataShape f_shape = ops[2].data_shape();
+    std::vector<DataShape> op_shapes = {c_shape, t_shape, f_shape};
+
+    Index c_rows = cond.rows();
+    Index t_rows = ops[1].rows();
+    Index f_rows = ops[2].rows();
+    std::vector<Index> row_counts = {c_rows, t_rows, f_rows};
+
+    ShapeBroadcastPlan shape_plan = ShapeBroadcastPlan::Make(op_shapes, info.shape);
+    RowBroadcastPlan   row_plan   = RowBroadcastPlan::Compute(row_counts);
+
+    auto c_in = FlatInput<int>::Acquire(cond);
+    auto t_in = FlatInput<T>::Acquire(ops[1]);
+    auto f_in = FlatInput<T>::Acquire(ops[2]);
+
+    const int* c_ptr = c_in.ptr;
+    Index c_stride = c_in.stride;
+    const T* t_ptr = t_in.ptr;
+    Index t_stride = t_in.stride;
+    const T* f_ptr = f_in.ptr;
+    Index f_stride = f_in.stride;
+
+    auto out_ds = std::unique_ptr<DataSeries>(
+        new DataSeries(info.shape.kind(), DataTypeOf<T>::tag, info.shape));
+    out_ds->set_unit(info.unit);
+    out_ds->resize(static_cast<std::size_t>(info.rows));
+    T* out = out_ds->mutable_contiguous_data<T>();
+
+    Index out_stride = shape_plan.result_elements;
+    for (Index i = 0; i < info.rows; ++i) {
+        Index c_off = (row_plan.broadcast[0] ? 0 : i) * c_stride;
+        Index t_off = (row_plan.broadcast[1] ? 0 : i) * t_stride;
+        Index f_off = (row_plan.broadcast[2] ? 0 : i) * f_stride;
+        Index o_off = i * out_stride;
+
+        for (Index j = 0; j < shape_plan.result_elements; ++j) {
+            Index cj = shape_plan.MapFlatIndex(j, 0);
+            Index tj = shape_plan.MapFlatIndex(j, 1);
+            Index fj = shape_plan.MapFlatIndex(j, 2);
+            out[o_off + j] = (c_ptr[c_off + cj] != 0)
+                             ? t_ptr[t_off + tj]
+                             : f_ptr[f_off + fj];
+        }
+    }
+
+    if (c_meas && t_meas && f_meas)
+        return Value(MakeMeasFromFlat(out, info.shape, info.unit));
+    return MakeArrayFromFlat(std::move(out_ds), *out_src);
+}
+
+// -- String path: read strings directly, no FlatInput ---
+
+static Value ExecConditionalString(const ExecContextInfo& info,
+                                    const std::vector<Value>& ops,
+                                    const Value& cond,
+                                    const DataArray* out_src,
+                                    bool c_meas, bool t_meas, bool f_meas) {
+    DataShape c_shape = cond.data_shape();
+    DataShape t_shape = ops[1].data_shape();
+    DataShape f_shape = ops[2].data_shape();
+    std::vector<DataShape> op_shapes = {c_shape, t_shape, f_shape};
+
+    Index c_rows = cond.rows();
+    Index t_rows = ops[1].rows();
+    Index f_rows = ops[2].rows();
+    std::vector<Index> row_counts = {c_rows, t_rows, f_rows};
+
+    ShapeBroadcastPlan shape_plan = ShapeBroadcastPlan::Make(op_shapes, info.shape);
+    RowBroadcastPlan   row_plan   = RowBroadcastPlan::Compute(row_counts);
+
+    auto c_in = FlatInput<int>::Acquire(cond);
+    const int* c_ptr = c_in.ptr;
+    Index c_stride = c_in.stride;
+
+    Index t_stride = static_cast<Index>(t_shape.element_count());
+    Index f_stride = static_cast<Index>(f_shape.element_count());
+
+    std::vector<std::string> t_flat, f_flat;
+    auto read_flat = [](const Value& v, Index rows, Index stride,
+                        std::vector<std::string>& out) {
+        out.resize(static_cast<std::size_t>(rows * stride));
+        if (v.is_measurement()) {
+            const Measurement& m = v.as_measurement();
+            DataKind dk = m.data_kind();
+            if (dk == DataKind::kScalar) {
+                std::string s = m.as_scalar<std::string>();
+                for (Index i = 0; i < rows * stride; ++i)
+                    out[static_cast<std::size_t>(i)] = s;
+            } else if (dk == DataKind::kVector) {
+                auto vec = m.as_vector<std::string>();
+                for (Index i = 0; i < rows; ++i)
+                    for (Index j = 0; j < stride; ++j)
+                        out[static_cast<std::size_t>(i * stride + j)] = vec(j);
+            } else {
+                auto mat = m.as_matrix<std::string>();
+                Index cols = m.shape()[1];
+                for (Index i = 0; i < rows; ++i)
+                    for (Index j = 0; j < stride; ++j)
+                        out[static_cast<std::size_t>(i * stride + j)] =
+                            mat(j / cols, j % cols);
+            }
+        } else {
+            const DataSeries& ds = v.as_data_array().data();
+            DataKind dk = ds.data_kind();
+            for (Index i = 0; i < rows; ++i) {
+                Index src_row = i;
+                if (dk == DataKind::kScalar)
+                    out[static_cast<std::size_t>(i * stride)] =
+                        ds.scalar_at<std::string>(src_row);
+                else if (dk == DataKind::kVector)
+                    for (Index j = 0; j < stride; ++j)
+                        out[static_cast<std::size_t>(i * stride + j)] =
+                            ds.vector_at<std::string>(src_row)(j);
+                else {
+                    Index cols = ds.data_shape()[1];
+                    for (Index j = 0; j < stride; ++j)
+                        out[static_cast<std::size_t>(i * stride + j)] =
+                            ds.matrix_at<std::string>(src_row)(j / cols, j % cols);
+                }
+            }
+        }
+    };
+    read_flat(ops[1], t_rows, t_stride, t_flat);
+    read_flat(ops[2], f_rows, f_stride, f_flat);
+
+    auto out_ds = std::unique_ptr<DataSeries>(
+        new DataSeries(info.shape.kind(), DataType::kString, info.shape));
+    out_ds->set_unit(info.unit);
+    out_ds->resize(static_cast<std::size_t>(info.rows));
+
+    Index out_stride = shape_plan.result_elements;
+    Index result_rows_total = info.rows * out_stride;
+
+    if (c_meas && t_meas && f_meas) {
+        // Measurement output — use string tensors or scalar directly
+        DataKind dk = info.shape.kind();
+        if (dk == DataKind::kScalar) {
+            Index cj = shape_plan.MapFlatIndex(0, 0);
+            Index tj = shape_plan.MapFlatIndex(0, 1);
+            Index fj = shape_plan.MapFlatIndex(0, 2);
+            std::string val = (c_ptr[cj] != 0)
+                ? t_flat[static_cast<std::size_t>(tj)]
+                : f_flat[static_cast<std::size_t>(fj)];
+            return Value(Measurement::String(std::move(val)));
+        }
+        if (dk == DataKind::kVector) {
+            Index w = info.shape[0];
+            VecXs vec(w);
+            for (Index i = 0; i < info.rows; ++i) {
+                Index c_off = (row_plan.broadcast[0] ? 0 : i) * c_stride;
+                Index t_off = (row_plan.broadcast[1] ? 0 : i) * t_stride;
+                Index f_off = (row_plan.broadcast[2] ? 0 : i) * f_stride;
+
+                for (Index j = 0; j < out_stride; ++j) {
+                    Index cj = shape_plan.MapFlatIndex(j, 0);
+                    Index tj = shape_plan.MapFlatIndex(j, 1);
+                    Index fj = shape_plan.MapFlatIndex(j, 2);
+                    Index idx = static_cast<Index>(static_cast<std::size_t>(i) * static_cast<std::size_t>(out_stride) + static_cast<std::size_t>(j));
+                    if (c_ptr[c_off + cj] != 0)
+                        vec(idx % w) = t_flat[static_cast<std::size_t>(t_off + tj)];
+                    else
+                        vec(idx % w) = f_flat[static_cast<std::size_t>(f_off + fj)];
+                }
+            }
+            return Value(Measurement::Vector(vec));
+        } else {
+            Index rows = info.shape[0], cols = info.shape[1];
+            MatXs mat(rows, cols);
+            for (Index i = 0; i < info.rows; ++i) {
+                Index c_off = (row_plan.broadcast[0] ? 0 : i) * c_stride;
+                Index t_off = (row_plan.broadcast[1] ? 0 : i) * t_stride;
+                Index f_off = (row_plan.broadcast[2] ? 0 : i) * f_stride;
+
+                for (Index j = 0; j < out_stride; ++j) {
+                    Index cj = shape_plan.MapFlatIndex(j, 0);
+                    Index tj = shape_plan.MapFlatIndex(j, 1);
+                    Index fj = shape_plan.MapFlatIndex(j, 2);
+                    if (c_ptr[c_off + cj] != 0)
+                        mat(j / cols, j % cols) = t_flat[static_cast<std::size_t>(t_off + tj)];
+                    else
+                        mat(j / cols, j % cols) = f_flat[static_cast<std::size_t>(f_off + fj)];
+                }
+            }
+            return Value(Measurement::Matrix(mat));
+        }
+    }
+
+    // DataArray output
+    for (Index i = 0; i < info.rows; ++i) {
+        Index c_off = (row_plan.broadcast[0] ? 0 : i) * c_stride;
+        Index t_off = (row_plan.broadcast[1] ? 0 : i) * t_stride;
+        Index f_off = (row_plan.broadcast[2] ? 0 : i) * f_stride;
+
+        if (info.shape.kind() == DataKind::kScalar) {
+            Index cj = shape_plan.MapFlatIndex(0, 0);
+            Index tj = shape_plan.MapFlatIndex(0, 1);
+            Index fj = shape_plan.MapFlatIndex(0, 2);
+            out_ds->scalar_at<std::string>(i) =
+                (c_ptr[c_off + cj] != 0)
+                ? t_flat[static_cast<std::size_t>(t_off + tj)]
+                : f_flat[static_cast<std::size_t>(f_off + fj)];
+        } else if (info.shape.kind() == DataKind::kVector) {
+            for (Index j = 0; j < out_stride; ++j) {
+                Index cj = shape_plan.MapFlatIndex(j, 0);
+                Index tj = shape_plan.MapFlatIndex(j, 1);
+                Index fj = shape_plan.MapFlatIndex(j, 2);
+                out_ds->vector_at<std::string>(i)(j) =
+                    (c_ptr[c_off + cj] != 0)
+                    ? t_flat[static_cast<std::size_t>(t_off + tj)]
+                    : f_flat[static_cast<std::size_t>(f_off + fj)];
+            }
+        } else {
+            for (Index j = 0; j < out_stride; ++j) {
+                Index cj = shape_plan.MapFlatIndex(j, 0);
+                Index tj = shape_plan.MapFlatIndex(j, 1);
+                Index fj = shape_plan.MapFlatIndex(j, 2);
+                Index row = j / info.shape[1];
+                Index col = j % info.shape[1];
+                out_ds->matrix_at<std::string>(i)(row, col) =
+                    (c_ptr[c_off + cj] != 0)
+                    ? t_flat[static_cast<std::size_t>(t_off + tj)]
+                    : f_flat[static_cast<std::size_t>(f_off + fj)];
+            }
+        }
+    }
+    return MakeArrayFromFlat(std::move(out_ds), *out_src);
+}
+
+Value ExecuteConditional(const ExecContextInfo& info,
+                          const std::vector<Value>& ops) {
+    // ops: [condition, true_value, false_value]
+
+    // ---- convert condition to logical int (0/1) ----
+    auto make_logical = [](const Value& v) -> Value {
+        if (v.is_measurement()) {
+            const Measurement& m = v.as_measurement();
+            if (m.data_type() == DataType::kBoolean) {
+                return Value(Measurement(static_cast<int>(m.as_scalar<bool>() ? 1 : 0)));
+            }
+            DataSeries ds(m.data_kind(), m.data_type(), m.shape());
+            ds.append(m);
+            auto logical_ds = std::unique_ptr<DataSeries>(
+                new DataSeries(ds.as_logical()));
+            return Value(MakeMeasFromFlat(logical_ds->contiguous_data<int>(),
+                        m.shape(), m.unit()));
+        } else {
+            auto logical_ds = std::unique_ptr<DataSeries>(
+                new DataSeries(v.as_data_array().data().as_logical()));
+            return MakeArrayFromFlat(std::move(logical_ds), v.as_data_array());
+        }
+    };
+
+    Value cond = make_logical(ops[0]);
+
+    bool t_meas = ops[1].is_measurement();
+    bool f_meas = ops[2].is_measurement();
+    bool c_meas = cond.is_measurement();
+
+    // Output source: inherit metadata from true/false DataArray
+    const DataArray* out_src = nullptr;
+    if (!t_meas && !f_meas) out_src = &ops[1].as_data_array();
+    else if (!t_meas)       out_src = &ops[1].as_data_array();
+    else if (!f_meas)       out_src = &ops[2].as_data_array();
+
+    if (info.dtype == DataType::kString)
+        return ExecConditionalString(info, ops, cond, out_src,
+            c_meas, t_meas, f_meas);
+
+    switch (info.dtype) {
+        case DataType::kComplex:
+            return ExecConditionalT<std::complex<double>>(info, ops, cond,
+                out_src, c_meas, t_meas, f_meas);
+        case DataType::kReal:
+            return ExecConditionalT<double>(info, ops, cond,
+                out_src, c_meas, t_meas, f_meas);
+        default:
+            return ExecConditionalT<int>(info, ops, cond,
+                out_src, c_meas, t_meas, f_meas);
+    }
+}
+
+// =========================================================================
 //  Predefined OpTraits
 // =========================================================================
 
@@ -2088,11 +2421,11 @@ const OpTraits kOpBitNot = {
     DeriveDtypeBitwise, DeriveUnitDimless, ExecuteUnaryBitNot
 };
 
-// ---- ternary (TODO: execute) -----------------------------------------------
+// ---- ternary ---------------------------------------------------------------
 
 const OpTraits kOpConditional = {
     OpCategory::kConditional, 3, DeriveShapeBroadcast, DeriveRowsBroadcast,
-    DeriveDtypePromote, DeriveUnitFirst, nullptr
+    DeriveDtypeConditional, DeriveUnitConditional, ExecuteConditional
 };
 
 // ---- variadic (TODO: execute) ----------------------------------------------
@@ -2138,6 +2471,12 @@ Value OperationShr(const Value& lhs, const Value& rhs)   { return Operate({lhs, 
 Value OperationNegate(const Value& v)                    { return Operate({v}, kOpNegate); }
 Value OperationNot(const Value& v)                       { return Operate({v}, kOpNot); }
 Value OperationBitNot(const Value& v)                    { return Operate({v}, kOpBitNot); }
+
+Value OperationConditional(const Value& condition,
+                           const Value& true_value,
+                           const Value& false_value) {
+    return Operate({condition, true_value, false_value}, kOpConditional);
+}
 
 Value OperationMatrix(const std::vector<Value>& ops)     { return Operate(ops, kOpMatrix); }
 Value OperationSweep(const std::vector<Value>& ops)      { return Operate(ops, kOpSweep); }
