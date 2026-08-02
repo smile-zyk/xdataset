@@ -836,6 +836,36 @@ TEST(OperationMatrixTest, PreservesFirstDataArrayMetadata)
     EXPECT_EQ(arr.data_kind(), DataArrayKind::kDependent);
 }
 
+TEST(OperationMatrixTest, SingleScalarStaysScalar)
+{
+    Value result = OperationMatrix({Value(xdataset::Measurement(42))});
+    ASSERT_TRUE(result.is_measurement());
+    ASSERT_EQ(result.as_measurement().data_kind(), DataKind::kScalar);
+    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 42);
+}
+
+TEST(OperationMatrixTest, SingleScalarWithUnit)
+{
+    Unit u = Unit::parse("V");
+    Value result = OperationMatrix({Value(xdataset::Measurement(3.14, u))});
+    ASSERT_TRUE(result.is_measurement());
+    ASSERT_EQ(result.as_measurement().data_kind(), DataKind::kScalar);
+    EXPECT_DOUBLE_EQ(result.as_measurement().as_scalar<double>(), 3.14);
+    EXPECT_TRUE(result.as_measurement().unit().same_dimension(u));
+}
+
+TEST(OperationMatrixTest, TwoScalarsStayVector)
+{
+    Value result = OperationMatrix({Value(xdataset::Measurement(1)),
+                                     Value(xdataset::Measurement(2))});
+    ASSERT_TRUE(result.is_measurement());
+    ASSERT_EQ(result.as_measurement().data_kind(), DataKind::kVector);
+    auto vec = result.as_measurement().as_vector<int>();
+    EXPECT_EQ(vec.size(), 2);
+    EXPECT_EQ(vec(0), 1);
+    EXPECT_EQ(vec(1), 2);
+}
+
 // =========================================================================
 //  OperationSweep
 // =========================================================================

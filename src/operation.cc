@@ -338,6 +338,12 @@ DataShape DeriveShapeMatrix(const std::vector<DataShape>& operand_shapes) {
     if (operand_shapes.empty())
         throw std::invalid_argument("concat: empty input");
 
+    const Index N = static_cast<Index>(operand_shapes.size());
+
+    // Single operand: passthrough (scalar stays scalar, vector stays vector)
+    if (N == 1)
+        return operand_shapes[0];
+
     const DataKind k0 = operand_shapes[0].kind();
     const DataShape& s0 = operand_shapes[0];
     for (size_t i = 1; i < operand_shapes.size(); ++i) {
@@ -348,8 +354,6 @@ DataShape DeriveShapeMatrix(const std::vector<DataShape>& operand_shapes) {
             throw std::invalid_argument(
                 "concat: shape mismatch at index " + std::to_string(i));
     }
-
-    const Index N = static_cast<Index>(operand_shapes.size());
 
     DataShape result;
     if (k0 == DataKind::kScalar)
@@ -1567,6 +1571,10 @@ Value ExecuteMatrix(const ExecContextInfo& info,
                      const std::vector<Value>& ops) {
     if (ops.empty())
         throw std::invalid_argument("concat: empty input");
+
+    // Single operand: passthrough (no stacking needed)
+    if (ops.size() == 1)
+        return ops[0];
 
     if (info.dtype == DataType::kString)
         return ExecMatrixString(info, ops);
