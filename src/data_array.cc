@@ -504,6 +504,17 @@ namespace xdataset
             }
         }
 
+        // If only kSelf remains and the original was Dependent, demote to
+        // Independent because a Dependent DataArray requires independent
+        // variables as dependencies.
+        if (data_kind_ == DataArrayKind::kDependent && info.datas.size() == 1)
+        {
+            info.kind = DataArrayKind::kIndependent;
+            const Index data_size = info.datas[kSelf].size();
+            info.multi_dimension_spec =
+                MultiDimensionSpec().add_regular(static_cast<std::size_t>(data_size));
+        }
+
         return DataArray(std::move(info));
     }
 
