@@ -390,6 +390,28 @@ Measurement DataSeries::measurement_at(Index i) const {
 // =========================================================================
 
 DataSeries DataSeries::at(const std::vector<Index>& selected) const {
+    if (data_kind_ == DataKind::kScalar)
+        throw std::logic_error("at is invalid for scalar data");
+    if (data_kind_ != DataKind::kVector)
+        throw std::invalid_argument("vector at requires vector data");
+    return at_vector_impl(selected);
+}
+
+DataSeries DataSeries::at(
+    const std::vector<Index>& selected_rows,
+    const std::vector<Index>& selected_cols) const {
+    if (data_kind_ == DataKind::kScalar)
+        throw std::logic_error("at is invalid for scalar data");
+    if (data_kind_ != DataKind::kMatrix)
+        throw std::invalid_argument("matrix at requires matrix data");
+    return at_matrix_impl(selected_rows, selected_cols);
+}
+
+// =========================================================================
+// DataSeries -- at_vector_impl (private)
+// =========================================================================
+
+DataSeries DataSeries::at_vector_impl(const std::vector<Index>& selected) const {
     if (data_kind_ == DataKind::kScalar) {
         throw std::logic_error("at is invalid for scalar data");
     }
@@ -445,7 +467,11 @@ DataSeries DataSeries::at(const std::vector<Index>& selected) const {
     throw std::invalid_argument("vector at requires vector data");
 }
 
-DataSeries DataSeries::at(
+// =========================================================================
+// DataSeries -- at_matrix_impl (private)
+// =========================================================================
+
+DataSeries DataSeries::at_matrix_impl(
     const std::vector<Index>& selected_rows,
     const std::vector<Index>& selected_cols) const {
     if (data_kind_ == DataKind::kScalar) {

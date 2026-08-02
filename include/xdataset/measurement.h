@@ -13,6 +13,7 @@
 
 #include "xdataset_predefine.h"
 #include "unit.h"
+#include "multi_index_selector.h"
 
 namespace xdataset
 {
@@ -189,6 +190,12 @@ namespace xdataset
 
         /// Return the (r, c)-th element as a scalar Measurement (preserves unit).
         Measurement element_at(Index r, Index c) const;
+
+        /// Return a sub-Measurement selected by MultiIndexSelectors.
+        /// For vectors: 1 selector → scalar (if single) or sub-vector.
+        /// For matrices: 2 selectors → scalar/vector/sub-matrix.
+        /// Preserves unit.  Not valid for scalar data.
+        Measurement at(const std::vector<MultiIndexSelector>& selectors) const;
 
         // ======== unary operators (member functions to avoid ADL ambiguity) =====
 

@@ -270,6 +270,172 @@ namespace xdataset
     }
 
     // =========================================================================
+    // Measurement -- at (slicing via MultiIndexSelector)
+    // =========================================================================
+
+    Measurement Measurement::at(const std::vector<MultiIndexSelector>& selectors) const
+    {
+        if (data_kind_ == DataKind::kScalar)
+            throw std::logic_error("at is invalid for scalar Measurement");
+
+        const std::size_t ndim = (data_kind_ == DataKind::kVector) ? 1 : 2;
+        if (selectors.size() > ndim)
+            throw std::invalid_argument("too many selectors for Measurement::at");
+
+        // Pad short selectors with Any()
+        std::vector<MultiIndexSelector> padded = selectors;
+        while (padded.size() < ndim)
+            padded.push_back(MultiIndexSelector::Any());
+
+        if (data_kind_ == DataKind::kVector)
+        {
+            const std::vector<Index> selected = padded[0].resolve(shape_[0]);
+
+            if (selected.size() == 1)
+                return element_at(selected[0]);
+
+            // Sub-vector: extract selected elements
+            switch (data_type_)
+            {
+                case DataType::kReal: {
+                    const auto& src = boost::get<VecXd>(storage_);
+                    VecXd dst(static_cast<Index>(selected.size()));
+                    for (std::size_t i = 0; i < selected.size(); ++i)
+                        dst(static_cast<Index>(i)) = src(selected[i]);
+                    return Measurement(dst, unit_);
+                }
+                case DataType::kInteger: {
+                    const auto& src = boost::get<VecXi>(storage_);
+                    VecXi dst(static_cast<Index>(selected.size()));
+                    for (std::size_t i = 0; i < selected.size(); ++i)
+                        dst(static_cast<Index>(i)) = src(selected[i]);
+                    return Measurement(dst, unit_);
+                }
+                case DataType::kComplex: {
+                    const auto& src = boost::get<VecXcd>(storage_);
+                    VecXcd dst(static_cast<Index>(selected.size()));
+                    for (std::size_t i = 0; i < selected.size(); ++i)
+                        dst(static_cast<Index>(i)) = src(selected[i]);
+                    return Measurement(dst, unit_);
+                }
+                case DataType::kString: {
+                    const auto& src = boost::get<VecXs>(storage_);
+                    VecXs dst(static_cast<Index>(selected.size()));
+                    for (std::size_t i = 0; i < selected.size(); ++i)
+                        dst(static_cast<Index>(i)) = src(selected[i]);
+                    return Measurement(dst, unit_);
+                }
+                default: break;
+            }
+            throw std::logic_error("unsupported dtype in Measurement::at");
+        }
+
+        // Matrix
+        const std::vector<Index> sel_rows = padded[0].resolve(shape_[0]);
+        const std::vector<Index> sel_cols = padded[1].resolve(shape_[1]);
+
+        if (sel_rows.size() == 1 && sel_cols.size() == 1)
+            return element_at(sel_rows[0], sel_cols[0]);
+
+        if (sel_rows.size() == 1 || sel_cols.size() == 1)
+        {
+            // Single row or single column → vector
+            const bool single_row = (sel_rows.size() == 1);
+            const std::vector<Index>& remaining = single_row ? sel_cols : sel_rows;
+            const Index width = static_cast<Index>(remaining.size());
+
+            switch (data_type_)
+            {
+                case DataType::kReal: {
+                    const auto& src = boost::get<MatXd>(storage_);
+                    VecXd dst(width);
+                    for (Index i = 0; i < width; ++i) {
+                        Index r = single_row ? sel_rows[0] : remaining[i];
+                        Index c = single_row ? remaining[i] : sel_cols[0];
+                        dst(i) = src(r, c);
+                    }
+                    return Measurement(dst, unit_);
+                }
+                case DataType::kInteger: {
+                    const auto& src = boost::get<MatXi>(storage_);
+                    VecXi dst(width);
+                    for (Index i = 0; i < width; ++i) {
+                        Index r = single_row ? sel_rows[0] : remaining[i];
+                        Index c = single_row ? remaining[i] : sel_cols[0];
+                        dst(i) = src(r, c);
+                    }
+                    return Measurement(dst, unit_);
+                }
+                case DataType::kComplex: {
+                    const auto& src = boost::get<MatXcd>(storage_);
+                    VecXcd dst(width);
+                    for (Index i = 0; i < width; ++i) {
+                        Index r = single_row ? sel_rows[0] : remaining[i];
+                        Index c = single_row ? remaining[i] : sel_cols[0];
+                        dst(i) = src(r, c);
+                    }
+                    return Measurement(dst, unit_);
+                }
+                case DataType::kString: {
+                    const auto& src = boost::get<MatXs>(storage_);
+                    VecXs dst(width);
+                    for (Index i = 0; i < width; ++i) {
+                        Index r = single_row ? sel_rows[0] : remaining[i];
+                        Index c = single_row ? remaining[i] : sel_cols[0];
+                        dst(i) = src(r, c);
+                    }
+                    return Measurement(dst, unit_);
+                }
+                default: break;
+            }
+            throw std::logic_error("unsupported dtype in Measurement::at");
+        }
+
+        // Sub-matrix: extract selected rows × columns
+        switch (data_type_)
+        {
+            case DataType::kReal: {
+                const auto& src = boost::get<MatXd>(storage_);
+                MatXd dst(static_cast<Index>(sel_rows.size()),
+                          static_cast<Index>(sel_cols.size()));
+                for (Index i = 0; i < static_cast<Index>(sel_rows.size()); ++i)
+                    for (Index j = 0; j < static_cast<Index>(sel_cols.size()); ++j)
+                        dst(i, j) = src(sel_rows[i], sel_cols[j]);
+                return Measurement(dst, unit_);
+            }
+            case DataType::kInteger: {
+                const auto& src = boost::get<MatXi>(storage_);
+                MatXi dst(static_cast<Index>(sel_rows.size()),
+                          static_cast<Index>(sel_cols.size()));
+                for (Index i = 0; i < static_cast<Index>(sel_rows.size()); ++i)
+                    for (Index j = 0; j < static_cast<Index>(sel_cols.size()); ++j)
+                        dst(i, j) = src(sel_rows[i], sel_cols[j]);
+                return Measurement(dst, unit_);
+            }
+            case DataType::kComplex: {
+                const auto& src = boost::get<MatXcd>(storage_);
+                MatXcd dst(static_cast<Index>(sel_rows.size()),
+                           static_cast<Index>(sel_cols.size()));
+                for (Index i = 0; i < static_cast<Index>(sel_rows.size()); ++i)
+                    for (Index j = 0; j < static_cast<Index>(sel_cols.size()); ++j)
+                        dst(i, j) = src(sel_rows[i], sel_cols[j]);
+                return Measurement(dst, unit_);
+            }
+            case DataType::kString: {
+                const auto& src = boost::get<MatXs>(storage_);
+                MatXs dst(static_cast<Index>(sel_rows.size()),
+                          static_cast<Index>(sel_cols.size()));
+                for (Index i = 0; i < static_cast<Index>(sel_rows.size()); ++i)
+                    for (Index j = 0; j < static_cast<Index>(sel_cols.size()); ++j)
+                        dst(i, j) = src(sel_rows[i], sel_cols[j]);
+                return Measurement(dst, unit_);
+            }
+            default: break;
+        }
+        throw std::logic_error("unsupported dtype in Measurement::at");
+    }
+
+    // =========================================================================
     // MeasurementFormatter
     // =========================================================================
 

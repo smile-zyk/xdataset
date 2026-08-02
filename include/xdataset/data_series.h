@@ -577,6 +577,11 @@ private:
         const std::vector<Index>& selected_rows,
         const std::vector<Index>& selected_cols) const;
 
+    DataSeries at_vector_impl(const std::vector<Index>& selected) const;
+    DataSeries at_matrix_impl(
+        const std::vector<Index>& selected_rows,
+        const std::vector<Index>& selected_cols) const;
+
     static void validate_schema(DataKind kind, const DataShape& shape);
 
     static std::unique_ptr<SeriesStorage> make_storage(DataKind kind, DataType dtype, const DataShape& shape);

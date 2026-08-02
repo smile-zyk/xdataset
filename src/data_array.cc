@@ -307,12 +307,13 @@ namespace xdataset
         {
             const std::vector<Index> selected = padded[0].resolve(data().data_shape()[0]);
             info.datas[kSelf] = data().at(selected);
-            return DataArray(std::move(info));
         }
-
-        const std::vector<Index> selected_rows = padded[0].resolve(data().data_shape()[0]);
-        const std::vector<Index> selected_cols = padded[1].resolve(data().data_shape()[1]);
-        info.datas[kSelf] = data().at(selected_rows, selected_cols);
+        else
+        {
+            const std::vector<Index> selected_rows = padded[0].resolve(data().data_shape()[0]);
+            const std::vector<Index> selected_cols = padded[1].resolve(data().data_shape()[1]);
+            info.datas[kSelf] = data().at(selected_rows, selected_cols);
+        }
         return DataArray(std::move(info));
     }
 

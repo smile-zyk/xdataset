@@ -15,9 +15,15 @@ using xdataset::Measurement;
 using xdataset::MeasurementDataFrame;
 using xdataset::DataType;
 using xdataset::Index;
+using xdataset::MultiIndexSelector;
 using xdataset::Unit;
 using xdataset::VecXd;
 using xdataset::VecXi;
+using xdataset::VecXcd;
+using xdataset::VecXs;
+using xdataset::MatXd;
+using xdataset::MatXi;
+using xdataset::MatXcd;
 using xdataset::VecXcd;
 using xdataset::VecXs;
 using xdataset::MatXd;
@@ -347,6 +353,186 @@ TEST(MeasurementToDataFrameTest, ToCsvRoundtrip)
     //   FormatMultiIndex() gives "[]", EscapeCsvField does not quote it
     //   (no comma / quote / newline characters), so: [],10,20
     EXPECT_NE(csv.find("0,10,20"), std::string::npos);
+}
+
+// =========================================================================
+//  Measurement::at
+// =========================================================================
+
+TEST(MeasurementAtTest, ScalarThrows)
+{
+    Measurement m(42.0);
+    EXPECT_THROW(m.at({MultiIndexSelector::Any()}), std::logic_error);
+}
+
+TEST(MeasurementAtTest, VectorAtEqualReturnsScalar)
+{
+    VecXd v(4); v << 10.0, 20.0, 30.0, 40.0;
+    Measurement m = Measurement::Vector(v);
+
+    Measurement result = m.at({MultiIndexSelector::Equal(2)});
+    ASSERT_EQ(result.data_kind(), DataKind::kScalar);
+    EXPECT_DOUBLE_EQ(result.as_scalar<double>(), 30.0);
+}
+
+TEST(MeasurementAtTest, VectorAtInReturnsSubVector)
+{
+    VecXd v(5); v << 1.0, 2.0, 3.0, 4.0, 5.0;
+    Measurement m = Measurement::Vector(v);
+
+    Measurement result = m.at({MultiIndexSelector::In({0, 2, 4})});
+    ASSERT_EQ(result.data_kind(), DataKind::kVector);
+    auto vec = result.as_vector<double>();
+    EXPECT_EQ(vec.size(), 3);
+    EXPECT_DOUBLE_EQ(vec(0), 1.0);
+    EXPECT_DOUBLE_EQ(vec(1), 3.0);
+    EXPECT_DOUBLE_EQ(vec(2), 5.0);
+}
+
+TEST(MeasurementAtTest, VectorAtInPreservesUnit)
+{
+    Unit u = Unit::parse("V");
+    VecXd v(3); v << 1.0, 2.0, 3.0;
+    Measurement m(v, u);
+
+    Measurement result = m.at({MultiIndexSelector::In({1, 2})});
+    EXPECT_TRUE(result.unit().same_dimension(u));
+}
+
+TEST(MeasurementAtTest, VectorAtAnyReturnsAll)
+{
+    VecXd v(3); v << 1.0, 2.0, 3.0;
+    Measurement m = Measurement::Vector(v);
+
+    Measurement result = m.at({MultiIndexSelector::Any()});
+    ASSERT_EQ(result.data_kind(), DataKind::kVector);
+    auto vec = result.as_vector<double>();
+    EXPECT_EQ(vec.size(), 3);
+}
+
+TEST(MeasurementAtTest, MatrixAtSingleElementReturnsScalar)
+{
+    MatXd mat(2, 3);
+    mat << 1.0, 2.0, 3.0,
+           4.0, 5.0, 6.0;
+    Measurement m = Measurement::Matrix(mat);
+
+    Measurement result = m.at({MultiIndexSelector::Equal(1), MultiIndexSelector::Equal(2)});
+    ASSERT_EQ(result.data_kind(), DataKind::kScalar);
+    EXPECT_DOUBLE_EQ(result.as_scalar<double>(), 6.0);
+}
+
+TEST(MeasurementAtTest, MatrixAtSingleRowReturnsVector)
+{
+    MatXd mat(3, 3);
+    mat << 1.0, 2.0, 3.0,
+           4.0, 5.0, 6.0,
+           7.0, 8.0, 9.0;
+    Measurement m = Measurement::Matrix(mat);
+
+    Measurement result = m.at({MultiIndexSelector::Equal(1), MultiIndexSelector::Any()});
+    ASSERT_EQ(result.data_kind(), DataKind::kVector);
+    auto vec = result.as_vector<double>();
+    EXPECT_EQ(vec.size(), 3);
+    EXPECT_DOUBLE_EQ(vec(0), 4.0);
+    EXPECT_DOUBLE_EQ(vec(1), 5.0);
+    EXPECT_DOUBLE_EQ(vec(2), 6.0);
+}
+
+TEST(MeasurementAtTest, MatrixAtSingleColumnReturnsVector)
+{
+    MatXd mat(3, 2);
+    mat << 1.0, 2.0,
+           3.0, 4.0,
+           5.0, 6.0;
+    Measurement m = Measurement::Matrix(mat);
+
+    Measurement result = m.at({MultiIndexSelector::Any(), MultiIndexSelector::Equal(0)});
+    ASSERT_EQ(result.data_kind(), DataKind::kVector);
+    auto vec = result.as_vector<double>();
+    EXPECT_EQ(vec.size(), 3);
+    EXPECT_DOUBLE_EQ(vec(0), 1.0);
+    EXPECT_DOUBLE_EQ(vec(1), 3.0);
+    EXPECT_DOUBLE_EQ(vec(2), 5.0);
+}
+
+TEST(MeasurementAtTest, MatrixAtInReturnsSubMatrix)
+{
+    MatXd mat(4, 4);
+    mat << 1.0,  2.0,  3.0,  4.0,
+           5.0,  6.0,  7.0,  8.0,
+           9.0,  10.0, 11.0, 12.0,
+           13.0, 14.0, 15.0, 16.0;
+    Measurement m = Measurement::Matrix(mat);
+
+    Measurement result = m.at({MultiIndexSelector::In({0, 2}), MultiIndexSelector::In({1, 3})});
+    ASSERT_EQ(result.data_kind(), DataKind::kMatrix);
+    auto sub = result.as_matrix<double>();
+    EXPECT_EQ(sub.rows(), 2);
+    EXPECT_EQ(sub.cols(), 2);
+    EXPECT_DOUBLE_EQ(sub(0, 0), 2.0);
+    EXPECT_DOUBLE_EQ(sub(0, 1), 4.0);
+    EXPECT_DOUBLE_EQ(sub(1, 0), 10.0);
+    EXPECT_DOUBLE_EQ(sub(1, 1), 12.0);
+}
+
+TEST(MeasurementAtTest, MatrixAtPreservesUnit)
+{
+    Unit u = Unit::parse("V");
+    MatXd mat(2, 2);
+    mat << 1.0, 2.0, 3.0, 4.0;
+    Measurement m(mat, u);
+
+    Measurement result = m.at({MultiIndexSelector::Equal(0), MultiIndexSelector::Equal(0)});
+    ASSERT_EQ(result.data_kind(), DataKind::kScalar);
+    EXPECT_DOUBLE_EQ(result.as_scalar<double>(), 1.0);
+    EXPECT_TRUE(result.unit().same_dimension(u));
+}
+
+TEST(MeasurementAtTest, IntegerVector)
+{
+    VecXi v(3); v << 10, 20, 30;
+    Measurement m = Measurement::Vector(v);
+
+    Measurement result = m.at({MultiIndexSelector::In({0, 2})});
+    ASSERT_EQ(result.data_kind(), DataKind::kVector);
+    auto vec = result.as_vector<int>();
+    EXPECT_EQ(vec(0), 10);
+    EXPECT_EQ(vec(1), 30);
+}
+
+TEST(MeasurementAtTest, ComplexMatrix)
+{
+    MatXcd mat(2, 2);
+    mat << std::complex<double>(1, 0), std::complex<double>(2, 0),
+           std::complex<double>(3, 0), std::complex<double>(4, 0);
+    Measurement m = Measurement::Matrix(mat);
+
+    Measurement result = m.at({MultiIndexSelector::Any(), MultiIndexSelector::Equal(1)});
+    ASSERT_EQ(result.data_kind(), DataKind::kVector);
+    auto vec = result.as_vector<std::complex<double>>();
+    EXPECT_DOUBLE_EQ(vec(0).real(), 2.0);
+    EXPECT_DOUBLE_EQ(vec(1).real(), 4.0);
+}
+
+TEST(MeasurementAtTest, StringVector)
+{
+    VecXs v(3);
+    v(0) = "a"; v(1) = "b"; v(2) = "c";
+    Measurement m = Measurement::Vector(v);
+
+    Measurement result = m.at({MultiIndexSelector::In({1, 2})});
+    ASSERT_EQ(result.data_kind(), DataKind::kVector);
+    auto vec = result.as_vector<std::string>();
+    EXPECT_EQ(vec(0), "b");
+    EXPECT_EQ(vec(1), "c");
+}
+
+TEST(MeasurementAtTest, TooManySelectorsThrows)
+{
+    VecXd v(3); v << 1.0, 2.0, 3.0;
+    Measurement m = Measurement::Vector(v);
+    EXPECT_THROW(m.at({MultiIndexSelector::Any(), MultiIndexSelector::Any()}), std::invalid_argument);
 }
 
 // =========================================================================
