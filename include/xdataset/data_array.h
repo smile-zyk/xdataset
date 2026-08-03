@@ -111,6 +111,27 @@ namespace xdataset
 
         DataArray select(const std::vector<MultiIndexSelector>& selectors) const;
 
+        /// Reduce along the innermost dimension by taking the element-wise
+        /// minimum of each group of leaves sharing the same outer prefix.
+        ///
+        /// Each call lowers the rank by one:
+        ///   - rank >= 2: the result is a Dependent DataArray (the reduced
+        ///     innermost values become dependent data over the remaining
+        ///     dimensions).
+        ///   - rank == 1: the whole column collapses into a single value and
+        ///     the result is demoted to an Independent DataArray with one
+        ///     dimension of size 1.
+        ///
+        /// Only scalar data is supported (vector/matrix cells throw).
+        /// Numeric values compare numerically; complex values by magnitude
+        /// (std::abs); booleans as false < true; strings lexicographically.
+        DataArray min() const;
+
+        /// Reduce along the innermost dimension by taking the element-wise
+        /// maximum. Same lowering/demotion semantics and comparison rules
+        /// as min().
+        DataArray max() const;
+
         // Standalone independent variable (no prior independents).
         static DataArray CreateIndependent(
             DataSeries data);
@@ -121,6 +142,10 @@ namespace xdataset
             const tsl::ordered_map<std::string, const DataArray*>& indep_variables);
 
     private:
+        /// Shared implementation for min() / max(): reduce along the innermost
+        /// dimension.  See min() for the exact semantics.
+        DataArray reduce_minmax(bool want_max) const;
+
         /// Unified data storage.  The last entry (key = kSelf) is always the
         /// self data; preceding entries are independent dimension / variable
         /// data.

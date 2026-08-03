@@ -9,6 +9,10 @@ output/
 
 # C extensions
 *.so
+*.pyd
+
+# demo output files
+python/demo_out.h5
 
 # Distribution / packaging
 .Python

@@ -85,3 +85,89 @@ target_include_directories(xdataset_playground PRIVATE ${CMAKE_CURRENT_SOURCE_DI
 
 target_link_libraries(xdataset PUBLIC Eigen3::Eigen Boost::headers tsl::ordered_map llnl-units::units ${HDF5_TARGET})
 target_link_libraries(xdataset_playground PRIVATE xdataset)
+
+# =============================================================================
+# Python bindings (pybind11)
+# =============================================================================
+#
+# The pybind11 CMake package is located through the *Python module* pybind11:
+#   <python> -m pybind11 --cmakedir
+#
+# On Windows the interpreter defaults to the MSYS2 MinGW Python so that the
+# resulting .pyd stays ABI-compatible with the MinGW-built xdataset.dll.
+# Override with:  -DPython3_EXECUTABLE=<path-to-python>
+# =============================================================================
+
+option(BUILD_XDATASET_PYTHON "Build the Python bindings (pybind11)" ON)
+
+if(BUILD_XDATASET_PYTHON)
+    if(WIN32 AND NOT DEFINED Python3_EXECUTABLE)
+        foreach(_py_candidate
+                "C:/msys64/mingw64/bin/python.exe"
+                "C:/msys2/mingw64/bin/python.exe")
+            if(EXISTS "${_py_candidate}")
+                set(Python3_EXECUTABLE "${_py_candidate}" CACHE FILEPATH
+                    "Python interpreter used for the xdataset Python bindings")
+                break()
+            endif()
+        endforeach()
+    endif()
+
+    find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
+    message(STATUS "Python bindings interpreter: ${Python3_EXECUTABLE}")
+
+    # Use the Python module pybind11 to resolve the CMake package location.
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}" -m pybind11 --cmakedir
+        OUTPUT_VARIABLE PYBIND11_CMAKE_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE _pybind11_cmakedir_result
+        ERROR_QUIET)
+    if(NOT _pybind11_cmakedir_result EQUAL 0 OR
+       NOT EXISTS "${PYBIND11_CMAKE_DIR}/pybind11Config.cmake")
+        message(WARNING
+            "pybind11 Python module not found for ${Python3_EXECUTABLE}; "
+            "skipping the Python bindings. Install it with: "
+            "\"${Python3_EXECUTABLE}\" -m pip install pybind11")
+    else()
+        message(STATUS "pybind11 CMake dir: ${PYBIND11_CMAKE_DIR}")
+        list(PREPEND CMAKE_PREFIX_PATH "${PYBIND11_CMAKE_DIR}")
+        find_package(pybind11 CONFIG REQUIRED)
+
+        # NumPy include dir — required by pybind11/numpy.h and pybind11/eigen.h.
+        execute_process(
+            COMMAND "${Python3_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
+            OUTPUT_VARIABLE NUMPY_INCLUDE_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE _numpy_include_result)
+        if(NOT _numpy_include_result EQUAL 0 OR NOT EXISTS "${NUMPY_INCLUDE_DIR}")
+            message(FATAL_ERROR
+                "numpy is required to build the Python bindings. Install it with: "
+                "\"${Python3_EXECUTABLE}\" -m pip install numpy")
+        endif()
+
+        pybind11_add_module(xdataset_pybind python/xdataset_pybind.cc)
+
+        target_include_directories(xdataset_pybind PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${NUMPY_INCLUDE_DIR})
+
+        target_link_libraries(xdataset_pybind PRIVATE xdataset)
+
+        # Guarantee the importable name "xdataset.pyd" regardless of the
+        # ABI-tagged suffix pybind11 would otherwise generate.
+        # The bindings stay on C++11 (the same standard as the library).
+        set_target_properties(xdataset_pybind PROPERTIES
+            CXX_STANDARD 11
+            CXX_STANDARD_REQUIRED ON
+            CXX_EXTENSIONS OFF
+            OUTPUT_NAME xdataset
+            PREFIX ""
+            SUFFIX ".pyd")
+
+        # GCC 15 Debug needs -O1 for Eigen template inlining (same as xdataset).
+        target_compile_options(xdataset_pybind PRIVATE
+            $<$<CXX_COMPILER_ID:GNU>:$<$<CONFIG:Debug>:-O1>>)
+    endif()
+endif()
