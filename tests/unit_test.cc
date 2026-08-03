@@ -19,6 +19,15 @@ TEST(UnitTest, DefaultIsDimensionlessUnit)
     EXPECT_DOUBLE_EQ(u.multiplier(), 1.0);
 }
 
+TEST(UnitTest, NoneAliasIsDimensionless)
+{
+    Unit u = Unit::None();
+    EXPECT_FALSE(u.has_dimension());
+    EXPECT_TRUE(u.is_dimensionless());
+    EXPECT_DOUBLE_EQ(u.multiplier(), 1.0);
+    EXPECT_TRUE(u == Unit());
+}
+
 TEST(UnitTest, ParseHz)
 {
     Unit u = Unit::parse("Hz");
@@ -456,7 +465,7 @@ TEST(UnitTest, ToStringRoundTripBasicUnits)
 }
 
 // =========================================================================
-//  to_string: canonicalized prefixed units â†?base REL name
+//  to_string: canonicalized prefixed units ï¿½?base REL name
 // =========================================================================
 
 TEST(UnitTest, ToStringCanonicalMHz)
@@ -480,7 +489,7 @@ TEST(UnitTest, ToStringCanonicalkOhm)
 
 TEST(UnitTest, ToStringCanonicalkS)
 {
-    // kS (kilo-Siemens) â†?canonicalized â†?"S"
+    // kS (kilo-Siemens) ï¿½?canonicalized ï¿½?"S"
     Unit u = Unit::parse("kS");
     Unit c = u.canonicalized();
     EXPECT_EQ(c.to_string(), "S");
@@ -577,11 +586,11 @@ TEST(UnitTest, BestDisplayHzToGHz)
 }
 
 // When the unit already has a prefix (e.g. "MHz") and the value doesn't
-// trigger further auto-scaling, the scale must be 1.0 â€?the display name
+// trigger further auto-scaling, the scale must be 1.0 ï¿½?the display name
 // returned by to_string() already includes the prefix.
 TEST(UnitTest, BestDisplayPrefixUnitNoFurtherScale)
 {
-    // 1.23e12 MHz â†?stays in MHz, no further auto-scaling possible.
+    // 1.23e12 MHz ï¿½?stays in MHz, no further auto-scaling possible.
     UnitScale s = Unit::parse("MHz").best_display(1.23e12);
     EXPECT_DOUBLE_EQ(s.scale, 1.0);
     EXPECT_EQ(s.name, "MHz");

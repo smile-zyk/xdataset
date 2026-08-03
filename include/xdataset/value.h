@@ -100,10 +100,62 @@ public:
 
     // ---- convenience factories -----------------------------------------
 
-    static Value Real(double v);
-    static Value Integer(int v);
-    static Value BooleanValue(bool b);
+    /// @{
+    /// Scalar factories with optional unit (default: dimensionless).
+    /// Boolean and String values cannot carry a physical unit, so their
+    /// factories take no unit.
+    static Value Boolean(bool b);
     static Value String(const std::string& s);
+    static Value Complex(std::complex<double> v, const Unit& u = Unit());
+    static Value Real(double v, const Unit& u = Unit());
+    static Value Integer(int v, const Unit& u = Unit());
+    /// @}
+
+    /// @{
+    /// Vector factories (1-d).
+    static Value Vector(const VecXd& v, const Unit& u = Unit());
+    static Value Vector(const VecXi& v, const Unit& u = Unit());
+    static Value Vector(const VecXcd& v, const Unit& u = Unit());
+    static Value Vector(const VecXs& v);
+    /// @}
+
+    /// @{
+    /// Matrix factories (2-d).
+    static Value Matrix(const MatXd& m, const Unit& u = Unit());
+    static Value Matrix(const MatXi& m, const Unit& u = Unit());
+    static Value Matrix(const MatXcd& m, const Unit& u = Unit());
+    static Value Matrix(const MatXs& m);
+    /// @}
+
+    /// @{
+    /// Independent DataArray factories: build a single-column (scalar) DataArray
+    /// Value directly from a flat std::vector.  Each entry becomes one row.
+    static Value ArrayReal(const std::vector<double>& v, const Unit& u = Unit());
+    static Value ArrayInteger(const std::vector<int>& v, const Unit& u = Unit());
+    static Value ArrayComplex(const std::vector<std::complex<double>>& v,
+                              const Unit& u = Unit());
+    static Value ArrayString(const std::vector<std::string>& v);
+    /// @}
+
+    /// @{
+    /// Independent DataArray factories with vector cells: each element of
+    /// `rows` becomes one row (a 1-d vector cell).  All rows must share the
+    /// same width.
+    static Value ArrayVector(const std::vector<VecXd>& rows, const Unit& u = Unit());
+    static Value ArrayVector(const std::vector<VecXi>& rows, const Unit& u = Unit());
+    static Value ArrayVector(const std::vector<VecXcd>& rows, const Unit& u = Unit());
+    static Value ArrayVector(const std::vector<VecXs>& rows);
+    /// @}
+
+    /// @{
+    /// Independent DataArray factories with matrix cells: each element of
+    /// `rows` becomes one row (a 2-d matrix cell).  All rows must share the
+    /// same shape.
+    static Value ArrayMatrix(const std::vector<MatXd>& rows, const Unit& u = Unit());
+    static Value ArrayMatrix(const std::vector<MatXi>& rows, const Unit& u = Unit());
+    static Value ArrayMatrix(const std::vector<MatXcd>& rows, const Unit& u = Unit());
+    static Value ArrayMatrix(const std::vector<MatXs>& rows);
+    /// @}
 
 private:
     typedef boost::variant<

@@ -131,20 +131,143 @@ std::string Value::Format(const std::string& name, int max_rows) const
 
 // ---- convenience factories -------------------------------------------------
 
-Value Value::Real(double v) {
-    return Value(Measurement(v));
+Value Value::Real(double v, const Unit& u) {
+    return Value(Measurement(v, u));
 }
 
-Value Value::Integer(int v) {
-    return Value(Measurement(v));
+Value Value::Integer(int v, const Unit& u) {
+    return Value(Measurement(v, u));
 }
 
-Value Value::BooleanValue(bool b) {
+Value Value::Boolean(bool b) {
     return Value(Measurement::Boolean(b));
 }
 
 Value Value::String(const std::string& s) {
     return Value(Measurement::String(s));
+}
+
+Value Value::Complex(std::complex<double> v, const Unit& u) {
+    return Value(Measurement(v, u));
+}
+
+Value Value::Vector(const VecXd& v, const Unit& u) {
+    return Value(Measurement(v, u));
+}
+
+Value Value::Vector(const VecXi& v, const Unit& u) {
+    return Value(Measurement(v, u));
+}
+
+Value Value::Vector(const VecXcd& v, const Unit& u) {
+    return Value(Measurement(v, u));
+}
+
+Value Value::Vector(const VecXs& v) {
+    return Value(Measurement::Vector(v));
+}
+
+Value Value::Matrix(const MatXd& m, const Unit& u) {
+    return Value(Measurement(m, u));
+}
+
+Value Value::Matrix(const MatXi& m, const Unit& u) {
+    return Value(Measurement(m, u));
+}
+
+Value Value::Matrix(const MatXcd& m, const Unit& u) {
+    return Value(Measurement(m, u));
+}
+
+Value Value::Matrix(const MatXs& m) {
+    return Value(Measurement::Matrix(m));
+}
+
+Value Value::ArrayReal(const std::vector<double>& v, const Unit& u) {
+    return Value(DataArray::CreateIndependent(
+        DataSeries::CreateScalarFromVector<double>(v, u)));
+}
+
+Value Value::ArrayInteger(const std::vector<int>& v, const Unit& u) {
+    return Value(DataArray::CreateIndependent(
+        DataSeries::CreateScalarFromVector<int>(v, u)));
+}
+
+Value Value::ArrayComplex(const std::vector<std::complex<double>>& v,
+                          const Unit& u) {
+    return Value(DataArray::CreateIndependent(
+        DataSeries::CreateScalarFromVector<std::complex<double>>(v, u)));
+}
+
+Value Value::ArrayString(const std::vector<std::string>& v) {
+    return Value(DataArray::CreateIndependent(
+        DataSeries::CreateScalarFromVector(v)));
+}
+
+Value Value::ArrayVector(const std::vector<VecXd>& rows, const Unit& u) {
+    DataSeries s(DataKind::kVector, DataType::kReal,
+                 {rows.empty() ? Index(0) : rows[0].size()});
+    s.set_unit(u);
+    for (const auto& row : rows) s.append(Measurement::Vector(row));
+    return Value(DataArray::CreateIndependent(std::move(s)));
+}
+
+Value Value::ArrayVector(const std::vector<VecXi>& rows, const Unit& u) {
+    DataSeries s(DataKind::kVector, DataType::kInteger,
+                 {rows.empty() ? Index(0) : rows[0].size()});
+    s.set_unit(u);
+    for (const auto& row : rows) s.append(Measurement::Vector(row));
+    return Value(DataArray::CreateIndependent(std::move(s)));
+}
+
+Value Value::ArrayVector(const std::vector<VecXcd>& rows, const Unit& u) {
+    DataSeries s(DataKind::kVector, DataType::kComplex,
+                 {rows.empty() ? Index(0) : rows[0].size()});
+    s.set_unit(u);
+    for (const auto& row : rows) s.append(Measurement::Vector(row));
+    return Value(DataArray::CreateIndependent(std::move(s)));
+}
+
+Value Value::ArrayVector(const std::vector<VecXs>& rows) {
+    DataSeries s(DataKind::kVector, DataType::kString,
+                 {rows.empty() ? Index(0) : rows[0].dimension(0)});
+    for (const auto& row : rows) s.append(Measurement::Vector(row));
+    return Value(DataArray::CreateIndependent(std::move(s)));
+}
+
+Value Value::ArrayMatrix(const std::vector<MatXd>& rows, const Unit& u) {
+    DataSeries s(DataKind::kMatrix, DataType::kReal,
+                 {rows.empty() ? Index(0) : rows[0].rows(),
+                  rows.empty() ? Index(0) : rows[0].cols()});
+    s.set_unit(u);
+    for (const auto& row : rows) s.append(Measurement::Matrix(row));
+    return Value(DataArray::CreateIndependent(std::move(s)));
+}
+
+Value Value::ArrayMatrix(const std::vector<MatXi>& rows, const Unit& u) {
+    DataSeries s(DataKind::kMatrix, DataType::kInteger,
+                 {rows.empty() ? Index(0) : rows[0].rows(),
+                  rows.empty() ? Index(0) : rows[0].cols()});
+    s.set_unit(u);
+    for (const auto& row : rows) s.append(Measurement::Matrix(row));
+    return Value(DataArray::CreateIndependent(std::move(s)));
+}
+
+Value Value::ArrayMatrix(const std::vector<MatXcd>& rows, const Unit& u) {
+    DataSeries s(DataKind::kMatrix, DataType::kComplex,
+                 {rows.empty() ? Index(0) : rows[0].rows(),
+                  rows.empty() ? Index(0) : rows[0].cols()});
+    s.set_unit(u);
+    for (const auto& row : rows) s.append(Measurement::Matrix(row));
+    return Value(DataArray::CreateIndependent(std::move(s)));
+}
+
+Value Value::ArrayMatrix(const std::vector<MatXs>& rows) {
+    DataSeries s(DataKind::kMatrix, DataType::kString,
+                 {rows.empty() ? Index(0) : rows[0].dimension(0),
+                  rows.empty() ? Index(0) : rows[0].dimension(1)});
+    for (const auto& row : rows) s.append(Measurement::Matrix(row));
+    return Value(DataArray::CreateIndependent(std::move(s)));
 }
 
 // =========================================================================

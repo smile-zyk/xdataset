@@ -9,7 +9,7 @@ namespace xdataset
 {
 
     // =========================================================================
-    //  REL vocabulary â€?only these strings are accepted by parse()
+    //  REL vocabulary ï¿½?only these strings are accepted by parse()
     // =========================================================================
 
     namespace
@@ -51,7 +51,7 @@ namespace xdataset
             {"W", "W"},
         };
 
-        // --- predefined scaled units (exact match â€?no scale factor allowed) ------
+        // --- predefined scaled units (exact match ï¿½?no scale factor allowed) ------
 
         struct PredefUnit
         {
@@ -145,12 +145,12 @@ namespace xdataset
                 return oss.str();
             }
 
-            // 4) not in REL vocabulary â†?error for parse()
+            // 4) not in REL vocabulary ï¿½?error for parse()
             throw std::invalid_argument("Unrecognised unit token: '" + token + "'");
         }
 
         // =========================================================================
-        //  Reverse mapping: llnl base_units string â†?REL unit name (no prefix)
+        //  Reverse mapping: llnl base_units string ï¿½?REL unit name (no prefix)
         // =========================================================================
         //
         //  For each entry in kUnitMap, we parse the llnl string, pull out its
@@ -159,7 +159,7 @@ namespace xdataset
         //  prefix and only register the base name.  Predefined units (mil, cm,
         //  etc.) whose llnl base is "m" are registered as that base.
         //
-        //  Duplicate keys (Ohm/Ohms both â†?"ohm") keep the first REL name.
+        //  Duplicate keys (Ohm/Ohms both ï¿½?"ohm") keep the first REL name.
 
         std::map<std::string, std::string>& get_base_unit_rel_name()
         {
@@ -209,6 +209,8 @@ namespace xdataset
     // =========================================================================
 
     Unit::Unit() : unit_() {}
+
+    Unit Unit::None() { return Unit(); }
 
     Unit::Unit(units::precise_unit pu) : unit_(std::move(pu)) {}
 
@@ -271,7 +273,7 @@ namespace xdataset
         auto& rel_map = get_base_unit_rel_name();
         auto rit = rel_map.find(base_key);
         if (rit == rel_map.end())
-            return units::to_string(unit_);  // not in vocabulary â€?fallback
+            return units::to_string(unit_);  // not in vocabulary ï¿½?fallback
 
         const std::string& rel_base = rit->second;
 

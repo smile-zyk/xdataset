@@ -1204,7 +1204,7 @@ Value ExecBinaryCmpT(const ExecContextInfo& info,
     if (l_meas && r_meas) {
         // Scalar Meas -> upgrade to Boolean
         if (info.shape.kind() == DataKind::kScalar)
-            return Value(Measurement::Boolean(out[0] != 0));
+            return Value::Boolean(out[0] != 0);
 
         return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
@@ -1309,7 +1309,7 @@ static Value ExecBinaryCmpString(const ExecContextInfo& info,
 
     if (l_meas && r_meas) {
         if (info.shape.kind() == DataKind::kScalar)
-            return Value(Measurement::Boolean(out[0] != 0));
+            return Value::Boolean(out[0] != 0);
         return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
         return MakeArrayFromFlat(std::move(out_ds), *out_src);
@@ -1351,7 +1351,7 @@ Value ExecuteBinaryLogical(const ExecContextInfo& info,
         if (v.is_measurement()) {
             const Measurement& m = v.as_measurement();
             if (m.data_type() == DataType::kBoolean) {
-                return Value(Measurement(static_cast<int>(m.as_scalar<bool>() ? 1 : 0)));
+                return Value::Integer(m.as_scalar<bool>() ? 1 : 0);
             }
             DataSeries ds(m.data_kind(), m.data_type(), m.shape());
             ds.append(m);
@@ -1371,7 +1371,7 @@ Value ExecuteBinaryLogical(const ExecContextInfo& info,
 
     if (ops[0].is_measurement() && ops[1].is_measurement() &&
         info.shape.kind() == DataKind::kScalar) {
-        return Value(Measurement::Boolean(result.as_measurement().as_scalar<int>() != 0));
+        return Value::Boolean(result.as_measurement().as_scalar<int>() != 0);
     }
     return result;
 }
@@ -1531,14 +1531,14 @@ static Value ExecMatrixString(const ExecContextInfo& info,
             VecXs vec(w);
             for (Index i = 0; i < w; ++i)
                 vec(i) = std::move(flat[static_cast<std::size_t>(i)]);
-            return Value(Measurement::Vector(vec));
+            return Value::Vector(vec);
         }
         Index rows = info.shape[0], cols = info.shape[1];
         MatXs mat(rows, cols);
         for (Index i = 0; i < rows; ++i)
             for (Index j = 0; j < cols; ++j)
                 mat(i, j) = std::move(flat[static_cast<std::size_t>(i * cols + j)]);
-        return Value(Measurement::Matrix(mat));
+        return Value::Matrix(mat);
     }
 
     // DataArray output
@@ -1844,7 +1844,7 @@ Value ExecuteUnaryNot(const ExecContextInfo& info,
     if (ops[0].is_measurement()) {
         const Measurement& m = ops[0].as_measurement();
         if (m.data_type() == DataType::kBoolean) {
-            v = Value(Measurement(static_cast<int>(m.as_scalar<bool>() ? 1 : 0)));
+            v = Value::Integer(m.as_scalar<bool>() ? 1 : 0);
         } else {
             DataSeries ds(m.data_kind(), m.data_type(), m.shape());
             ds.append(m);
@@ -1860,7 +1860,7 @@ Value ExecuteUnaryNot(const ExecContextInfo& info,
     Value result = ExecUnaryT<int>(info, {v}, op_not<int>);
 
     if (ops[0].is_measurement() && info.shape.kind() == DataKind::kScalar) {
-        return Value(Measurement::Boolean(result.as_measurement().as_scalar<int>() != 0));
+        return Value::Boolean(result.as_measurement().as_scalar<int>() != 0);
     }
     return result;
 }
@@ -2210,7 +2210,7 @@ static Value ExecConditionalString(const ExecContextInfo& info,
             std::string val = (c_ptr[cj] != 0)
                 ? t_flat[static_cast<std::size_t>(tj)]
                 : f_flat[static_cast<std::size_t>(fj)];
-            return Value(Measurement::String(std::move(val)));
+            return Value::String(std::move(val));
         }
         if (dk == DataKind::kVector) {
             Index w = info.shape[0];
@@ -2231,7 +2231,7 @@ static Value ExecConditionalString(const ExecContextInfo& info,
                         vec(idx % w) = f_flat[static_cast<std::size_t>(f_off + fj)];
                 }
             }
-            return Value(Measurement::Vector(vec));
+            return Value::Vector(vec);
         } else {
             Index rows = info.shape[0], cols = info.shape[1];
             MatXs mat(rows, cols);
@@ -2250,7 +2250,7 @@ static Value ExecConditionalString(const ExecContextInfo& info,
                         mat(j / cols, j % cols) = f_flat[static_cast<std::size_t>(f_off + fj)];
                 }
             }
-            return Value(Measurement::Matrix(mat));
+            return Value::Matrix(mat);
         }
     }
 
@@ -2304,7 +2304,7 @@ Value ExecuteConditional(const ExecContextInfo& info,
         if (v.is_measurement()) {
             const Measurement& m = v.as_measurement();
             if (m.data_type() == DataType::kBoolean) {
-                return Value(Measurement(static_cast<int>(m.as_scalar<bool>() ? 1 : 0)));
+                return Value::Integer(m.as_scalar<bool>() ? 1 : 0);
             }
             DataSeries ds(m.data_kind(), m.data_type(), m.shape());
             ds.append(m);
@@ -2542,9 +2542,9 @@ static Value ExecIfString(const ExecContextInfo& info,
             Index ej0 = shape_plan.MapFlatIndex(0, n - 1);
             for (Index p = 0; p < num_pairs; ++p) {
                 if (cond_ins[p].ptr[cj0[p]] != 0)
-                    return Value(Measurement::String(val_flats[p][static_cast<std::size_t>(vj0[p])]));
+                    return Value::String(val_flats[p][static_cast<std::size_t>(vj0[p])]);
             }
-            return Value(Measurement::String(else_flat[static_cast<std::size_t>(ej0)]));
+            return Value::String(else_flat[static_cast<std::size_t>(ej0)]);
         }
         if (dk == DataKind::kVector) {
             Index w = info.shape[0];
@@ -2578,7 +2578,7 @@ static Value ExecIfString(const ExecContextInfo& info,
                         vec(idx % w) = else_flat[static_cast<std::size_t>(e_off + ej)];
                 }
             }
-            return Value(Measurement::Vector(vec));
+            return Value::Vector(vec);
         } else {
             // Matrix Measurement
             Index rows = info.shape[0], cols = info.shape[1];
@@ -2611,7 +2611,7 @@ static Value ExecIfString(const ExecContextInfo& info,
                         mat(j / cols, j % cols) = else_flat[static_cast<std::size_t>(e_off + ej)];
                 }
             }
-            return Value(Measurement::Matrix(mat));
+            return Value::Matrix(mat);
         }
     }
 
@@ -2713,7 +2713,7 @@ Value ExecuteIf(const ExecContextInfo& info,
         if (v.is_measurement()) {
             const Measurement& m = v.as_measurement();
             if (m.data_type() == DataType::kBoolean) {
-                return Value(Measurement(static_cast<int>(m.as_scalar<bool>() ? 1 : 0)));
+                return Value::Integer(m.as_scalar<bool>() ? 1 : 0);
             }
             DataSeries ds(m.data_kind(), m.data_type(), m.shape());
             ds.append(m);

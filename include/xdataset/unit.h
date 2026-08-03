@@ -76,6 +76,10 @@ public:
     /// string is not in the REL vocabulary.
     static Unit parse(const std::string& s);
 
+    /// The dimensionless unit (equivalent to the default-constructed Unit).
+    /// Provided as a named alias so call sites can write Unit::None().
+    static Unit None();
+
     /// Access the underlying llnl precise_unit (e.g. for units::convert).
     const units::precise_unit& raw() const { return unit_; }
 
