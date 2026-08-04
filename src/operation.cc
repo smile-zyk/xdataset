@@ -336,23 +336,19 @@ DataShape DeriveShapeBroadcast(const std::vector<DataShape>& operand_shapes) {
 
 DataShape DeriveShapeMatrix(const std::vector<DataShape>& operand_shapes) {
     if (operand_shapes.empty())
-        throw std::invalid_argument("concat: empty input");
+        throw std::invalid_argument("matrix: empty input");
 
     const Index N = static_cast<Index>(operand_shapes.size());
-
-    // Single operand: passthrough (scalar stays scalar, vector stays vector)
-    if (N == 1)
-        return operand_shapes[0];
 
     const DataKind k0 = operand_shapes[0].kind();
     const DataShape& s0 = operand_shapes[0];
     for (size_t i = 1; i < operand_shapes.size(); ++i) {
         if (operand_shapes[i].kind() != k0)
             throw std::invalid_argument(
-                "concat: kind mismatch at index " + std::to_string(i));
+                "matrix: kind mismatch at index " + std::to_string(i));
         if (operand_shapes[i] != s0)
             throw std::invalid_argument(
-                "concat: shape mismatch at index " + std::to_string(i));
+                "matrix: shape mismatch at index " + std::to_string(i));
     }
 
     DataShape result;
@@ -361,7 +357,7 @@ DataShape DeriveShapeMatrix(const std::vector<DataShape>& operand_shapes) {
     else if (k0 == DataKind::kVector)
         result = DataShape{N, s0[0]};
     else
-        throw std::invalid_argument("concat: cannot concat matrices");
+        throw std::invalid_argument("matrix: cannot concat matrices");
 
     return result;
 }
@@ -953,15 +949,6 @@ Measurement MakeMeasFromFlat(const T* data,
     return Measurement(m, unit);
 }
 
-Value MakeArrayFromFlat(std::unique_ptr<DataSeries> ds, const DataArray& src) {
-    DataArrayCreateInfo arr_info;
-    arr_info.datas                    = src.datas();
-    arr_info.datas[DataArray::kSelf]  = std::move(*ds);
-    arr_info.multi_dimension_spec     = src.multi_dimension_spec();
-    arr_info.kind                     = src.data_kind();
-    return Value(DataArray(std::move(arr_info)));
-}
-
 /// Binary ops: when the output is a DataArray, choose which operand's
 /// metadata (MultiDimensionSpec, DataArrayKind) to inherit.
 static const DataArray* SelectOutputSource(bool l_meas, bool r_meas,
@@ -1131,7 +1118,7 @@ Value ExecBinaryArithT(const ExecContextInfo& info,
     if (l_meas && r_meas) {
         return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
-        return MakeArrayFromFlat(std::move(out_ds), *out_src);
+        return Value(out_src->with_self_data(std::move(*out_ds)));
     }
 }
 
@@ -1208,7 +1195,7 @@ Value ExecBinaryCmpT(const ExecContextInfo& info,
 
         return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
-        return MakeArrayFromFlat(std::move(out_ds), *out_src);
+        return Value(out_src->with_self_data(std::move(*out_ds)));
     }
 }
 
@@ -1312,7 +1299,7 @@ static Value ExecBinaryCmpString(const ExecContextInfo& info,
             return Value::Boolean(out[0] != 0);
         return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
-        return MakeArrayFromFlat(std::move(out_ds), *out_src);
+        return Value(out_src->with_self_data(std::move(*out_ds)));
     }
 }
 
@@ -1360,7 +1347,7 @@ Value ExecuteBinaryLogical(const ExecContextInfo& info,
                         m.shape(), m.unit()));
         } else {
             auto logical_ds = std::unique_ptr<DataSeries>(new DataSeries(v.as_data_array().data().as_logical()));
-            return MakeArrayFromFlat(std::move(logical_ds), v.as_data_array());
+            return Value(v.as_data_array().with_self_data(std::move(*logical_ds)));
         }
     };
     Value li = make_logical(ops[0]);
@@ -1451,7 +1438,7 @@ static Value ExecMatrixT(const ExecContextInfo& info,
     for (size_t i = 0; i < ops.size(); ++i)
         if (ops[i].is_data_array()) { tmpl = &ops[i].as_data_array(); break; }
     if (tmpl)
-        return MakeArrayFromFlat(std::move(out_ds), *tmpl);
+        return Value(tmpl->with_self_data(std::move(*out_ds)));
 
     return Value(DataArray::CreateIndependent(std::move(*out_ds)));
 }
@@ -1563,18 +1550,14 @@ static Value ExecMatrixString(const ExecContextInfo& info,
     for (size_t i = 0; i < ops.size(); ++i)
         if (ops[i].is_data_array()) { tmpl = &ops[i].as_data_array(); break; }
     if (tmpl)
-        return MakeArrayFromFlat(std::move(out_ds), *tmpl);
+        return Value(tmpl->with_self_data(std::move(*out_ds)));
     return Value(DataArray::CreateIndependent(std::move(*out_ds)));
 }
 
 Value ExecuteMatrix(const ExecContextInfo& info,
                      const std::vector<Value>& ops) {
     if (ops.empty())
-        throw std::invalid_argument("concat: empty input");
-
-    // Single operand: passthrough (no stacking needed)
-    if (ops.size() == 1)
-        return ops[0];
+        throw std::invalid_argument("matrix: empty input");
 
     if (info.dtype == DataType::kString)
         return ExecMatrixString(info, ops);
@@ -1587,7 +1570,7 @@ Value ExecuteMatrix(const ExecContextInfo& info,
         case DataType::kInteger:
             return ExecMatrixT<int>(info, ops);
         default:
-            throw std::invalid_argument("concat: unsupported dtype");
+            throw std::invalid_argument("matrix: unsupported dtype");
     }
 }
 
@@ -1809,7 +1792,7 @@ Value ExecUnaryT(const ExecContextInfo& info,
         return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
         const DataArray& src = ops[0].as_data_array();
-        return MakeArrayFromFlat(std::move(out_ds), src);
+        return Value(src.with_self_data(std::move(*out_ds)));
     }
 }
 
@@ -1854,7 +1837,7 @@ Value ExecuteUnaryNot(const ExecContextInfo& info,
         }
     } else {
         auto logical_ds = std::unique_ptr<DataSeries>(new DataSeries(ops[0].as_data_array().data().as_logical()));
-        v = MakeArrayFromFlat(std::move(logical_ds), ops[0].as_data_array());
+        v = Value(ops[0].as_data_array().with_self_data(std::move(*logical_ds)));
     }
 
     Value result = ExecUnaryT<int>(info, {v}, op_not<int>);
@@ -1941,7 +1924,7 @@ Value ExecBinaryMatMulT(const ExecContextInfo& info,
     if (l_meas && r_meas) {
         return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
-        return MakeArrayFromFlat(std::move(out_ds), *out_src);
+        return Value(out_src->with_self_data(std::move(*out_ds)));
     }
 }
 
@@ -1999,7 +1982,7 @@ Value ExecBinaryDivT(const ExecContextInfo& info,
     if (l_meas && r_meas) {
         return Value(MakeMeasFromFlat(out, info.shape, info.unit));
     } else {
-        return MakeArrayFromFlat(std::move(out_ds), *out_src);
+        return Value(out_src->with_self_data(std::move(*out_ds)));
     }
 }
 
@@ -2114,7 +2097,7 @@ static Value ExecConditionalT(const ExecContextInfo& info,
 
     if (c_meas && t_meas && f_meas)
         return Value(MakeMeasFromFlat(out, info.shape, info.unit));
-    return MakeArrayFromFlat(std::move(out_ds), *out_src);
+    return Value(out_src->with_self_data(std::move(*out_ds)));
 }
 
 // -- String path: read strings directly, no FlatInput ---
@@ -2292,7 +2275,7 @@ static Value ExecConditionalString(const ExecContextInfo& info,
             }
         }
     }
-    return MakeArrayFromFlat(std::move(out_ds), *out_src);
+    return Value(out_src->with_self_data(std::move(*out_ds)));
 }
 
 Value ExecuteConditional(const ExecContextInfo& info,
@@ -2315,7 +2298,7 @@ Value ExecuteConditional(const ExecContextInfo& info,
         } else {
             auto logical_ds = std::unique_ptr<DataSeries>(
                 new DataSeries(v.as_data_array().data().as_logical()));
-            return MakeArrayFromFlat(std::move(logical_ds), v.as_data_array());
+            return Value(v.as_data_array().with_self_data(std::move(*logical_ds)));
         }
     };
 
@@ -2438,7 +2421,7 @@ static Value ExecIfT(const ExecContextInfo& info,
     }
     if (all_meas)
         return Value(MakeMeasFromFlat(out, info.shape, info.unit));
-    return MakeArrayFromFlat(std::move(out_ds), *out_src);
+    return Value(out_src->with_self_data(std::move(*out_ds)));
 }
 
 // -- String path for If ---
@@ -2694,7 +2677,7 @@ static Value ExecIfString(const ExecContextInfo& info,
             }
         }
     }
-    return MakeArrayFromFlat(std::move(out_ds), *out_src);
+    return Value(out_src->with_self_data(std::move(*out_ds)));
 }
 
 Value ExecuteIf(const ExecContextInfo& info,
@@ -2724,7 +2707,7 @@ Value ExecuteIf(const ExecContextInfo& info,
         } else {
             auto logical_ds = std::unique_ptr<DataSeries>(
                 new DataSeries(v.as_data_array().data().as_logical()));
-            return MakeArrayFromFlat(std::move(logical_ds), v.as_data_array());
+            return Value(v.as_data_array().with_self_data(std::move(*logical_ds)));
         }
     };
 

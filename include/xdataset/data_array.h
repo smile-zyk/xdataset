@@ -71,7 +71,15 @@ namespace xdataset
         /// For Dependent DataArrays, the new series must have the same size as
         /// multi_dimension_spec().compute_cell_count().  The data_frame cache is
         /// invalidated.  The new series must be canonicalized before replacement.
-        void replace_self_series(DataSeries new_self);
+        /// This mutates the DataArray in place.
+        void replace_self_data(DataSeries&& new_self);
+        void replace_self_data(const DataSeries& new_self);
+
+        /// Return a new DataArray with the same independent dimensions /
+        /// multi_dimension_spec but with `new_self` as the self data.
+        /// The original DataArray is unchanged.
+        DataArray with_self_data(DataSeries&& new_self) const;
+        DataArray with_self_data(const DataSeries& new_self) const;
 
         /// Apply a transformation callback to the self DataSeries and return a
         /// new DataArray with the same independent dimensions / multi_dimension_spec
@@ -89,7 +97,7 @@ namespace xdataset
         {
             DataSeries new_self = data().transform(std::forward<Func>(callback));
             DataArray result(*this);
-            result.replace_self_series(std::move(new_self));
+            result.replace_self_data(std::move(new_self));
             return result;
         }
 

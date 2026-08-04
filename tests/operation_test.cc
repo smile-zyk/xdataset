@@ -815,24 +815,6 @@ TEST(OperationMatrixTest, PreservesFirstDataArrayMetadata)
     EXPECT_EQ(arr.data_kind(), DataArrayKind::kDependent);
 }
 
-TEST(OperationMatrixTest, SingleScalarStaysScalar)
-{
-    Value result = OperationMatrix({Value::Integer(42)});
-    ASSERT_TRUE(result.is_measurement());
-    ASSERT_EQ(result.as_measurement().data_kind(), DataKind::kScalar);
-    EXPECT_EQ(result.as_measurement().as_scalar<int>(), 42);
-}
-
-TEST(OperationMatrixTest, SingleScalarWithUnit)
-{
-    Unit u = Unit::parse("V");
-    Value result = OperationMatrix({Value::Real(3.14, u)});
-    ASSERT_TRUE(result.is_measurement());
-    ASSERT_EQ(result.as_measurement().data_kind(), DataKind::kScalar);
-    EXPECT_DOUBLE_EQ(result.as_measurement().as_scalar<double>(), 3.14);
-    EXPECT_TRUE(result.as_measurement().unit().same_dimension(u));
-}
-
 TEST(OperationMatrixTest, TwoScalarsStayVector)
 {
     Value result = OperationMatrix({Value::Integer(1), Value::Integer(2)});

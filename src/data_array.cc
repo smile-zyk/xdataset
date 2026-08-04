@@ -754,10 +754,10 @@ namespace xdataset
     }
 
 // =========================================================================
-//  DataArray -- replace_self_series
+//  DataArray -- replace_self_data / with_self_data
 // =========================================================================
 
-void DataArray::replace_self_series(DataSeries new_self)
+void DataArray::replace_self_data(DataSeries&& new_self)
 {
     // For Dependent, validate that the new series size matches the cell count.
     if (data_kind_ == DataArrayKind::kDependent && !multi_dimension_spec_.empty())
@@ -766,7 +766,7 @@ void DataArray::replace_self_series(DataSeries new_self)
         if (new_self.size() != static_cast<Index>(expected))
         {
             throw std::invalid_argument(
-                "replace_self_series: new series size " +
+                "replace_self_data: new series size " +
                 std::to_string(new_self.size()) +
                 " does not match multi_dimension_spec cell count " +
                 std::to_string(expected));
@@ -781,6 +781,25 @@ void DataArray::replace_self_series(DataSeries new_self)
 
     // Invalidate cached DataFrame.
     data_frame_cache_.reset();
+}
+
+void DataArray::replace_self_data(const DataSeries& new_self)
+{
+    replace_self_data(DataSeries(new_self));
+}
+
+DataArray DataArray::with_self_data(DataSeries&& new_self) const
+{
+    DataArray result(*this);
+    result.replace_self_data(std::move(new_self));
+    return result;
+}
+
+DataArray DataArray::with_self_data(const DataSeries& new_self) const
+{
+    DataArray result(*this);
+    result.replace_self_data(DataSeries(new_self));
+    return result;
 }
 
 // =========================================================================

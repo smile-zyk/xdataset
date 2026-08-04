@@ -926,7 +926,7 @@ namespace xdataset
     }
 
     // =========================================================================
-    //  DataArray replace_self_series
+    //  DataArray replace_self_data
     // =========================================================================
 
     TEST(DataArrayReplaceSelfTest, IndependentReplace) {
@@ -935,7 +935,7 @@ namespace xdataset
         EXPECT_EQ(da.data().size(), 3u);
 
         DataSeries new_self = MakeScalarSeriesFrom({1.0, 2.0, 3.0});
-        da.replace_self_series(new_self);
+        da.replace_self_data(new_self);
 
         ASSERT_EQ(da.data().size(), 3u);
         EXPECT_DOUBLE_EQ(da.data().scalar_at<double>(0), 1.0);
@@ -951,7 +951,7 @@ namespace xdataset
 
         DataSeries new_self = MakeScalarSeriesFrom(
             {999.0, 998.0, 997.0, 996.0, 995.0, 994.0});
-        z_data.replace_self_series(new_self);
+        z_data.replace_self_data(new_self);
 
         ASSERT_EQ(z_data.data().size(), 6u);
         EXPECT_DOUBLE_EQ(z_data.data().scalar_at<double>(0), 999.0);
@@ -968,7 +968,7 @@ namespace xdataset
         EXPECT_EQ(z_data.data().size(), 6u);
 
         DataSeries bad = MakeScalarSeriesFrom({1.0, 2.0});  // only 2 rows
-        EXPECT_THROW(z_data.replace_self_series(bad), std::invalid_argument);
+        EXPECT_THROW(z_data.replace_self_data(bad), std::invalid_argument);
     }
 
     // =========================================================================
