@@ -319,10 +319,13 @@ namespace xdataset
         }
 
         // -- SFINAE scalar (int priority) ---------------------------------
+        //  Uses expression SFINAE on a non-type template parameter so that
+        //  Measurement does not appear inside a decltype within the class
+        //  body (avoids IntelliSense "incomplete type" false positives).
 
-        template <typename T, typename Func>
-        auto transform_scalar_impl(Func&& func, int) const
-            -> decltype(func(std::declval<const T&>()), Measurement())
+        template <typename T, typename Func,
+            decltype(std::declval<Func>()(std::declval<const T&>()), 0) = 0>
+        Measurement transform_scalar_impl(Func&& func, int) const
         {
             return Measurement(func(boost::get<T>(storage_)), unit_);
         }
@@ -334,9 +337,9 @@ namespace xdataset
 
         // -- SFINAE vector (int priority) ---------------------------------
 
-        template <typename T, typename Func>
-        auto transform_vector_impl(Func&& func, int) const
-            -> decltype(func(std::declval<const T&>()), Measurement())
+        template <typename T, typename Func,
+            decltype(std::declval<Func>()(std::declval<const T&>()), 0) = 0>
+        Measurement transform_vector_impl(Func&& func, int) const
         {
             typedef decltype(func(std::declval<const T&>())) Out;
             Index w = shape_[0];
@@ -353,9 +356,9 @@ namespace xdataset
 
         // -- SFINAE matrix (int priority) ---------------------------------
 
-        template <typename T, typename Func>
-        auto transform_matrix_impl(Func&& func, int) const
-            -> decltype(func(std::declval<const T&>()), Measurement())
+        template <typename T, typename Func,
+            decltype(std::declval<Func>()(std::declval<const T&>()), 0) = 0>
+        Measurement transform_matrix_impl(Func&& func, int) const
         {
             typedef decltype(func(std::declval<const T&>())) Out;
             Index r = shape_[0], c = shape_[1];
