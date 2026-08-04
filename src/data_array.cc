@@ -132,13 +132,11 @@ namespace xdataset
         std::vector<std::string> names;
         const std::size_t rank = multi_dimension_spec_.rank();
         names.reserve(rank);
-        std::size_t i = 0;
         for (const auto& item : datas_)
         {
-            if (data_kind_ == DataArrayKind::kDependent && i >= rank)
-                break;
+            if (item.first == kSelf)
+                break;  // kSelf is never an independent variable name
             names.push_back(item.first);
-            ++i;
         }
         return names;
     }
