@@ -67,6 +67,32 @@ namespace xdataset
             return datas_.rbegin()->second;
         }
 
+        /// Replace the self DataSeries (the last entry in datas_ with key = kSelf).
+        /// For Dependent DataArrays, the new series must have the same size as
+        /// multi_dimension_spec().compute_cell_count().  The data_frame cache is
+        /// invalidated.  The new series must be canonicalized before replacement.
+        void replace_self_series(DataSeries new_self);
+
+        /// Apply a transformation callback to the self DataSeries and return a
+        /// new DataArray with the same independent dimensions / multi_dimension_spec
+        /// but the transformed self data.  Delegates to DataSeries::transform.
+        ///
+        /// The callback receives a Measurement per row and returns a new Measurement.
+        /// The output type (dtype/kind/shape) may differ from the input.
+        ///
+        /// Example:
+        ///   auto da_squared = da.transform([](const Measurement& m) {
+        ///       return Measurement(m.as_scalar<double>() * m.as_scalar<double>(), m.unit());
+        ///   });
+        template <typename Func>
+        DataArray transform(Func&& callback) const
+        {
+            DataSeries new_self = data().transform(std::forward<Func>(callback));
+            DataArray result(*this);
+            result.replace_self_series(std::move(new_self));
+            return result;
+        }
+
         const MultiDimensionSpec& multi_dimension_spec() const
         {
             return multi_dimension_spec_;

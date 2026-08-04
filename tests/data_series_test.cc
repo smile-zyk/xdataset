@@ -812,4 +812,227 @@ TEST(DataSeriesUnitTest, CellAtCarriesUnit)
     EXPECT_DOUBLE_EQ(m.as_scalar<double>(), 42.0);
 }
 
+// ---------------------------------------------------------------------------
+//  CreateFromMeasurements -- batch factory
+// ---------------------------------------------------------------------------
+
+TEST(CreateFromMeasurementsTest, ScalarDouble) {
+    std::vector<Measurement> ms;
+    ms.push_back(Measurement(1.0, Unit::parse("V")));
+    ms.push_back(Measurement(2.0, Unit::parse("V")));
+    ms.push_back(Measurement(3.0, Unit::parse("V")));
+
+    DataSeries s = DataSeries::CreateFromMeasurements(ms);
+    ASSERT_EQ(s.size(), 3u);
+    EXPECT_EQ(s.data_kind(), DataKind::kScalar);
+    EXPECT_EQ(s.data_type(), DataType::kReal);
+    EXPECT_TRUE(s.unit().same_dimension(Unit::parse("V")));
+    EXPECT_DOUBLE_EQ(s.scalar_at<double>(0), 1.0);
+    EXPECT_DOUBLE_EQ(s.scalar_at<double>(1), 2.0);
+    EXPECT_DOUBLE_EQ(s.scalar_at<double>(2), 3.0);
+}
+
+TEST(CreateFromMeasurementsTest, ScalarInt) {
+    std::vector<Measurement> ms;
+    ms.push_back(Measurement(10));
+    ms.push_back(Measurement(20));
+    ms.push_back(Measurement(30));
+
+    DataSeries s = DataSeries::CreateFromMeasurements(ms);
+    ASSERT_EQ(s.size(), 3u);
+    EXPECT_EQ(s.data_type(), DataType::kInteger);
+    EXPECT_EQ(s.scalar_at<int>(0), 10);
+    EXPECT_EQ(s.scalar_at<int>(1), 20);
+    EXPECT_EQ(s.scalar_at<int>(2), 30);
+}
+
+TEST(CreateFromMeasurementsTest, ScalarComplex) {
+    using cd = std::complex<double>;
+    std::vector<Measurement> ms;
+    ms.push_back(Measurement(cd(1.0, 0.0)));
+    ms.push_back(Measurement(cd(0.0, 1.0)));
+
+    DataSeries s = DataSeries::CreateFromMeasurements(ms);
+    ASSERT_EQ(s.size(), 2u);
+    EXPECT_EQ(s.data_type(), DataType::kComplex);
+    EXPECT_DOUBLE_EQ(s.scalar_at<cd>(0).real(), 1.0);
+    EXPECT_DOUBLE_EQ(s.scalar_at<cd>(1).imag(), 1.0);
+}
+
+TEST(CreateFromMeasurementsTest, ScalarString) {
+    std::vector<Measurement> ms;
+    ms.push_back(Measurement(std::string("hello")));
+    ms.push_back(Measurement(std::string("world")));
+
+    DataSeries s = DataSeries::CreateFromMeasurements(ms);
+    ASSERT_EQ(s.size(), 2u);
+    EXPECT_EQ(s.data_type(), DataType::kString);
+    EXPECT_EQ(s.scalar_at<std::string>(0), "hello");
+    EXPECT_EQ(s.scalar_at<std::string>(1), "world");
+}
+
+TEST(CreateFromMeasurementsTest, VectorInt) {
+    std::vector<Measurement> ms;
+    VecXi v1(3); v1 << 1, 2, 3;
+    VecXi v2(3); v2 << 4, 5, 6;
+    ms.push_back(Measurement(v1));
+    ms.push_back(Measurement(v2));
+
+    DataSeries s = DataSeries::CreateFromMeasurements(ms);
+    ASSERT_EQ(s.size(), 2u);
+    EXPECT_EQ(s.data_kind(), DataKind::kVector);
+    EXPECT_EQ(s.data_type(), DataType::kInteger);
+    ASSERT_EQ(s.data_shape().size(), 1u);
+    EXPECT_EQ(s.data_shape()[0], 3);
+    EXPECT_EQ(s.vector_at<int>(0)(0), 1);
+    EXPECT_EQ(s.vector_at<int>(0)(2), 3);
+    EXPECT_EQ(s.vector_at<int>(1)(0), 4);
+    EXPECT_EQ(s.vector_at<int>(1)(2), 6);
+}
+
+TEST(CreateFromMeasurementsTest, MatrixDouble) {
+    std::vector<Measurement> ms;
+    MatXd m1(2, 2); m1 << 1, 2, 3, 4;
+    MatXd m2(2, 2); m2 << 5, 6, 7, 8;
+    ms.push_back(Measurement(m1));
+    ms.push_back(Measurement(m2));
+
+    DataSeries s = DataSeries::CreateFromMeasurements(ms);
+    ASSERT_EQ(s.size(), 2u);
+    EXPECT_EQ(s.data_kind(), DataKind::kMatrix);
+    EXPECT_EQ(s.data_type(), DataType::kReal);
+    EXPECT_DOUBLE_EQ(s.matrix_at<double>(0)(1, 1), 4.0);
+    EXPECT_DOUBLE_EQ(s.matrix_at<double>(1)(0, 0), 5.0);
+}
+
+TEST(CreateFromMeasurementsTest, Empty) {
+    DataSeries s = DataSeries::CreateFromMeasurements({});
+    EXPECT_EQ(s.size(), 0u);
+    EXPECT_EQ(s.data_kind(), DataKind::kScalar);
+    EXPECT_EQ(s.data_type(), DataType::kReal);
+}
+
+// ---------------------------------------------------------------------------
+//  DataSeries::transform
+// ---------------------------------------------------------------------------
+
+TEST(TransformTest, ScalarSquare) {
+    DataSeries s = DataSeries::CreateScalarFromVector<double>(
+        std::vector<double>{1.0, 2.0, 3.0, 4.0});
+
+    DataSeries squared = s.transform([](const Measurement& m) {
+        double v = m.as_scalar<double>();
+        return Measurement(v * v, m.unit());
+    });
+
+    ASSERT_EQ(squared.size(), 4u);
+    EXPECT_EQ(squared.data_kind(), DataKind::kScalar);
+    EXPECT_EQ(squared.data_type(), DataType::kReal);
+    EXPECT_DOUBLE_EQ(squared.scalar_at<double>(0), 1.0);
+    EXPECT_DOUBLE_EQ(squared.scalar_at<double>(1), 4.0);
+    EXPECT_DOUBLE_EQ(squared.scalar_at<double>(2), 9.0);
+    EXPECT_DOUBLE_EQ(squared.scalar_at<double>(3), 16.0);
+}
+
+TEST(TransformTest, IntToDouble) {
+    DataSeries s = DataSeries::CreateScalarFromVector<int>(
+        std::vector<int>{1, 2, 3});
+
+    DataSeries doubled = s.transform([](const Measurement& m) {
+        return Measurement(static_cast<double>(m.as_scalar<int>()) * 2.0);
+    });
+
+    ASSERT_EQ(doubled.size(), 3u);
+    EXPECT_EQ(doubled.data_type(), DataType::kReal);
+    EXPECT_DOUBLE_EQ(doubled.scalar_at<double>(0), 2.0);
+    EXPECT_DOUBLE_EQ(doubled.scalar_at<double>(1), 4.0);
+    EXPECT_DOUBLE_EQ(doubled.scalar_at<double>(2), 6.0);
+}
+
+TEST(TransformTest, ScalarWithUnitChange) {
+    DataSeries s = DataSeries::CreateScalarFromVector<double>(
+        std::vector<double>{1000.0, 2000.0}, Unit::parse("meter"));
+
+    DataSeries scaled = s.transform([](const Measurement& m) {
+        return Measurement(m.as_scalar<double>() / 1000.0, Unit());
+    });
+
+    ASSERT_EQ(scaled.size(), 2u);
+    EXPECT_TRUE(scaled.unit().same_dimension(Unit()));
+    EXPECT_DOUBLE_EQ(scaled.scalar_at<double>(0), 1.0);
+    EXPECT_DOUBLE_EQ(scaled.scalar_at<double>(1), 2.0);
+}
+
+TEST(TransformTest, VectorNorm) {
+    DataSeries vecs(DataKind::kVector, DataType::kReal, {3});
+    vecs.resize(2);
+    vecs.vector_at<double>(0) << 3.0, 4.0, 0.0;
+    vecs.vector_at<double>(1) << 6.0, 8.0, 0.0;
+
+    DataSeries norms = vecs.transform([](const Measurement& m) {
+        auto v = m.as_vector<double>();
+        return Measurement(std::sqrt(v(0) * v(0) + v(1) * v(1) + v(2) * v(2)));
+    });
+
+    ASSERT_EQ(norms.size(), 2u);
+    EXPECT_EQ(norms.data_kind(), DataKind::kScalar);
+    EXPECT_DOUBLE_EQ(norms.scalar_at<double>(0), 5.0);
+    EXPECT_DOUBLE_EQ(norms.scalar_at<double>(1), 10.0);
+}
+
+TEST(TransformTest, StringToLength) {
+    DataSeries labels = DataSeries::CreateScalarFromVector(
+        std::vector<std::string>{"a", "ab", "abc", "abcd"});
+
+    DataSeries lengths = labels.transform([](const Measurement& m) {
+        return Measurement(static_cast<int>(m.as_scalar<std::string>().size()));
+    });
+
+    ASSERT_EQ(lengths.size(), 4u);
+    EXPECT_EQ(lengths.data_type(), DataType::kInteger);
+    EXPECT_EQ(lengths.scalar_at<int>(0), 1);
+    EXPECT_EQ(lengths.scalar_at<int>(1), 2);
+    EXPECT_EQ(lengths.scalar_at<int>(2), 3);
+    EXPECT_EQ(lengths.scalar_at<int>(3), 4);
+}
+
+TEST(TransformTest, EmptySeries) {
+    DataSeries s = DataSeries::CreateScalar<double>(0);
+    DataSeries result = s.transform([](const Measurement& m) {
+        return Measurement(m.as_scalar<double>() * 2.0);
+    });
+
+    EXPECT_EQ(result.size(), 0u);
+    EXPECT_TRUE(result.empty());
+}
+
+TEST(TransformTest, MatrixElementwiseAbsolute) {
+    using cd = std::complex<double>;
+    DataSeries mats(DataKind::kMatrix, DataType::kComplex, {2, 2});
+    mats.resize(2);
+    MatXcd m1(2, 2); m1 << cd(-1, 0), cd(0, -2), cd(3, 0), cd(-4, 0);
+    MatXcd m2(2, 2); m2 << cd(5, 0), cd(-6, 0), cd(0, 7), cd(-8, 0);
+    mats.matrix_at<cd>(0) = m1;
+    mats.matrix_at<cd>(1) = m2;
+
+    DataSeries abs_mats = mats.transform([](const Measurement& m) {
+        auto mat = m.as_matrix<cd>();
+        MatXd result(mat.rows(), mat.cols());
+        for (Index r = 0; r < mat.rows(); ++r)
+            for (Index c = 0; c < mat.cols(); ++c)
+                result(r, c) = std::abs(mat(r, c));
+        return Measurement(result);
+    });
+
+    ASSERT_EQ(abs_mats.size(), 2u);
+    EXPECT_EQ(abs_mats.data_kind(), DataKind::kMatrix);
+    EXPECT_EQ(abs_mats.data_type(), DataType::kReal);
+    EXPECT_DOUBLE_EQ(abs_mats.matrix_at<double>(0)(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(abs_mats.matrix_at<double>(0)(0, 1), 2.0);
+    EXPECT_DOUBLE_EQ(abs_mats.matrix_at<double>(0)(1, 0), 3.0);
+    EXPECT_DOUBLE_EQ(abs_mats.matrix_at<double>(0)(1, 1), 4.0);
+    EXPECT_DOUBLE_EQ(abs_mats.matrix_at<double>(1)(0, 0), 5.0);
+    EXPECT_DOUBLE_EQ(abs_mats.matrix_at<double>(1)(1, 1), 8.0);
+}
+
 // =========================================================================

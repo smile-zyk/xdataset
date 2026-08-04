@@ -319,6 +319,17 @@ public:
         const std::vector<std::vector<std::vector<std::string>>>& rows,
         const Unit& u = Unit());
 
+    // -----------------------------------------------------------------------
+    //  Factory: CreateFromMeasurements -> batch create from vector<Measurement>
+    // -----------------------------------------------------------------------
+    //
+    //  Determines the output schema (kind/dtype/shape/unit) from the first
+    //  element.  Dispatches the type ONCE, then writes all rows in a tight
+    //  loop with zero per-row overhead.  An empty vector yields a default
+    //  (kScalar, kReal) series.
+    //
+    static DataSeries CreateFromMeasurements(const std::vector<Measurement>& measurements);
+
     std::size_t size() const { return storage_->size(); }
     bool empty() const { return size() == 0; }
 
@@ -360,6 +371,41 @@ public:
 
     /// True when the stored unit is already canonical (multiplier == 1, non-affine).
     bool is_canonicalized() const;
+
+    //---------------------------------------------------------------------
+    //  transform: apply a callback to every row and return a new DataSeries
+    //---------------------------------------------------------------------
+    //
+    //  The callback receives a Measurement (the cell value with its unit)
+    //  and returns a new Measurement.  The output dtype, kind, and shape
+    //  are determined from the first row's result and must be consistent
+    //  across all rows.  The output type may differ from the input type.
+    //
+    //  Internally, results are collected into a vector and then batch-written
+    //  via CreateFromMeasurements, which dispatches the type ONCE and then
+    //  writes all rows in a tight loop with zero per-row overhead.
+    //
+    //  Example:
+    //    auto squared = series.transform([](const Measurement& m) {
+    //        return Measurement(m.as_scalar<double>() * m.as_scalar<double>(), m.unit() * m.unit());
+    //    });
+    //
+
+    template <typename Func>
+    DataSeries transform(Func&& callback) const {
+        const std::size_t n = size();
+        if (n == 0) {
+            return DataSeries(data_kind_, data_type_, shape_);
+        }
+
+        std::vector<Measurement> results;
+        results.reserve(n);
+        for (std::size_t i = 0; i < n; ++i) {
+            results.push_back(callback(measurement_at(static_cast<Index>(i))));
+        }
+
+        return CreateFromMeasurements(results);
+    }
 
     //---------------------------------------------------------------------
 

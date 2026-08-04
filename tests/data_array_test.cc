@@ -924,4 +924,105 @@ namespace xdataset
         EXPECT_THROW(da.min(), std::logic_error);
         EXPECT_THROW(da.max(), std::logic_error);
     }
+
+    // =========================================================================
+    //  DataArray replace_self_series
+    // =========================================================================
+
+    TEST(DataArrayReplaceSelfTest, IndependentReplace) {
+        DataSeries orig = MakeScalarSeriesFrom({10.0, 20.0, 30.0});
+        DataArray da = DataArray::CreateIndependent(orig);
+        EXPECT_EQ(da.data().size(), 3u);
+
+        DataSeries new_self = MakeScalarSeriesFrom({1.0, 2.0, 3.0});
+        da.replace_self_series(new_self);
+
+        ASSERT_EQ(da.data().size(), 3u);
+        EXPECT_DOUBLE_EQ(da.data().scalar_at<double>(0), 1.0);
+        EXPECT_DOUBLE_EQ(da.data().scalar_at<double>(1), 2.0);
+        EXPECT_DOUBLE_EQ(da.data().scalar_at<double>(2), 3.0);
+    }
+
+    TEST(DataArrayReplaceSelfTest, DependentReplace) {
+        Block block(MakeValueRichCreateInfo());
+        DataArray z_data = block.GetOrCreateDataArray("z");
+        EXPECT_EQ(z_data.data().size(), 6u);
+        EXPECT_DOUBLE_EQ(z_data.data().scalar_at<double>(0), 100.0);
+
+        DataSeries new_self = MakeScalarSeriesFrom(
+            {999.0, 998.0, 997.0, 996.0, 995.0, 994.0});
+        z_data.replace_self_series(new_self);
+
+        ASSERT_EQ(z_data.data().size(), 6u);
+        EXPECT_DOUBLE_EQ(z_data.data().scalar_at<double>(0), 999.0);
+        EXPECT_DOUBLE_EQ(z_data.data().scalar_at<double>(5), 994.0);
+
+        // DataFrame cache should be invalidated and regenerated.
+        const DataFrame& table = z_data.GetOrCreateDataFrame();
+        EXPECT_EQ(table.GetRow(0).fields[2].to_string(), "999");
+    }
+
+    TEST(DataArrayReplaceSelfTest, DependentSizeMismatchThrows) {
+        Block block(MakeValueRichCreateInfo());
+        DataArray z_data = block.GetOrCreateDataArray("z");
+        EXPECT_EQ(z_data.data().size(), 6u);
+
+        DataSeries bad = MakeScalarSeriesFrom({1.0, 2.0});  // only 2 rows
+        EXPECT_THROW(z_data.replace_self_series(bad), std::invalid_argument);
+    }
+
+    // =========================================================================
+    //  DataArray::transform
+    // =========================================================================
+
+    TEST(DataArrayTransformTest, DependentSquare) {
+        Block block(MakeValueRichCreateInfo());
+        DataArray z_data = block.GetOrCreateDataArray("z");
+
+        // Square each value: 100->10000, ..., 105->11025
+        DataArray squared = z_data.transform([](const Measurement& m) {
+            double v = m.as_scalar<double>();
+            return Measurement(v * v, m.unit());
+        });
+
+        EXPECT_EQ(squared.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(squared.multi_dimension_spec().rank(),
+                  z_data.multi_dimension_spec().rank());
+        ASSERT_EQ(squared.data().size(), 6u);
+        EXPECT_DOUBLE_EQ(squared.data().scalar_at<double>(0), 10000.0);
+        EXPECT_DOUBLE_EQ(squared.data().scalar_at<double>(5), 11025.0);
+    }
+
+    TEST(DataArrayTransformTest, IndependentRoundTrip) {
+        DataSeries orig = MakeScalarSeriesFrom({1.0, 2.0, 3.0, 4.0});
+        DataArray da = DataArray::CreateIndependent(orig);
+
+        DataArray doubled = da.transform([](const Measurement& m) {
+            return Measurement(m.as_scalar<double>() * 2.0);
+        });
+
+        EXPECT_EQ(doubled.data_kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(doubled.multi_dimension_spec().rank(),
+                  da.multi_dimension_spec().rank());
+        ASSERT_EQ(doubled.data().size(), 4u);
+        EXPECT_DOUBLE_EQ(doubled.data().scalar_at<double>(0), 2.0);
+        EXPECT_DOUBLE_EQ(doubled.data().scalar_at<double>(3), 8.0);
+    }
+
+    TEST(DataArrayTransformTest, IndependentTypeChange) {
+        DataSeries orig = MakeScalarSeriesFrom({1.0, 2.0, 3.0});
+        DataArray da = DataArray::CreateIndependent(orig);
+
+        DataArray labels = da.transform([](const Measurement& m) {
+            double v = m.as_scalar<double>();
+            return Measurement(std::string("val_") + std::to_string(static_cast<int>(v)));
+        });
+
+        EXPECT_EQ(labels.data_kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(labels.data().data_type(), DataType::kString);
+        ASSERT_EQ(labels.data().size(), 3u);
+        EXPECT_EQ(labels.data().scalar_at<std::string>(0), "val_1");
+        EXPECT_EQ(labels.data().scalar_at<std::string>(1), "val_2");
+        EXPECT_EQ(labels.data().scalar_at<std::string>(2), "val_3");
+    }
 } // namespace xdataset

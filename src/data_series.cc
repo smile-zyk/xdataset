@@ -386,6 +386,92 @@ Measurement DataSeries::measurement_at(Index i) const {
 }
 
 // =========================================================================
+// DataSeries -- write_measurement_to_row (private static helper)
+// =========================================================================
+// DataSeries -- CreateFromMeasurements (batch factory)
+// =========================================================================
+
+namespace {
+
+// ---- Scalar batch writers ----
+
+template <typename T>
+void write_scalar_batch(DataSeries& out, const std::vector<Measurement>& ms) {
+    for (std::size_t i = 0; i < ms.size(); ++i)
+        out.scalar_at<T>(static_cast<Index>(i)) = ms[i].as_scalar<T>();
+}
+
+// ---- Vector batch writers ----
+
+template <typename T>
+void write_vector_numeric_batch(DataSeries& out, const std::vector<Measurement>& ms) {
+    for (std::size_t i = 0; i < ms.size(); ++i)
+        out.vector_at<T>(static_cast<Index>(i)) = ms[i].as_vector<T>();
+}
+
+void write_vector_string_batch(DataSeries& out, const std::vector<Measurement>& ms) {
+    for (std::size_t i = 0; i < ms.size(); ++i)
+        out.vector_at<std::string>(static_cast<Index>(i)) = ms[i].as_vector<std::string>();
+}
+
+// ---- Matrix batch writers ----
+
+template <typename T>
+void write_matrix_numeric_batch(DataSeries& out, const std::vector<Measurement>& ms) {
+    for (std::size_t i = 0; i < ms.size(); ++i)
+        out.matrix_at<T>(static_cast<Index>(i)) = ms[i].as_matrix<T>();
+}
+
+void write_matrix_string_batch(DataSeries& out, const std::vector<Measurement>& ms) {
+    for (std::size_t i = 0; i < ms.size(); ++i)
+        out.matrix_at<std::string>(static_cast<Index>(i)) = ms[i].as_matrix<std::string>();
+}
+
+} // anonymous namespace
+
+DataSeries DataSeries::CreateFromMeasurements(const std::vector<Measurement>& measurements) {
+    if (measurements.empty())
+        return DataSeries(DataKind::kScalar, DataType::kReal, {});
+
+    const Measurement& first = measurements[0];
+    DataKind  kind  = first.data_kind();
+    DataType  dtype = first.data_type();
+
+    DataSeries out(kind, dtype, first.shape());
+    out.set_unit(first.unit());
+    out.resize(measurements.size());
+
+    // Dispatch (kind, dtype) ONCE, then write all rows in a tight loop.
+    if (kind == DataKind::kScalar) {
+        switch (dtype) {
+            case DataType::kReal:    write_scalar_batch<double>(out, measurements);              break;
+            case DataType::kInteger: write_scalar_batch<int>(out, measurements);                 break;
+            case DataType::kComplex: write_scalar_batch<std::complex<double>>(out, measurements); break;
+            case DataType::kString:  write_scalar_batch<std::string>(out, measurements);         break;
+            default: throw std::invalid_argument("CreateFromMeasurements: unsupported scalar dtype");
+        }
+    } else if (kind == DataKind::kVector) {
+        switch (dtype) {
+            case DataType::kReal:    write_vector_numeric_batch<double>(out, measurements);              break;
+            case DataType::kInteger: write_vector_numeric_batch<int>(out, measurements);                 break;
+            case DataType::kComplex: write_vector_numeric_batch<std::complex<double>>(out, measurements); break;
+            case DataType::kString:  write_vector_string_batch(out, measurements);                      break;
+            default: throw std::invalid_argument("CreateFromMeasurements: unsupported vector dtype");
+        }
+    } else {
+        switch (dtype) {
+            case DataType::kReal:    write_matrix_numeric_batch<double>(out, measurements);              break;
+            case DataType::kInteger: write_matrix_numeric_batch<int>(out, measurements);                 break;
+            case DataType::kComplex: write_matrix_numeric_batch<std::complex<double>>(out, measurements); break;
+            case DataType::kString:  write_matrix_string_batch(out, measurements);                      break;
+            default: throw std::invalid_argument("CreateFromMeasurements: unsupported matrix dtype");
+        }
+    }
+
+    return out;
+}
+
+// =========================================================================
 // DataSeries -- at (public)
 // =========================================================================
 

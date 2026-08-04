@@ -754,10 +754,36 @@ namespace xdataset
     }
 
 // =========================================================================
-//  DataArray operators (via OperationXxx)
+//  DataArray -- replace_self_series
 // =========================================================================
 
-// -- arithmetic (AA, AM, MA)
+void DataArray::replace_self_series(DataSeries new_self)
+{
+    // For Dependent, validate that the new series size matches the cell count.
+    if (data_kind_ == DataArrayKind::kDependent && !multi_dimension_spec_.empty())
+    {
+        const std::size_t expected = multi_dimension_spec_.compute_cell_count();
+        if (new_self.size() != static_cast<Index>(expected))
+        {
+            throw std::invalid_argument(
+                "replace_self_series: new series size " +
+                std::to_string(new_self.size()) +
+                " does not match multi_dimension_spec cell count " +
+                std::to_string(expected));
+        }
+    }
+
+    // Canonicalize the new series for consistency with DataArray invariants.
+    new_self.canonicalize();
+
+    // Replace the last entry (kSelf) in the ordered map.
+    datas_[kSelf] = std::move(new_self);
+
+    // Invalidate cached DataFrame.
+    data_frame_cache_.reset();
+}
+
+// =========================================================================
 DataArray operator+(const DataArray& a, const DataArray& b)  { return OperationAdd(Value(a),Value(b)).as_data_array(); }
 DataArray operator-(const DataArray& a, const DataArray& b)  { return OperationSub(Value(a),Value(b)).as_data_array(); }
 DataArray operator*(const DataArray& a, const DataArray& b)  { return OperationMul(Value(a),Value(b)).as_data_array(); }
