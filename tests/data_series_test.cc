@@ -232,7 +232,7 @@ TEST(CopyMoveTest, MoveAssignmentTransfersOwnership) {
 // ---------------------------------------------------------------------------
 
 TEST(VectorTest, CreateAndWrite) {
-    DataSeries vecs(DataKind::kVector, DataType::kReal, {4});
+    DataSeries vecs(DataType::kReal, xdataset::DataShape::Vector(4));
     vecs.resize(3);
     vecs.vector_at<double>(0) = Eigen::RowVector4d(1, 0, 0, 0);
     vecs.vector_at<double>(1) = Eigen::RowVector4d(0, 1, 0, 0);
@@ -246,7 +246,7 @@ TEST(VectorTest, CreateAndWrite) {
 }
 
 TEST(VectorTest, DotProductBetweenRows) {
-    DataSeries vecs(DataKind::kVector, DataType::kReal, {4});
+    DataSeries vecs(DataType::kReal, xdataset::DataShape::Vector(4));
     vecs.resize(2);
     vecs.vector_at<double>(0) = Eigen::RowVector4d(1, 0, 0, 0);
     vecs.vector_at<double>(1) = Eigen::RowVector4d(0, 1, 0, 0);
@@ -254,7 +254,7 @@ TEST(VectorTest, DotProductBetweenRows) {
 }
 
 TEST(VectorTest, AppendGrowsSize) {
-    DataSeries vecs(DataKind::kVector, DataType::kReal, {4});
+    DataSeries vecs(DataType::kReal, xdataset::DataShape::Vector(4));
     vecs.resize(2);
     VecXd v(4);
     v << 0.5, 0.5, 0.5, 0.5;
@@ -264,7 +264,7 @@ TEST(VectorTest, AppendGrowsSize) {
 }
 
 TEST(VectorTest, ElementAccessor) {
-    DataSeries vecs(DataKind::kVector, DataType::kInteger, {3});
+    DataSeries vecs(DataType::kInteger, xdataset::DataShape::Vector(3));
     vecs.resize(1);
     vecs.vector_at<int>(0) << 10, 20, 30;
     EXPECT_EQ(vecs.vector_at<int>(0)(0), 10);
@@ -273,7 +273,7 @@ TEST(VectorTest, ElementAccessor) {
 }
 
 TEST(VectorTest, FillAllElements) {
-    DataSeries vecs(DataKind::kVector, DataType::kReal, {3});
+    DataSeries vecs(DataType::kReal, xdataset::DataShape::Vector(3));
     vecs.resize(2);
     vecs.fill<double>(7.0);
     for (Index r = 0; r < 2; ++r)
@@ -282,7 +282,7 @@ TEST(VectorTest, FillAllElements) {
 }
 
 TEST(VectorTest, IlocPreservesContent) {
-    DataSeries vecs(DataKind::kVector, DataType::kReal, {2});
+    DataSeries vecs(DataType::kReal, xdataset::DataShape::Vector(2));
     vecs.resize(3);
     vecs.vector_at<double>(0) << 1.0, 2.0;
     vecs.vector_at<double>(1) << 3.0, 4.0;
@@ -294,7 +294,7 @@ TEST(VectorTest, IlocPreservesContent) {
 }
 
 TEST(VectorTest, StringVector) {
-    DataSeries tags(DataKind::kVector, DataType::kString, {3});
+    DataSeries tags(DataType::kString, xdataset::DataShape::Vector(3));
     tags.resize(2);
     VecXs t0(3);
     t0(0) = "red"; t0(1) = "big"; t0(2) = "fast";
@@ -306,7 +306,7 @@ TEST(VectorTest, StringVector) {
 }
 
 TEST(VectorTest, StringVectorFill) {
-    DataSeries tags(DataKind::kVector, DataType::kString, {3});
+    DataSeries tags(DataType::kString, xdataset::DataShape::Vector(3));
     tags.resize(2);
     tags.fill<std::string>("n/a");
     EXPECT_EQ(tags.vector_at<std::string>(0)(1), "n/a");
@@ -363,7 +363,7 @@ TEST(VectorTest, DynamicAppendWithoutInitialRowCount) {
 }
 
 TEST(VectorTest, StringElementAccessor) {
-    DataSeries tags(DataKind::kVector, DataType::kString, {2});
+    DataSeries tags(DataType::kString, xdataset::DataShape::Vector(2));
     tags.resize(1);
     tags.vector_at<std::string>(0)(0) = "hello";
     tags.vector_at<std::string>(0)(1) = "world";
@@ -373,7 +373,7 @@ TEST(VectorTest, StringElementAccessor) {
 
 TEST(VectorTest, ComplexVector) {
     using cd = std::complex<double>;
-    DataSeries vecs(DataKind::kVector, DataType::kComplex, {2});
+    DataSeries vecs(DataType::kComplex, xdataset::DataShape::Vector(2));
     vecs.resize(1);
     VecXcd v(2);
     v(0) = cd(1.0, 2.0);
@@ -388,13 +388,13 @@ TEST(VectorTest, ComplexVector) {
 // ---------------------------------------------------------------------------
 
 TEST(VectorExceptionTest, VectorAtOutOfRange) {
-    DataSeries vecs(DataKind::kVector, DataType::kReal, {3});
+    DataSeries vecs(DataType::kReal, xdataset::DataShape::Vector(3));
     vecs.resize(2);
     EXPECT_THROW(vecs.vector_at<double>(2), std::out_of_range);
 }
 
 TEST(VectorExceptionTest, AppendWrongWidthThrows) {
-    DataSeries vecs(DataKind::kVector, DataType::kReal, {3});
+    DataSeries vecs(DataType::kReal, xdataset::DataShape::Vector(3));
     vecs.resize(1);
     VecXd bad(5);
     bad.setZero();
@@ -412,7 +412,7 @@ TEST(VectorExceptionTest, FromRowsMismatchedWidthThrows) {
 // ---------------------------------------------------------------------------
 
 TEST(MatrixTest, CreateAndMetadata) {
-    DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
+    DataSeries mats(DataType::kReal, xdataset::DataShape::Matrix(3, 3));
     mats.resize(3);
     EXPECT_EQ(mats.size(), 3u);
     EXPECT_EQ(mats.data_kind(), DataKind::kMatrix);
@@ -424,14 +424,14 @@ TEST(MatrixTest, CreateAndMetadata) {
 }
 
 TEST(MatrixTest, IdentityDeterminant) {
-    DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
+    DataSeries mats(DataType::kReal, xdataset::DataShape::Matrix(3, 3));
     mats.resize(1);
     mats.matrix_at<double>(0) = Eigen::Matrix3d::Identity();
     EXPECT_NEAR(mats.matrix_at<double>(0).determinant(), 1.0, 1e-12);
 }
 
 TEST(MatrixTest, TraceAndProduct) {
-    DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
+    DataSeries mats(DataType::kReal, xdataset::DataShape::Matrix(3, 3));
     mats.resize(2);
     mats.matrix_at<double>(0) = Eigen::Matrix3d::Identity();
     mats.matrix_at<double>(1) = Eigen::Matrix3d::Ones() * 2.0;
@@ -441,7 +441,7 @@ TEST(MatrixTest, TraceAndProduct) {
 }
 
 TEST(MatrixTest, AppendGrowsSize) {
-    DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
+    DataSeries mats(DataType::kReal, xdataset::DataShape::Matrix(3, 3));
     mats.resize(2);
     xdataset::MatXd m = Eigen::Matrix3d::Random();
     mats.append(Measurement(xdataset::MatXd(m)));
@@ -449,7 +449,7 @@ TEST(MatrixTest, AppendGrowsSize) {
 }
 
 TEST(MatrixTest, ElementAccessor) {
-    DataSeries mats(DataKind::kMatrix, DataType::kReal, {2, 2});
+    DataSeries mats(DataType::kReal, xdataset::DataShape::Matrix(2, 2));
     mats.resize(1);
     mats.matrix_at<double>(0) << 1.0, 2.0, 3.0, 4.0;
     EXPECT_DOUBLE_EQ(mats.matrix_at<double>(0)(0, 0), 1.0);
@@ -459,7 +459,7 @@ TEST(MatrixTest, ElementAccessor) {
 }
 
 TEST(MatrixTest, FillAllElements) {
-    DataSeries mats(DataKind::kMatrix, DataType::kReal, {2, 2});
+    DataSeries mats(DataType::kReal, xdataset::DataShape::Matrix(2, 2));
     mats.resize(2);
     mats.fill<double>(5.0);
     for (Index r = 0; r < 2; ++r)
@@ -467,7 +467,7 @@ TEST(MatrixTest, FillAllElements) {
 }
 
 TEST(MatrixTest, RotationMatrix) {
-    DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
+    DataSeries mats(DataType::kReal, xdataset::DataShape::Matrix(3, 3));
     mats.resize(1);
     Eigen::Matrix3d rot =
         Eigen::AngleAxisd(0.5, Eigen::RowVector3d::UnitZ()).toRotationMatrix();
@@ -476,7 +476,7 @@ TEST(MatrixTest, RotationMatrix) {
 }
 
 TEST(MatrixTest, StringMatrix) {
-    DataSeries strmat(DataKind::kMatrix, DataType::kString, {2, 3});
+    DataSeries strmat(DataType::kString, xdataset::DataShape::Matrix(2, 3));
     strmat.resize(2);
     strmat.fill<std::string>(".");
     strmat.matrix_at<std::string>(0)(0, 1) = "hello";
@@ -488,7 +488,7 @@ TEST(MatrixTest, StringMatrix) {
 }
 
 TEST(MatrixTest, StringElementAccessor) {
-    DataSeries strmat(DataKind::kMatrix, DataType::kString, {2, 2});
+    DataSeries strmat(DataType::kString, xdataset::DataShape::Matrix(2, 2));
     strmat.resize(1);
     strmat.fill<std::string>("x");
     strmat.matrix_at<std::string>(0)(0, 1) = "A";
@@ -498,7 +498,7 @@ TEST(MatrixTest, StringElementAccessor) {
 
 TEST(MatrixTest, ComplexMatrix) {
     using cd = std::complex<double>;
-    DataSeries mats(DataKind::kMatrix, DataType::kComplex, {2, 2});
+    DataSeries mats(DataType::kComplex, xdataset::DataShape::Matrix(2, 2));
     mats.resize(1);
     Eigen::Matrix<cd, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> m(2, 2);
     m(0, 0) = cd(1, 0); m(0, 1) = cd(0, 1);
@@ -509,7 +509,7 @@ TEST(MatrixTest, ComplexMatrix) {
 }
 
 TEST(MatrixTest, IlocPreservesContent) {
-    DataSeries mats(DataKind::kMatrix, DataType::kReal, {2, 2});
+    DataSeries mats(DataType::kReal, xdataset::DataShape::Matrix(2, 2));
     mats.resize(3);
     mats.matrix_at<double>(0) << 1.0, 2.0, 3.0, 4.0;
     mats.matrix_at<double>(1) << 5.0, 6.0, 7.0, 8.0;
@@ -579,13 +579,13 @@ TEST(MatrixTest, DynamicAppendWithoutInitialRowCount) {
 // ---------------------------------------------------------------------------
 
 TEST(MatrixExceptionTest, MatrixAtOutOfRange) {
-    DataSeries mats(DataKind::kMatrix, DataType::kReal, {3, 3});
+    DataSeries mats(DataType::kReal, xdataset::DataShape::Matrix(3, 3));
     mats.resize(2);
     EXPECT_THROW(mats.matrix_at<double>(2), std::out_of_range);
 }
 
 TEST(MatrixExceptionTest, AppendWrongShapeThrows) {
-    DataSeries mats(DataKind::kMatrix, DataType::kReal, {2, 2});
+    DataSeries mats(DataType::kReal, xdataset::DataShape::Matrix(2, 2));
     mats.resize(1);
     MatXd bad(3, 3);
     bad.setZero();
@@ -681,12 +681,12 @@ TEST(ContiguousTest, ScalarStringNotTrivial) {
 }
 
 TEST(ContiguousTest, VectorMemcpy) {
-    DataSeries src(DataKind::kVector, DataType::kInteger, {3});
+    DataSeries src(DataType::kInteger, xdataset::DataShape::Vector(3));
     src.resize(2);
     src.vector_at<int>(0) << 1, 2, 3;
     src.vector_at<int>(1) << 4, 5, 6;
 
-    DataSeries dst(DataKind::kVector, DataType::kInteger, {3});
+    DataSeries dst(DataType::kInteger, xdataset::DataShape::Vector(3));
     dst.resize(2);
     std::memcpy(dst.mutable_contiguous_data<int>(),
                 src.contiguous_data<int>(),
@@ -699,12 +699,12 @@ TEST(ContiguousTest, VectorMemcpy) {
 }
 
 TEST(ContiguousTest, MatrixMemcpyAndRowMajorLayout) {
-    DataSeries src(DataKind::kMatrix, DataType::kReal, {2, 2});
+    DataSeries src(DataType::kReal, xdataset::DataShape::Matrix(2, 2));
     src.resize(2);
     src.matrix_at<double>(0) << 1.0, 2.0, 3.0, 4.0;
     src.matrix_at<double>(1) << 5.0, 6.0, 7.0, 8.0;
 
-    DataSeries dst(DataKind::kMatrix, DataType::kReal, {2, 2});
+    DataSeries dst(DataType::kReal, xdataset::DataShape::Matrix(2, 2));
     dst.resize(2);
     std::memcpy(dst.mutable_contiguous_data<double>(),
                 src.contiguous_data<double>(),
@@ -964,7 +964,7 @@ TEST(TransformTest, ScalarWithUnitChange) {
 }
 
 TEST(TransformTest, VectorNorm) {
-    DataSeries vecs(DataKind::kVector, DataType::kReal, {3});
+    DataSeries vecs(DataType::kReal, xdataset::DataShape::Vector(3));
     vecs.resize(2);
     vecs.vector_at<double>(0) << 3.0, 4.0, 0.0;
     vecs.vector_at<double>(1) << 6.0, 8.0, 0.0;
@@ -1008,7 +1008,7 @@ TEST(TransformTest, EmptySeries) {
 
 TEST(TransformTest, MatrixElementwiseAbsolute) {
     using cd = std::complex<double>;
-    DataSeries mats(DataKind::kMatrix, DataType::kComplex, {2, 2});
+    DataSeries mats(DataType::kComplex, xdataset::DataShape::Matrix(2, 2));
     mats.resize(2);
     MatXcd m1(2, 2); m1 << cd(-1, 0), cd(0, -2), cd(3, 0), cd(-4, 0);
     MatXcd m2(2, 2); m2 << cd(5, 0), cd(-6, 0), cd(0, 7), cd(-8, 0);

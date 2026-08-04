@@ -18,12 +18,12 @@ namespace xdataset
     {
         MeasurementTypeVisitor v;
         boost::apply_visitor(v, storage_);
-        data_kind_  = v.kind;
         data_type_ = v.dtype;
 
         // Derive shape by dispatching on (kind, dtype).
         shape_.clear();
-        switch (data_kind_)
+        DataKind kind = v.kind;
+        switch (kind)
         {
             case DataKind::kScalar:
                 break;  // shape_ remains empty
@@ -77,8 +77,7 @@ namespace xdataset
     // =========================================================================
 
     Measurement::Measurement()
-        : data_kind_(DataKind::kScalar)
-        , data_type_(DataType::kReal)
+        : data_type_(DataType::kReal)
         , shape_()
         , storage_(0.0)
         , unit_()
@@ -93,7 +92,6 @@ namespace xdataset
     {
         Measurement m;
         m.storage_ = value;
-        m.data_kind_    = DataKind::kScalar;
         m.data_type_   = DataType::kReal;
         return m;
     }
@@ -102,7 +100,6 @@ namespace xdataset
     {
         Measurement m;
         m.storage_ = value;
-        m.data_kind_    = DataKind::kScalar;
         m.data_type_   = DataType::kInteger;
         return m;
     }
@@ -111,7 +108,6 @@ namespace xdataset
     {
         Measurement m;
         m.storage_ = value;
-        m.data_kind_    = DataKind::kScalar;
         m.data_type_   = DataType::kComplex;
         return m;
     }
@@ -120,7 +116,6 @@ namespace xdataset
     {
         Measurement m;
         m.storage_ = value;
-        m.data_kind_    = DataKind::kScalar;
         m.data_type_   = DataType::kString;
         return m;
     }
@@ -129,7 +124,6 @@ namespace xdataset
     {
         Measurement m;
         m.storage_ = value;
-        m.data_kind_    = DataKind::kScalar;
         m.data_type_   = DataType::kBoolean;
         return m;
     }
@@ -138,7 +132,6 @@ namespace xdataset
     {
         Measurement m;
         m.storage_ = v;
-        m.data_kind_    = DataKind::kVector;
         m.data_type_   = DataType::kReal;
         m.shape_.push_back(v.size());
         return m;
@@ -148,7 +141,6 @@ namespace xdataset
     {
         Measurement m;
         m.storage_ = v;
-        m.data_kind_    = DataKind::kVector;
         m.data_type_   = DataType::kInteger;
         m.shape_.push_back(v.size());
         return m;
@@ -158,7 +150,6 @@ namespace xdataset
     {
         Measurement m;
         m.storage_ = v;
-        m.data_kind_    = DataKind::kVector;
         m.data_type_   = DataType::kComplex;
         m.shape_.push_back(v.size());
         return m;
@@ -168,7 +159,6 @@ namespace xdataset
     {
         Measurement m;
         m.storage_ = v;
-        m.data_kind_    = DataKind::kVector;
         m.data_type_   = DataType::kString;
         m.shape_.push_back(v.dimension(0));
         return m;
@@ -178,7 +168,6 @@ namespace xdataset
     {
         Measurement mm;
         mm.storage_ = m;
-        mm.data_kind_    = DataKind::kMatrix;
         mm.data_type_   = DataType::kReal;
         mm.shape_.push_back(m.rows());
         mm.shape_.push_back(m.cols());
@@ -189,7 +178,6 @@ namespace xdataset
     {
         Measurement mm;
         mm.storage_ = m;
-        mm.data_kind_    = DataKind::kMatrix;
         mm.data_type_   = DataType::kInteger;
         mm.shape_.push_back(m.rows());
         mm.shape_.push_back(m.cols());
@@ -200,7 +188,6 @@ namespace xdataset
     {
         Measurement mm;
         mm.storage_ = m;
-        mm.data_kind_    = DataKind::kMatrix;
         mm.data_type_   = DataType::kComplex;
         mm.shape_.push_back(m.rows());
         mm.shape_.push_back(m.cols());
@@ -211,7 +198,6 @@ namespace xdataset
     {
         Measurement mm;
         mm.storage_ = m;
-        mm.data_kind_    = DataKind::kMatrix;
         mm.data_type_   = DataType::kString;
         mm.shape_.push_back(m.dimension(0));
         mm.shape_.push_back(m.dimension(1));
@@ -241,7 +227,7 @@ namespace xdataset
 
     Measurement Measurement::element_at(Index i) const
     {
-        if (data_kind_ != DataKind::kVector)
+        if (shape_.kind() != DataKind::kVector)
             throw std::logic_error("element_at(Index) requires vector data");
         switch (data_type_)
         {
@@ -256,7 +242,7 @@ namespace xdataset
 
     Measurement Measurement::element_at(Index r, Index c) const
     {
-        if (data_kind_ != DataKind::kMatrix)
+        if (shape_.kind() != DataKind::kMatrix)
             throw std::logic_error("element_at(Index, Index) requires matrix data");
         switch (data_type_)
         {
@@ -275,10 +261,10 @@ namespace xdataset
 
     Measurement Measurement::at(const std::vector<MultiIndexSelector>& selectors) const
     {
-        if (data_kind_ == DataKind::kScalar)
+        if (shape_.kind() == DataKind::kScalar)
             throw std::logic_error("at is invalid for scalar Measurement");
 
-        const std::size_t ndim = (data_kind_ == DataKind::kVector) ? 1 : 2;
+        const std::size_t ndim = (shape_.kind() == DataKind::kVector) ? 1 : 2;
         if (selectors.size() > ndim)
             throw std::invalid_argument("too many selectors for Measurement::at");
 
@@ -287,7 +273,7 @@ namespace xdataset
         while (padded.size() < ndim)
             padded.push_back(MultiIndexSelector::Any());
 
-        if (data_kind_ == DataKind::kVector)
+        if (shape_.kind() == DataKind::kVector)
         {
             const std::vector<Index> selected = padded[0].resolve(shape_[0]);
 
@@ -677,16 +663,15 @@ Measurement Measurement::canonicalized() const {
     DataType res_dtype = (data_type_ == DataType::kInteger) ? DataType::kReal : data_type_;
 
     Measurement result;
-    result.data_kind_  = data_kind_;
     result.data_type_ = res_dtype;
     result.shape_ = shape_;
     result.unit_  = target;
 
     Index count = 1;
-    if (data_kind_ == DataKind::kVector) count = shape_[0];
-    else if (data_kind_ == DataKind::kMatrix) count = shape_[0] * shape_[1];
+    if (shape_.kind() == DataKind::kVector) count = shape_[0];
+    else if (shape_.kind() == DataKind::kMatrix) count = shape_[0] * shape_[1];
 
-    if (data_kind_ == DataKind::kScalar) {
+    if (shape_.kind() == DataKind::kScalar) {
         double v = (data_type_ == DataType::kInteger)
                    ? static_cast<double>(boost::get<int>(storage_))
                    : boost::get<double>(storage_);
@@ -701,7 +686,7 @@ Measurement Measurement::canonicalized() const {
         return result;
     }
 
-    if (data_kind_ == DataKind::kVector) {
+    if (shape_.kind() == DataKind::kVector) {
         if (res_dtype == DataType::kComplex) {
             VecXcd vec = boost::get<VecXcd>(storage_);
             if (!affine) vec *= mult;

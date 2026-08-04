@@ -205,7 +205,7 @@ Value Value::ArrayString(const std::vector<std::string>& v) {
 }
 
 Value Value::ArrayVector(const std::vector<VecXd>& rows, const Unit& u) {
-    DataSeries s(DataKind::kVector, DataType::kReal,
+    DataSeries s(DataType::kReal,
                  {rows.empty() ? Index(0) : rows[0].size()});
     s.set_unit(u);
     for (const auto& row : rows) s.append(Measurement::Vector(row));
@@ -213,7 +213,7 @@ Value Value::ArrayVector(const std::vector<VecXd>& rows, const Unit& u) {
 }
 
 Value Value::ArrayVector(const std::vector<VecXi>& rows, const Unit& u) {
-    DataSeries s(DataKind::kVector, DataType::kInteger,
+    DataSeries s(DataType::kInteger,
                  {rows.empty() ? Index(0) : rows[0].size()});
     s.set_unit(u);
     for (const auto& row : rows) s.append(Measurement::Vector(row));
@@ -221,7 +221,7 @@ Value Value::ArrayVector(const std::vector<VecXi>& rows, const Unit& u) {
 }
 
 Value Value::ArrayVector(const std::vector<VecXcd>& rows, const Unit& u) {
-    DataSeries s(DataKind::kVector, DataType::kComplex,
+    DataSeries s(DataType::kComplex,
                  {rows.empty() ? Index(0) : rows[0].size()});
     s.set_unit(u);
     for (const auto& row : rows) s.append(Measurement::Vector(row));
@@ -229,14 +229,14 @@ Value Value::ArrayVector(const std::vector<VecXcd>& rows, const Unit& u) {
 }
 
 Value Value::ArrayVector(const std::vector<VecXs>& rows) {
-    DataSeries s(DataKind::kVector, DataType::kString,
+    DataSeries s(DataType::kString,
                  {rows.empty() ? Index(0) : rows[0].dimension(0)});
     for (const auto& row : rows) s.append(Measurement::Vector(row));
     return Value(DataArray::CreateIndependent(std::move(s)));
 }
 
 Value Value::ArrayMatrix(const std::vector<MatXd>& rows, const Unit& u) {
-    DataSeries s(DataKind::kMatrix, DataType::kReal,
+    DataSeries s(DataType::kReal,
                  {rows.empty() ? Index(0) : rows[0].rows(),
                   rows.empty() ? Index(0) : rows[0].cols()});
     s.set_unit(u);
@@ -245,7 +245,7 @@ Value Value::ArrayMatrix(const std::vector<MatXd>& rows, const Unit& u) {
 }
 
 Value Value::ArrayMatrix(const std::vector<MatXi>& rows, const Unit& u) {
-    DataSeries s(DataKind::kMatrix, DataType::kInteger,
+    DataSeries s(DataType::kInteger,
                  {rows.empty() ? Index(0) : rows[0].rows(),
                   rows.empty() ? Index(0) : rows[0].cols()});
     s.set_unit(u);
@@ -254,7 +254,7 @@ Value Value::ArrayMatrix(const std::vector<MatXi>& rows, const Unit& u) {
 }
 
 Value Value::ArrayMatrix(const std::vector<MatXcd>& rows, const Unit& u) {
-    DataSeries s(DataKind::kMatrix, DataType::kComplex,
+    DataSeries s(DataType::kComplex,
                  {rows.empty() ? Index(0) : rows[0].rows(),
                   rows.empty() ? Index(0) : rows[0].cols()});
     s.set_unit(u);
@@ -263,7 +263,7 @@ Value Value::ArrayMatrix(const std::vector<MatXcd>& rows, const Unit& u) {
 }
 
 Value Value::ArrayMatrix(const std::vector<MatXs>& rows) {
-    DataSeries s(DataKind::kMatrix, DataType::kString,
+    DataSeries s(DataType::kString,
                  {rows.empty() ? Index(0) : rows[0].dimension(0),
                   rows.empty() ? Index(0) : rows[0].dimension(1)});
     for (const auto& row : rows) s.append(Measurement::Matrix(row));

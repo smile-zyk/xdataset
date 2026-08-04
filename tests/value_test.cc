@@ -71,7 +71,7 @@ TEST(ValueTest, MetadataMeas)
     Value v(m);
     EXPECT_EQ(v.data_kind(), DataKind::kVector);
     EXPECT_EQ(v.data_type(), DataType::kReal);
-    EXPECT_EQ(v.data_shape(), xdataset::DataShape{5});
+    EXPECT_EQ(v.data_shape(), xdataset::DataShape::Vector(5));
     EXPECT_TRUE(v.unit().same_dimension(Unit::parse("Hz")));
     EXPECT_EQ(v.rows(), 1);
 }
@@ -153,7 +153,7 @@ TEST(ValueTest, ArrayVectorFactory)
     EXPECT_EQ(v.data_type(), DataType::kReal);
     EXPECT_EQ(v.rows(), 2);
     const auto& ds = v.as_data_array().data();
-    EXPECT_EQ(ds.data_shape(), xdataset::DataShape{2});
+    EXPECT_EQ(ds.data_shape(), xdataset::DataShape::Vector(2));
     EXPECT_DOUBLE_EQ(ds.vector_at<double>(0)(0), 1.0);
     EXPECT_DOUBLE_EQ(ds.vector_at<double>(0)(1), 2.0);
     EXPECT_DOUBLE_EQ(ds.vector_at<double>(1)(0), 3.0);
@@ -190,7 +190,7 @@ TEST(ValueTest, ArrayMatrixFactory)
     EXPECT_EQ(v.data_type(), DataType::kReal);
     EXPECT_EQ(v.rows(), 1);
     const auto& ds = v.as_data_array().data();
-    EXPECT_EQ(ds.data_shape(), (xdataset::DataShape{2, 2}));
+    EXPECT_EQ(ds.data_shape(), (xdataset::DataShape::Matrix(2, 2)));
     auto mm = ds.matrix_at<double>(0);
     EXPECT_DOUBLE_EQ(mm(0, 0), 1.0);
     EXPECT_DOUBLE_EQ(mm(0, 1), 2.0);

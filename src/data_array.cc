@@ -480,7 +480,7 @@ namespace xdataset
             if (is_self && data_kind_ == DataArrayKind::kDependent)
             {
                 // Dependent kSelf: select by flat row indices.
-                DataSeries sel(data().data_kind(), data().data_type(), data().data_shape());
+                DataSeries sel(data().data_type(), data().data_shape());
                 for (Index r : selected_row_indices)
                     sel.append_from(data(), r);
                 info.datas.emplace(kSelf, std::move(sel));
@@ -493,7 +493,7 @@ namespace xdataset
 
                 const auto& src_rows = selection_info[static_cast<Index>(idx)].source_rows;
                 const DataSeries& src_series = it->second;
-                DataSeries sel(src_series.data_kind(), src_series.data_type(), src_series.data_shape());
+                DataSeries sel(src_series.data_type(), src_series.data_shape());
                 for (Index r : src_rows)
                     sel.append_from(src_series, r);
 
@@ -655,7 +655,7 @@ namespace xdataset
         }
 
         // Reduced values become the new kSelf data (one row per group).
-        DataSeries out(data().data_kind(), data().data_type(), data().data_shape());
+        DataSeries out(data().data_type(), data().data_shape());
         for (const GroupAcc& acc : groups)
             out.append(acc.best);
 

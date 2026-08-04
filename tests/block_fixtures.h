@@ -34,7 +34,7 @@ namespace xdataset
 
         inline DataSeries MakeVectorSeries(std::size_t rows, Index width)
         {
-            DataSeries vecs(DataKind::kVector, DataType::kReal, {width});
+            DataSeries vecs(DataType::kReal, xdataset::DataShape::Vector(width));
             vecs.resize(rows);
             for (std::size_t i = 0; i < rows; ++i)
             {
@@ -48,7 +48,7 @@ namespace xdataset
 
         inline DataSeries MakeMatrixSeries(std::size_t rows, Index r, Index c)
         {
-            DataSeries mats(DataKind::kMatrix, DataType::kReal, {r, c});
+            DataSeries mats(DataType::kReal, xdataset::DataShape::Matrix(r, c));
             mats.resize(rows);
             for (std::size_t i = 0; i < rows; ++i)
             {

@@ -103,7 +103,7 @@ TEST(CellTest, AppendStillThrowsOnCompleteMismatch) {
 
 TEST(CellTest, AppendVectorShapeMismatchThrows) {
     VecXd vd(3); vd << 1., 2., 3.;
-    DataSeries s(DataKind::kVector, DataType::kComplex, xdataset::DataShape{2});
+    DataSeries s(DataType::kComplex, xdataset::DataShape::Vector(2));
     EXPECT_THROW(s.append(Measurement(vd)), std::bad_cast);
 }
 
@@ -128,7 +128,7 @@ TEST(CellTest, CellAtRoundtripScalar) {
 }
 
 TEST(CellTest, CellAtRoundtripVector) {
-    DataSeries vecs(DataKind::kVector, DataType::kReal, {3});
+    DataSeries vecs(DataType::kReal, xdataset::DataShape::Vector(3));
     vecs.resize(2);
     vecs.vector_at<double>(0) << 1.0, 2.0, 3.0;
     vecs.vector_at<double>(1) << 4.0, 5.0, 6.0;
@@ -139,7 +139,7 @@ TEST(CellTest, CellAtRoundtripVector) {
 }
 
 TEST(CellTest, CellAtRoundtripMatrix) {
-    DataSeries mats(DataKind::kMatrix, DataType::kReal, {2, 2});
+    DataSeries mats(DataType::kReal, xdataset::DataShape::Matrix(2, 2));
     mats.resize(1);
     mats.matrix_at<double>(0) << 1.0, 2.0, 3.0, 4.0;
     Measurement m = mats.measurement_at(0);

@@ -32,7 +32,7 @@ namespace
 
     DataSeries vectors(std::size_t rows, Index width, const Unit& u = Unit())
     {
-        DataSeries s(DataKind::kVector, DataType::kReal, {width});
+        DataSeries s(DataType::kReal, xdataset::DataShape::Vector(width));
         s.set_unit(u);
         s.resize(rows);
         for (std::size_t i = 0; i < rows; ++i)
@@ -43,7 +43,7 @@ namespace
 
     DataSeries matrices(std::size_t rows, Index r, Index c, const Unit& u = Unit())
     {
-        DataSeries s(DataKind::kMatrix, DataType::kReal, {r, c});
+        DataSeries s(DataType::kReal, xdataset::DataShape::Matrix(r, c));
         s.set_unit(u);
         s.resize(rows);
         for (std::size_t i = 0; i < rows; ++i)

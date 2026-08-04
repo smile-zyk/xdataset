@@ -287,7 +287,7 @@ DataShape DeriveShapeBroadcast(const std::vector<DataShape>& operand_shapes) {
     }
 
     if (res_kind == DataKind::kScalar)
-        return DataShape{};
+        return DataShape::Scalar();
 
     if (res_kind == DataKind::kVector) {
         Index w = 1;
@@ -301,7 +301,7 @@ DataShape DeriveShapeBroadcast(const std::vector<DataShape>& operand_shapes) {
                     "vector width mismatch (" + std::to_string(w) +
                     " vs " + std::to_string(sw) + ")");
         }
-        return DataShape{w};
+        return DataShape::Vector(w);
     }
 
     // Matrix: row & col independently
@@ -329,7 +329,7 @@ DataShape DeriveShapeBroadcast(const std::vector<DataShape>& operand_shapes) {
                 "col dim mismatch (" + std::to_string(c) +
                 " vs " + std::to_string(op_c) + ")");
     }
-    return DataShape{r, c};
+    return DataShape::Matrix(r, c);
 }
 
 // -- DeriveShapeMatrix --
@@ -353,9 +353,9 @@ DataShape DeriveShapeMatrix(const std::vector<DataShape>& operand_shapes) {
 
     DataShape result;
     if (k0 == DataKind::kScalar)
-        result = DataShape{N};
+        result = DataShape::Vector(N);
     else if (k0 == DataKind::kVector)
-        result = DataShape{N, s0[0]};
+        result = DataShape::Matrix(N, s0[0]);
     else
         throw std::invalid_argument("matrix: cannot concat matrices");
 
@@ -377,10 +377,10 @@ std::pair<Index, Index> EffectiveRC(const DataShape& s) {
 }
 
 DataShape MakeShapeRC(Index r, Index c) {
-    if (r == 1 && c == 1) return DataShape{};
-    if (r == 1)           return DataShape{c};
-    if (c == 1)           return DataShape{r};
-    return DataShape{r, c};
+    if (r == 1 && c == 1) return DataShape::Scalar();
+    if (r == 1)           return DataShape::Vector(c);
+    if (c == 1)           return DataShape::Vector(r);
+    return DataShape::Matrix(r, c);
 }
 
 }  // anonymous namespace
@@ -980,7 +980,7 @@ struct FlatInput {
     /// Construct a single-row DataSeries from a Boolean Measurement in the target dtype.
     static std::unique_ptr<DataSeries> MakeBoolSeries(const Measurement& m) {
         auto ds = std::unique_ptr<DataSeries>(
-            new DataSeries(m.data_kind(), DataTypeOf<T>::tag, m.shape()));
+            new DataSeries(DataTypeOf<T>::tag, m.shape()));
         ds->resize(1);
 
         T val = static_cast<T>(m.as_scalar<bool>() ? 1 : 0);
@@ -1018,7 +1018,7 @@ FlatInput<T> FlatInput<T>::Acquire(const Value& v) {
         }
 
         fi.owner = std::unique_ptr<DataSeries>(
-            new DataSeries(m.data_kind(), m.data_type(), m.shape()));
+            new DataSeries(m.data_type(), m.shape()));
         fi.owner->append(m);
 
         DataType target = DataTypeOf<T>::tag;
@@ -1101,7 +1101,7 @@ Value ExecBinaryArithT(const ExecContextInfo& info,
     const DataArray* out_src = SelectOutputSource(l_meas, r_meas, ops);
 
     auto out_ds = std::unique_ptr<DataSeries>(
-        new DataSeries(info.shape.kind(), DataTypeOf<T>::tag, info.shape));
+        new DataSeries(DataTypeOf<T>::tag, info.shape));
     out_ds->set_unit(info.unit);
     out_ds->resize(static_cast<std::size_t>(info.rows));
     T* out = out_ds->mutable_contiguous_data<T>();
@@ -1177,7 +1177,7 @@ Value ExecBinaryCmpT(const ExecContextInfo& info,
 
     // Output is int (0/1), using same shape/kind as result
     auto out_ds = std::unique_ptr<DataSeries>(
-        new DataSeries(info.shape.kind(), DataType::kInteger, info.shape));
+        new DataSeries(DataType::kInteger, info.shape));
     out_ds->set_unit(info.unit);
     out_ds->resize(static_cast<std::size_t>(info.rows));
     int* out = out_ds->mutable_contiguous_data<int>();
@@ -1275,7 +1275,7 @@ static Value ExecBinaryCmpString(const ExecContextInfo& info,
     const DataArray* out_src = SelectOutputSource(l_meas, r_meas, ops);
 
     auto out_ds = std::unique_ptr<DataSeries>(
-        new DataSeries(info.shape.kind(), DataType::kInteger, info.shape));
+        new DataSeries(DataType::kInteger, info.shape));
     out_ds->set_unit(info.unit);
     out_ds->resize(static_cast<std::size_t>(info.rows));
     int* out = out_ds->mutable_contiguous_data<int>();
@@ -1340,7 +1340,7 @@ Value ExecuteBinaryLogical(const ExecContextInfo& info,
             if (m.data_type() == DataType::kBoolean) {
                 return Value::Integer(m.as_scalar<bool>() ? 1 : 0);
             }
-            DataSeries ds(m.data_kind(), m.data_type(), m.shape());
+            DataSeries ds(m.data_type(), m.shape());
             ds.append(m);
             auto logical_ds = std::unique_ptr<DataSeries>(new DataSeries(ds.as_logical()));
             return Value(MakeMeasFromFlat(logical_ds->contiguous_data<int>(),
@@ -1411,7 +1411,7 @@ static Value ExecMatrixT(const ExecContextInfo& info,
     Index result_rows = info.rows;
 
     auto out_ds = std::unique_ptr<DataSeries>(
-        new DataSeries(info.shape.kind(), DataTypeOf<T>::tag, info.shape));
+        new DataSeries(DataTypeOf<T>::tag, info.shape));
     out_ds->set_unit(info.unit);
     out_ds->resize(static_cast<std::size_t>(result_rows));
     T* out = out_ds->mutable_contiguous_data<T>();
@@ -1530,7 +1530,7 @@ static Value ExecMatrixString(const ExecContextInfo& info,
 
     // DataArray output
     auto out_ds = std::unique_ptr<DataSeries>(
-        new DataSeries(info.shape.kind(), DataType::kString, info.shape));
+        new DataSeries(DataType::kString, info.shape));
     out_ds->set_unit(info.unit);
     out_ds->resize(static_cast<std::size_t>(result_rows));
     for (Index r = 0; r < result_rows; ++r) {
@@ -1602,7 +1602,7 @@ static Value ExecSweepT(const ExecContextInfo& info,
     Index result_rows = info.rows;
 
     auto out_ds = std::unique_ptr<DataSeries>(
-        new DataSeries(info.shape.kind(), DataTypeOf<T>::tag, info.shape));
+        new DataSeries(DataTypeOf<T>::tag, info.shape));
     out_ds->set_unit(info.unit);
     out_ds->resize(static_cast<std::size_t>(result_rows));
     T* out = out_ds->mutable_contiguous_data<T>();
@@ -1701,7 +1701,7 @@ static Value ExecSweepString(const ExecContextInfo& info,
     }
 
     auto out_ds = std::unique_ptr<DataSeries>(
-        new DataSeries(info.shape.kind(), DataType::kString, info.shape));
+        new DataSeries(DataType::kString, info.shape));
     out_ds->set_unit(info.unit);
     out_ds->resize(static_cast<std::size_t>(result_rows));
     for (Index r = 0; r < result_rows; ++r) {
@@ -1781,7 +1781,7 @@ Value ExecUnaryT(const ExecContextInfo& info,
     Index    stride = in.stride;
 
     auto out_ds = std::unique_ptr<DataSeries>(
-        new DataSeries(info.shape.kind(), DataTypeOf<T>::tag, info.shape));
+        new DataSeries(DataTypeOf<T>::tag, info.shape));
     out_ds->set_unit(info.unit);
     out_ds->resize(static_cast<std::size_t>(info.rows));
     T* out = out_ds->mutable_contiguous_data<T>();
@@ -1829,7 +1829,7 @@ Value ExecuteUnaryNot(const ExecContextInfo& info,
         if (m.data_type() == DataType::kBoolean) {
             v = Value::Integer(m.as_scalar<bool>() ? 1 : 0);
         } else {
-            DataSeries ds(m.data_kind(), m.data_type(), m.shape());
+            DataSeries ds(m.data_type(), m.shape());
             ds.append(m);
             auto logical_ds = std::unique_ptr<DataSeries>(new DataSeries(ds.as_logical()));
             v = Value(MakeMeasFromFlat(logical_ds->contiguous_data<int>(),
@@ -1904,7 +1904,7 @@ Value ExecBinaryMatMulT(const ExecContextInfo& info,
     const DataArray* out_src = SelectOutputSource(l_meas, r_meas, ops);
 
     auto out_ds = std::unique_ptr<DataSeries>(
-        new DataSeries(info.shape.kind(), DataTypeOf<T>::tag, info.shape));
+        new DataSeries(DataTypeOf<T>::tag, info.shape));
     out_ds->set_unit(info.unit);
     out_ds->resize(static_cast<std::size_t>(info.rows));
     T* out = out_ds->mutable_contiguous_data<T>();
@@ -1960,7 +1960,7 @@ Value ExecBinaryDivT(const ExecContextInfo& info,
     const DataArray* out_src = SelectOutputSource(l_meas, r_meas, ops);
 
     auto out_ds = std::unique_ptr<DataSeries>(
-        new DataSeries(info.shape.kind(), DataTypeOf<T>::tag, info.shape));
+        new DataSeries(DataTypeOf<T>::tag, info.shape));
     out_ds->set_unit(info.unit);
     out_ds->resize(static_cast<std::size_t>(info.rows));
     T* out = out_ds->mutable_contiguous_data<T>();
@@ -2073,7 +2073,7 @@ static Value ExecConditionalT(const ExecContextInfo& info,
     Index f_stride = f_in.stride;
 
     auto out_ds = std::unique_ptr<DataSeries>(
-        new DataSeries(info.shape.kind(), DataTypeOf<T>::tag, info.shape));
+        new DataSeries(DataTypeOf<T>::tag, info.shape));
     out_ds->set_unit(info.unit);
     out_ds->resize(static_cast<std::size_t>(info.rows));
     T* out = out_ds->mutable_contiguous_data<T>();
@@ -2176,7 +2176,7 @@ static Value ExecConditionalString(const ExecContextInfo& info,
     read_flat(ops[2], f_rows, f_stride, f_flat);
 
     auto out_ds = std::unique_ptr<DataSeries>(
-        new DataSeries(info.shape.kind(), DataType::kString, info.shape));
+        new DataSeries(DataType::kString, info.shape));
     out_ds->set_unit(info.unit);
     out_ds->resize(static_cast<std::size_t>(info.rows));
 
@@ -2289,7 +2289,7 @@ Value ExecuteConditional(const ExecContextInfo& info,
             if (m.data_type() == DataType::kBoolean) {
                 return Value::Integer(m.as_scalar<bool>() ? 1 : 0);
             }
-            DataSeries ds(m.data_kind(), m.data_type(), m.shape());
+            DataSeries ds(m.data_type(), m.shape());
             ds.append(m);
             auto logical_ds = std::unique_ptr<DataSeries>(
                 new DataSeries(ds.as_logical()));
@@ -2371,7 +2371,7 @@ static Value ExecIfT(const ExecContextInfo& info,
 
     // --- allocate output ---
     auto out_ds = std::unique_ptr<DataSeries>(
-        new DataSeries(info.shape.kind(), DataTypeOf<T>::tag, info.shape));
+        new DataSeries(DataTypeOf<T>::tag, info.shape));
     out_ds->set_unit(info.unit);
     out_ds->resize(static_cast<std::size_t>(info.rows));
     T* out = out_ds->mutable_contiguous_data<T>();
@@ -2600,7 +2600,7 @@ static Value ExecIfString(const ExecContextInfo& info,
 
     // DataArray output
     auto out_ds = std::unique_ptr<DataSeries>(
-        new DataSeries(info.shape.kind(), DataType::kString, info.shape));
+        new DataSeries(DataType::kString, info.shape));
     out_ds->set_unit(info.unit);
     out_ds->resize(static_cast<std::size_t>(info.rows));
 
@@ -2698,7 +2698,7 @@ Value ExecuteIf(const ExecContextInfo& info,
             if (m.data_type() == DataType::kBoolean) {
                 return Value::Integer(m.as_scalar<bool>() ? 1 : 0);
             }
-            DataSeries ds(m.data_kind(), m.data_type(), m.shape());
+            DataSeries ds(m.data_type(), m.shape());
             ds.append(m);
             auto logical_ds = std::unique_ptr<DataSeries>(
                 new DataSeries(ds.as_logical()));

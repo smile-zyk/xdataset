@@ -435,7 +435,7 @@ namespace xdataset
         info.kind = DataArrayKind::kDependent;
         info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
         {
-            DataSeries ds(DataKind::kVector, DataType::kReal, {3});
+            DataSeries ds(DataType::kReal, xdataset::DataShape::Vector(3));
             ds.resize(2);
             ds.vector_at<double>(0) << 1.0, 2.0, 3.0;
             ds.vector_at<double>(1) << 4.0, 5.0, 6.0;
@@ -465,7 +465,7 @@ namespace xdataset
         info.kind = DataArrayKind::kDependent;
         info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
         {
-            DataSeries ds(DataKind::kMatrix, DataType::kInteger, {2, 3});
+            DataSeries ds(DataType::kInteger, xdataset::DataShape::Matrix(2, 3));
             ds.resize(2);
             ds.matrix_at<int>(0) << 1, 2, 3,
                                     4, 5, 6;
@@ -510,7 +510,7 @@ namespace xdataset
         info.kind = DataArrayKind::kDependent;
         info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
         {
-            DataSeries ds(DataKind::kMatrix, DataType::kInteger, {2, 3});
+            DataSeries ds(DataType::kInteger, xdataset::DataShape::Matrix(2, 3));
             ds.resize(2);
             ds.matrix_at<int>(0) << 1, 2, 3,
                                     4, 5, 6;
@@ -536,7 +536,7 @@ namespace xdataset
         info.kind = DataArrayKind::kDependent;
         info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
         {
-            DataSeries ds(DataKind::kMatrix, DataType::kInteger, {2, 3});
+            DataSeries ds(DataType::kInteger, xdataset::DataShape::Matrix(2, 3));
             ds.resize(2);
             ds.matrix_at<int>(0) << 1, 2, 3,
                                     4, 5, 6;
@@ -574,7 +574,7 @@ namespace xdataset
         info.kind = DataArrayKind::kDependent;
         info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
         {
-            DataSeries ds(DataKind::kVector, DataType::kReal, {3});
+            DataSeries ds(DataType::kReal, xdataset::DataShape::Vector(3));
             ds.resize(2);
             ds.vector_at<double>(0) << 1.0, 2.0, 3.0;
             ds.vector_at<double>(1) << 4.0, 5.0, 6.0;
@@ -602,7 +602,7 @@ namespace xdataset
         info.kind = DataArrayKind::kDependent;
         info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
         {
-            DataSeries ds(DataKind::kMatrix, DataType::kInteger, {2, 3});
+            DataSeries ds(DataType::kInteger, xdataset::DataShape::Matrix(2, 3));
             ds.resize(2);
             ds.matrix_at<int>(0) << 1, 2, 3,
                                     4, 5, 6;
@@ -635,7 +635,7 @@ namespace xdataset
         info.kind = DataArrayKind::kDependent;
         info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
         {
-            DataSeries ds(DataKind::kVector, DataType::kReal, {3});
+            DataSeries ds(DataType::kReal, xdataset::DataShape::Vector(3));
             ds.resize(2);
             ds.vector_at<double>(0) << 1.0, 2.0, 3.0;
             ds.vector_at<double>(1) << 4.0, 5.0, 6.0;
@@ -665,7 +665,7 @@ namespace xdataset
         info.kind = DataArrayKind::kDependent;
         info.datas["x"] = DataSeries::CreateScalarFromVector<double>({10.0, 20.0});
         {
-            DataSeries ds(DataKind::kMatrix, DataType::kInteger, {2, 3});
+            DataSeries ds(DataType::kInteger, xdataset::DataShape::Matrix(2, 3));
             ds.resize(2);
             ds.matrix_at<int>(0) << 1, 2, 3,
                                     4, 5, 6;

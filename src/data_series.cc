@@ -15,22 +15,20 @@ namespace xdataset {
 // =========================================================================
 
 DataSeries::DataSeries()
-    : data_kind_(DataKind::kScalar),
-      data_type_(DataType::kReal),
+    : data_type_(DataType::kReal),
       shape_(),
-      storage_(make_storage(DataKind::kScalar, DataType::kReal, DataShape())),
+      storage_(make_storage(DataType::kReal, DataShape())),
       unit_() {}
 
-DataSeries::DataSeries(DataKind kind, DataType dtype, const DataShape& shape)
-    : data_kind_(kind), data_type_(dtype), shape_(shape), storage_(make_storage(kind, dtype, shape)), unit_() {}
+DataSeries::DataSeries(DataType dtype, const DataShape& shape)
+    : data_type_(dtype), shape_(shape), storage_(make_storage(dtype, shape)), unit_() {}
 
 DataSeries::DataSeries(const DataSeries& other)
-    : data_kind_(other.data_kind_), data_type_(other.data_type_), shape_(other.shape_),
+    : data_type_(other.data_type_), shape_(other.shape_),
       storage_(other.storage_->clone()), unit_(other.unit_) {}
 
 DataSeries& DataSeries::operator=(const DataSeries& other) {
     if (this != &other) {
-        data_kind_ = other.data_kind_;
         data_type_ = other.data_type_;
         shape_ = other.shape_;
         storage_ = other.storage_->clone();
@@ -40,13 +38,12 @@ DataSeries& DataSeries::operator=(const DataSeries& other) {
 }
 
 DataSeries::DataSeries(DataSeries&& other) noexcept
-    : data_kind_(other.data_kind_), data_type_(other.data_type_),
+    : data_type_(other.data_type_),
       shape_(std::move(other.shape_)),
       storage_(std::move(other.storage_)),
       unit_(std::move(other.unit_)) {}
 
 DataSeries& DataSeries::operator=(DataSeries&& other) noexcept {
-    data_kind_ = other.data_kind_;
     data_type_ = other.data_type_;
     shape_ = std::move(other.shape_);
     storage_ = std::move(other.storage_);
@@ -80,10 +77,10 @@ void DataSeries::canonicalize() {
 
     for (std::size_t i = 0; i < size(); ++i) {
         Index idx = static_cast<Index>(i);
-        if (data_kind_ == DataKind::kScalar) {
+        if (shape_.kind() == DataKind::kScalar) {
             double& v = scalar_at<double>(idx);
             v = affine ? units::convert(v, unit_.raw(), target.raw()) : v * mult;
-        } else if (data_kind_ == DataKind::kVector) {
+        } else if (shape_.kind() == DataKind::kVector) {
             typename NumericVectorTypes<double>::MapType v = vector_at<double>(idx);
             for (Index j = 0; j < v.size(); ++j) {
                 v(j) = affine ? units::convert(v(j), unit_.raw(), target.raw()) : v(j) * mult;
@@ -126,21 +123,21 @@ DataSeries DataSeries::promoted_data_type(DataType target) const {
             std::to_string(static_cast<int>(target)));
 
     // Build a new DataSeries with target dtype, copy rows with promotion
-    DataSeries out(data_kind_, target, shape_);
+    DataSeries out(target, shape_);
     out.unit_ = unit_;
     out.resize(size());
 
     std::size_t n = size();
     for (std::size_t i = 0; i < n; ++i) {
         Index idx = static_cast<Index>(i);
-        if (data_kind_ == DataKind::kScalar) {
+        if (shape_.kind() == DataKind::kScalar) {
             if (target == DataType::kReal)
                 out.scalar_at<double>(idx) = static_cast<double>(scalar_at<int>(idx));
             else
                 out.scalar_at<std::complex<double>>(idx) = static_cast<std::complex<double>>(
                     data_type_ == DataType::kInteger ? static_cast<double>(scalar_at<int>(idx))
                                                      : scalar_at<double>(idx));
-        } else if (data_kind_ == DataKind::kVector) {
+        } else if (shape_.kind() == DataKind::kVector) {
             if (target == DataType::kReal)
                 out.vector_at<double>(idx) = vector_at<int>(idx).template cast<double>();
             else if (data_type_ == DataType::kInteger)
@@ -161,13 +158,13 @@ DataSeries DataSeries::promoted_data_type(DataType target) const {
 }
 
 DataSeries DataSeries::as_logical() const {
-    DataSeries out(data_kind_, DataType::kInteger, shape_);
+    DataSeries out(DataType::kInteger, shape_);
     out.resize(size());
     std::size_t n = size();
 
     for (std::size_t i = 0; i < n; ++i) {
         Index idx = static_cast<Index>(i);
-        if (data_kind_ == DataKind::kScalar) {
+        if (shape_.kind() == DataKind::kScalar) {
             int val = 0;
             switch (data_type_) {
                 case DataType::kReal:    val = (scalar_at<double>(idx) != 0.0) ? 1 : 0; break;
@@ -177,7 +174,7 @@ DataSeries DataSeries::as_logical() const {
                 default: throw std::invalid_argument("as_logical: unsupported dtype");
             }
             out.scalar_at<int>(idx) = val;
-        } else if (data_kind_ == DataKind::kVector) {
+        } else if (shape_.kind() == DataKind::kVector) {
             Index w = shape_[0];
             auto out_v = out.vector_at<int>(idx);
             if (data_type_ == DataType::kInteger) {
@@ -231,7 +228,7 @@ DataSeries DataSeries::tail(std::size_t n) const {
 
 DataSeries DataSeries::iloc(std::size_t start, std::size_t end) const {
     if (start > end || end > size()) throw std::out_of_range("iloc out of range");
-    DataSeries out(data_kind_, data_type_, shape_);
+    DataSeries out(data_type_, shape_);
     out.unit_ = unit_;
     for (std::size_t i = start; i < end; ++i) out.append_from(*this, static_cast<Index>(i));
     return out;
@@ -258,7 +255,7 @@ void DataSeries::append_from(const DataSeries& src, Index row) {
 }
 
 void DataSeries::assign_from(const DataSeries& src, Index src_row, Index dst_row) {
-    if (src.data_kind_ != data_kind_ || src.data_type_ != data_type_ || src.shape_ != shape_) throw std::bad_cast();
+    if (src.data_type_ != data_type_ || src.shape_ != shape_) throw std::bad_cast();
     if (src_row < 0 || static_cast<std::size_t>(src_row) >= src.size() ||
         dst_row < 0 || static_cast<std::size_t>(dst_row) >= size()) throw std::out_of_range("row index out of range");
 
@@ -274,7 +271,7 @@ void DataSeries::assign_from(const DataSeries& src, Index src_row, Index dst_row
             "], source has [" + src.unit_.to_string() + "]");
     }
 
-    if (data_kind_ == DataKind::kScalar) {
+    if (shape_.kind() == DataKind::kScalar) {
         if (data_type_ == DataType::kReal) scalar_at<double>(dst_row) = src.scalar_at<double>(src_row);
         else if (data_type_ == DataType::kInteger) scalar_at<int>(dst_row) = src.scalar_at<int>(src_row);
         else if (data_type_ == DataType::kComplex) {
@@ -285,7 +282,7 @@ void DataSeries::assign_from(const DataSeries& src, Index src_row, Index dst_row
         return;
     }
 
-    if (data_kind_ == DataKind::kVector) {
+    if (shape_.kind() == DataKind::kVector) {
         if (data_type_ == DataType::kReal) vector_at<double>(dst_row) = src.vector_at<double>(src_row);
         else if (data_type_ == DataType::kInteger) vector_at<int>(dst_row) = src.vector_at<int>(src_row);
         else if (data_type_ == DataType::kComplex) {
@@ -307,7 +304,7 @@ void DataSeries::assign_from(const DataSeries& src, Index src_row, Index dst_row
 
 void DataSeries::append(const Measurement& m)
 {
-    if (m.data_kind() != data_kind_ || m.data_type() != data_type_ || m.shape() != shape_)
+    if (m.data_type() != data_type_ || m.shape() != shape_)
         throw std::bad_cast();
 
     // First non-dimensionless measurement sets the series' unit.
@@ -322,7 +319,7 @@ void DataSeries::append(const Measurement& m)
             "], measurement has [" + m.unit().to_string() + "]");
     }
 
-    if (data_kind_ == DataKind::kScalar) {
+    if (shape_.kind() == DataKind::kScalar) {
         if (data_type_ == DataType::kReal) append_scalar(boost::get<double>(m.storage()));
         else if (data_type_ == DataType::kInteger) append_scalar(boost::get<int>(m.storage()));
         else if (data_type_ == DataType::kComplex) append_scalar(boost::get<std::complex<double> >(m.storage()));
@@ -330,7 +327,7 @@ void DataSeries::append(const Measurement& m)
         return;
     }
 
-    if (data_kind_ == DataKind::kVector) {
+    if (shape_.kind() == DataKind::kVector) {
         if (data_type_ == DataType::kReal) append_vector<double>(boost::get<VecXd>(m.storage()));
         else if (data_type_ == DataType::kInteger) append_vector<int>(boost::get<VecXi>(m.storage()));
         else if (data_type_ == DataType::kComplex) append_vector<std::complex<double> >(boost::get<VecXcd>(m.storage()));
@@ -362,14 +359,14 @@ std::size_t DataSeries::contiguous_bytes() const {
 Measurement DataSeries::measurement_at(Index i) const {
     if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("index out of range");
 
-    if (data_kind_ == DataKind::kScalar) {
+    if (shape_.kind() == DataKind::kScalar) {
         if (data_type_ == DataType::kReal) return Measurement(scalar_at<double>(i), unit_);
         else if (data_type_ == DataType::kInteger) return Measurement(scalar_at<int>(i), unit_);
         else if (data_type_ == DataType::kComplex) return Measurement(scalar_at<std::complex<double> >(i), unit_);
         else return Measurement(scalar_at<std::string>(i), unit_);
     }
 
-    if (data_kind_ == DataKind::kVector) {
+    if (shape_.kind() == DataKind::kVector) {
         if (data_type_ == DataType::kReal) return Measurement(VecXd(vector_at<double>(i)), unit_);
         else if (data_type_ == DataType::kInteger) return Measurement(VecXi(vector_at<int>(i)), unit_);
         else if (data_type_ == DataType::kComplex) return Measurement(VecXcd(vector_at<std::complex<double> >(i)), unit_);
@@ -431,13 +428,13 @@ void write_matrix_string_batch(DataSeries& out, const std::vector<Measurement>& 
 
 DataSeries DataSeries::CreateFromMeasurements(const std::vector<Measurement>& measurements) {
     if (measurements.empty())
-        return DataSeries(DataKind::kScalar, DataType::kReal, {});
+        return DataSeries(DataType::kReal, DataShape::Scalar());
 
     const Measurement& first = measurements[0];
-    DataKind  kind  = first.data_kind();
     DataType  dtype = first.data_type();
+    DataKind  kind  = first.data_kind();
 
-    DataSeries out(kind, dtype, first.shape());
+    DataSeries out(dtype, first.shape());
     out.set_unit(first.unit());
     out.resize(measurements.size());
 
@@ -476,9 +473,9 @@ DataSeries DataSeries::CreateFromMeasurements(const std::vector<Measurement>& me
 // =========================================================================
 
 DataSeries DataSeries::at(const std::vector<Index>& selected) const {
-    if (data_kind_ == DataKind::kScalar)
+    if (shape_.kind() == DataKind::kScalar)
         throw std::logic_error("at is invalid for scalar data");
-    if (data_kind_ != DataKind::kVector)
+    if (shape_.kind() != DataKind::kVector)
         throw std::invalid_argument("vector at requires vector data");
     return at_vector_impl(selected);
 }
@@ -486,9 +483,9 @@ DataSeries DataSeries::at(const std::vector<Index>& selected) const {
 DataSeries DataSeries::at(
     const std::vector<Index>& selected_rows,
     const std::vector<Index>& selected_cols) const {
-    if (data_kind_ == DataKind::kScalar)
+    if (shape_.kind() == DataKind::kScalar)
         throw std::logic_error("at is invalid for scalar data");
-    if (data_kind_ != DataKind::kMatrix)
+    if (shape_.kind() != DataKind::kMatrix)
         throw std::invalid_argument("matrix at requires matrix data");
     return at_matrix_impl(selected_rows, selected_cols);
 }
@@ -498,14 +495,14 @@ DataSeries DataSeries::at(
 // =========================================================================
 
 DataSeries DataSeries::at_vector_impl(const std::vector<Index>& selected) const {
-    if (data_kind_ == DataKind::kScalar) {
+    if (shape_.kind() == DataKind::kScalar) {
         throw std::logic_error("at is invalid for scalar data");
     }
 
-    if (data_kind_ == DataKind::kVector) {
+    if (shape_.kind() == DataKind::kVector) {
         if (selected.size() == 1) {
             if (data_type_ == DataType::kReal) {
-                DataSeries out(DataKind::kScalar, DataType::kReal, {});
+                DataSeries out(DataType::kReal, DataShape::Scalar());
                 out.resize(size());
                 for (std::size_t row = 0; row < size(); ++row) {
                     out.scalar_at<double>(static_cast<Index>(row)) = vector_at<double>(static_cast<Index>(row))(selected[0]);
@@ -513,7 +510,7 @@ DataSeries DataSeries::at_vector_impl(const std::vector<Index>& selected) const 
                 return out;
             }
             if (data_type_ == DataType::kInteger) {
-                DataSeries out(DataKind::kScalar, DataType::kInteger, {});
+                DataSeries out(DataType::kInteger, DataShape::Scalar());
                 out.resize(size());
                 for (std::size_t row = 0; row < size(); ++row) {
                     out.scalar_at<int>(static_cast<Index>(row)) = vector_at<int>(static_cast<Index>(row))(selected[0]);
@@ -521,7 +518,7 @@ DataSeries DataSeries::at_vector_impl(const std::vector<Index>& selected) const 
                 return out;
             }
             if (data_type_ == DataType::kComplex) {
-                DataSeries out(DataKind::kScalar, DataType::kComplex, {});
+                DataSeries out(DataType::kComplex, DataShape::Scalar());
                 out.resize(size());
                 for (std::size_t row = 0; row < size(); ++row) {
                     out.scalar_at<std::complex<double> >(static_cast<Index>(row)) =
@@ -530,7 +527,7 @@ DataSeries DataSeries::at_vector_impl(const std::vector<Index>& selected) const 
                 return out;
             }
 
-            DataSeries out(DataKind::kScalar, DataType::kString, {});
+            DataSeries out(DataType::kString, DataShape::Scalar());
             out.resize(size());
             for (std::size_t row = 0; row < size(); ++row) {
                 out.scalar_at<std::string>(static_cast<Index>(row)) = vector_at<std::string>(static_cast<Index>(row))(selected[0]);
@@ -560,17 +557,17 @@ DataSeries DataSeries::at_vector_impl(const std::vector<Index>& selected) const 
 DataSeries DataSeries::at_matrix_impl(
     const std::vector<Index>& selected_rows,
     const std::vector<Index>& selected_cols) const {
-    if (data_kind_ == DataKind::kScalar) {
+    if (shape_.kind() == DataKind::kScalar) {
         throw std::logic_error("at is invalid for scalar data");
     }
 
-    if (data_kind_ == DataKind::kVector) {
+    if (shape_.kind() == DataKind::kVector) {
         throw std::invalid_argument("matrix at requires matrix data");
     }
 
     if (selected_rows.size() == 1 && selected_cols.size() == 1) {
         if (data_type_ == DataType::kReal) {
-            DataSeries out(DataKind::kScalar, DataType::kReal, {});
+            DataSeries out(DataType::kReal, DataShape::Scalar());
             out.resize(size());
             for (std::size_t row = 0; row < size(); ++row) {
                 out.scalar_at<double>(static_cast<Index>(row)) =
@@ -579,7 +576,7 @@ DataSeries DataSeries::at_matrix_impl(
             return out;
         }
         if (data_type_ == DataType::kInteger) {
-            DataSeries out(DataKind::kScalar, DataType::kInteger, {});
+            DataSeries out(DataType::kInteger, DataShape::Scalar());
             out.resize(size());
             for (std::size_t row = 0; row < size(); ++row) {
                 out.scalar_at<int>(static_cast<Index>(row)) =
@@ -588,7 +585,7 @@ DataSeries DataSeries::at_matrix_impl(
             return out;
         }
         if (data_type_ == DataType::kComplex) {
-            DataSeries out(DataKind::kScalar, DataType::kComplex, {});
+            DataSeries out(DataType::kComplex, DataShape::Scalar());
             out.resize(size());
             for (std::size_t row = 0; row < size(); ++row) {
                 out.scalar_at<std::complex<double> >(static_cast<Index>(row)) =
@@ -597,7 +594,7 @@ DataSeries DataSeries::at_matrix_impl(
             return out;
         }
 
-        DataSeries out(DataKind::kScalar, DataType::kString, {});
+        DataSeries out(DataType::kString, DataShape::Scalar());
         out.resize(size());
         for (std::size_t row = 0; row < size(); ++row) {
             out.scalar_at<std::string>(static_cast<Index>(row)) =
@@ -611,7 +608,7 @@ DataSeries DataSeries::at_matrix_impl(
         const std::vector<Index>& remaining = select_columns ? selected_cols : selected_rows;
 
         if (data_type_ == DataType::kReal) {
-            DataSeries out(DataKind::kVector, DataType::kReal, {static_cast<Index>(remaining.size())});
+            DataSeries out(DataType::kReal, DataShape::Vector(static_cast<Index>(remaining.size())));
             out.resize(size());
             for (std::size_t row = 0; row < size(); ++row) {
                 auto out_vec = out.vector_at<double>(static_cast<Index>(row));
@@ -624,7 +621,7 @@ DataSeries DataSeries::at_matrix_impl(
             return out;
         }
         if (data_type_ == DataType::kInteger) {
-            DataSeries out(DataKind::kVector, DataType::kInteger, {static_cast<Index>(remaining.size())});
+            DataSeries out(DataType::kInteger, DataShape::Vector(static_cast<Index>(remaining.size())));
             out.resize(size());
             for (std::size_t row = 0; row < size(); ++row) {
                 auto out_vec = out.vector_at<int>(static_cast<Index>(row));
@@ -637,7 +634,7 @@ DataSeries DataSeries::at_matrix_impl(
             return out;
         }
         if (data_type_ == DataType::kComplex) {
-            DataSeries out(DataKind::kVector, DataType::kComplex, {static_cast<Index>(remaining.size())});
+            DataSeries out(DataType::kComplex, DataShape::Vector(static_cast<Index>(remaining.size())));
             out.resize(size());
             for (std::size_t row = 0; row < size(); ++row) {
                 auto out_vec = out.vector_at<std::complex<double> >(static_cast<Index>(row));
@@ -650,7 +647,7 @@ DataSeries DataSeries::at_matrix_impl(
             return out;
         }
 
-        DataSeries out(DataKind::kVector, DataType::kString, {static_cast<Index>(remaining.size())});
+        DataSeries out(DataType::kString, DataShape::Vector(static_cast<Index>(remaining.size())));
         out.resize(size());
         for (std::size_t row = 0; row < size(); ++row) {
             auto& out_vec = out.vector_at<std::string>(static_cast<Index>(row));
@@ -680,7 +677,7 @@ DataSeries DataSeries::at_matrix_impl(
 // =========================================================================
 
 DataSeries DataSeries::at_vector_string_impl(const std::vector<Index>& selected) const {
-    DataSeries out(DataKind::kVector, DataType::kString, {static_cast<Index>(selected.size())});
+    DataSeries out(DataType::kString, DataShape::Vector(static_cast<Index>(selected.size())));
     out.resize(size());
     for (std::size_t row = 0; row < size(); ++row) {
         auto out_vec = out.vector_at<std::string>(static_cast<Index>(row));
@@ -696,7 +693,7 @@ DataSeries DataSeries::at_matrix_string_impl(
     const std::vector<Index>& selected_rows,
     const std::vector<Index>& selected_cols) const {
 
-    DataSeries out(DataKind::kMatrix, DataType::kString,
+    DataSeries out(DataType::kString,
                    {static_cast<Index>(selected_rows.size()),
                     static_cast<Index>(selected_cols.size())});
     out.resize(size());
@@ -718,26 +715,21 @@ DataSeries DataSeries::at_matrix_string_impl(
 // DataSeries -- private: validate_schema / make_storage
 // =========================================================================
 
-void DataSeries::validate_schema(DataKind kind, const DataShape& shape) {
-    if (kind == DataKind::kScalar) {
-        if (!shape.empty()) throw std::invalid_argument("scalar schema must have empty shape");
-        return;
+void DataSeries::validate_schema(const DataShape& shape) {
+    if (shape.size() > 2) {
+        throw std::invalid_argument("data shape must have at most 2 dimensions");
     }
-
-    if (kind == DataKind::kVector) {
-        if (shape.size() != 1 || shape[0] < 0) {
-            throw std::invalid_argument("vector schema must have one non-negative dimension");
-        }
-        return;
+    if (shape.size() == 1 && shape[0] < 0) {
+        throw std::invalid_argument("vector schema must have non-negative dimension");
     }
-
-    if (shape.size() != 2 || shape[0] < 0 || shape[1] < 0) {
-        throw std::invalid_argument("matrix schema must have two non-negative dimensions");
+    if (shape.size() == 2 && (shape[0] < 0 || shape[1] < 0)) {
+        throw std::invalid_argument("matrix schema must have non-negative dimensions");
     }
 }
 
-std::unique_ptr<SeriesStorage> DataSeries::make_storage(DataKind kind, DataType dtype, const DataShape& shape) {
-    validate_schema(kind, shape);
+std::unique_ptr<SeriesStorage> DataSeries::make_storage(DataType dtype, const DataShape& shape) {
+    validate_schema(shape);
+    DataKind kind = shape.kind();
     if (kind == DataKind::kScalar) {
         if (dtype == DataType::kReal) return std::unique_ptr<SeriesStorage>(new ScalarSeriesStorage<double>());
         if (dtype == DataType::kInteger) return std::unique_ptr<SeriesStorage>(new ScalarSeriesStorage<int>());
@@ -763,22 +755,22 @@ std::unique_ptr<SeriesStorage> DataSeries::make_storage(DataKind kind, DataType 
 // =========================================================================
 
 VectorStringSeriesStorage* DataSeries::vector_storage_string() {
-    if (data_kind_ != DataKind::kVector || data_type_ != DataType::kString) throw std::bad_cast();
+    if (shape_.kind() != DataKind::kVector || data_type_ != DataType::kString) throw std::bad_cast();
     return static_cast<VectorStringSeriesStorage*>(storage_.get());
 }
 
 const VectorStringSeriesStorage* DataSeries::vector_storage_string() const {
-    if (data_kind_ != DataKind::kVector || data_type_ != DataType::kString) throw std::bad_cast();
+    if (shape_.kind() != DataKind::kVector || data_type_ != DataType::kString) throw std::bad_cast();
     return static_cast<const VectorStringSeriesStorage*>(storage_.get());
 }
 
 MatrixStringSeriesStorage* DataSeries::matrix_storage_string() {
-    if (data_kind_ != DataKind::kMatrix || data_type_ != DataType::kString) throw std::bad_cast();
+    if (shape_.kind() != DataKind::kMatrix || data_type_ != DataType::kString) throw std::bad_cast();
     return static_cast<MatrixStringSeriesStorage*>(storage_.get());
 }
 
 const MatrixStringSeriesStorage* DataSeries::matrix_storage_string() const {
-    if (data_kind_ != DataKind::kMatrix || data_type_ != DataType::kString) throw std::bad_cast();
+    if (shape_.kind() != DataKind::kMatrix || data_type_ != DataType::kString) throw std::bad_cast();
     return static_cast<const MatrixStringSeriesStorage*>(storage_.get());
 }
 
@@ -806,7 +798,7 @@ void DataSeries::fill_matrix_row(Index row, const std::string& val, std::true_ty
 
 DataSeries DataSeries::CreateScalarFromVector(const std::vector<std::string>& values,
                                              const Unit& u) {
-    DataSeries s(DataKind::kScalar, DataType::kString, {});
+    DataSeries s(DataType::kString, DataShape::Scalar());
     s.set_unit(u);
     s.resize(values.size());
     for (std::size_t i = 0; i < values.size(); ++i)
@@ -822,13 +814,13 @@ DataSeries DataSeries::CreateVectorFromVector(Index width, const std::vector<std
     if (w == 0) {
         if (!values.empty())
             throw std::invalid_argument("vector width 0 requires empty data");
-        DataSeries s(DataKind::kVector, DataType::kString, {width});
+        DataSeries s(DataType::kString, DataShape::Vector(width));
         s.set_unit(u);
         return s;
     }
     if (values.size() % w != 0)
         throw std::invalid_argument("vector flat data length must be a multiple of width");
-    DataSeries s(DataKind::kVector, DataType::kString, {width});
+    DataSeries s(DataType::kString, DataShape::Vector(width));
     s.set_unit(u);
     s.resize(values.size() / w);
     for (std::size_t i = 0; i < s.size(); ++i)
@@ -847,13 +839,13 @@ DataSeries DataSeries::CreateMatrixFromVector(Index cell_rows, Index cell_cols,
     if (elems == 0) {
         if (!values.empty())
             throw std::invalid_argument("zero-sized matrix cells require empty data");
-        DataSeries s(DataKind::kMatrix, DataType::kString, {cell_rows, cell_cols});
+        DataSeries s(DataType::kString, DataShape::Matrix(cell_rows, cell_cols));
         s.set_unit(u);
         return s;
     }
     if (values.size() % elems != 0)
         throw std::invalid_argument("matrix flat data length must be a multiple of cell_rows * cell_cols");
-    DataSeries s(DataKind::kMatrix, DataType::kString, {cell_rows, cell_cols});
+    DataSeries s(DataType::kString, DataShape::Matrix(cell_rows, cell_cols));
     s.set_unit(u);
     s.resize(values.size() / elems);
     for (std::size_t i = 0; i < s.size(); ++i)
@@ -868,12 +860,12 @@ DataSeries DataSeries::CreateMatrixFromVector(Index cell_rows, Index cell_cols,
 DataSeries DataSeries::CreateVectorFromNestedVector(const std::vector<std::vector<std::string>>& rows,
                                                    const Unit& u) {
     if (rows.empty()) {
-        DataSeries s(DataKind::kVector, DataType::kString, {0});
+        DataSeries s(DataType::kString, DataShape::Vector(0));
         s.set_unit(u);
         return s;
     }
     const Index width = static_cast<Index>(rows[0].size());
-    DataSeries s(DataKind::kVector, DataType::kString, {width});
+    DataSeries s(DataType::kString, DataShape::Vector(width));
     s.set_unit(u);
     s.resize(rows.size());
     for (std::size_t i = 0; i < rows.size(); ++i) {
@@ -889,13 +881,13 @@ DataSeries DataSeries::CreateMatrixFromNestedVector(
     const std::vector<std::vector<std::vector<std::string>>>& rows,
     const Unit& u) {
     if (rows.empty()) {
-        DataSeries s(DataKind::kMatrix, DataType::kString, {0, 0});
+        DataSeries s(DataType::kString, DataShape::Matrix(0, 0));
         s.set_unit(u);
         return s;
     }
     const Index cell_rows = static_cast<Index>(rows[0].size());
     const Index cell_cols = cell_rows > 0 ? static_cast<Index>(rows[0][0].size()) : 0;
-    DataSeries s(DataKind::kMatrix, DataType::kString, {cell_rows, cell_cols});
+    DataSeries s(DataType::kString, DataShape::Matrix(cell_rows, cell_cols));
     s.set_unit(u);
     s.resize(rows.size());
     for (std::size_t i = 0; i < rows.size(); ++i) {

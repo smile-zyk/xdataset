@@ -82,6 +82,16 @@ namespace xdataset
         DataShape(std::initializer_list<Index> il) : dims(il) {}
         explicit DataShape(const std::vector<Index>& v) : dims(v) {}
 
+        // ------------------------------------------------------------------
+        //  Named static constructors
+        // ------------------------------------------------------------------
+
+        static DataShape Scalar()            { return DataShape{}; }
+        static DataShape Vector(Index width) { return DataShape{width}; }
+        static DataShape Matrix(Index rows, Index cols) { return DataShape{rows, cols}; }
+
+        // ------------------------------------------------------------------
+
         Index& operator[](size_t i)             { return dims[i]; }
         Index  operator[](size_t i) const       { return dims[i]; }
         size_t size()                     const { return dims.size(); }

@@ -123,7 +123,7 @@ namespace xdataset
 
         // ======== metadata queries ==========================================
 
-        DataKind data_kind() const { return data_kind_; }
+        DataKind data_kind() const { return shape_.kind(); }
         DataType data_type() const { return data_type_; }
         const DataShape& shape() const { return shape_; }
         const Unit& unit() const { return unit_; }
@@ -219,7 +219,7 @@ namespace xdataset
         template <typename Func>
         Measurement transform(Func&& func) const
         {
-            switch (data_kind_) {
+            switch (shape_.kind()) {
                 case DataKind::kScalar:
                     return transform_scalar_dispatch(std::forward<Func>(func));
                 case DataKind::kVector:
@@ -376,7 +376,7 @@ namespace xdataset
             (void)func; return *this;
         }
 
-        DataKind             data_kind_;
+
         DataType             data_type_;
         DataShape            shape_;
         Storage              storage_;
@@ -493,9 +493,9 @@ namespace xdataset
     template <typename T>
     T Measurement::as_scalar() const
     {
-        if (data_kind_ != DataKind::kScalar)
+        if (shape_.kind() != DataKind::kScalar)
             throw std::logic_error("as_scalar: Measurement is not a scalar (kind=" +
-                std::to_string(static_cast<int>(data_kind_)) + ")");
+                std::to_string(static_cast<int>(shape_.kind())) + ")");
         return boost::get<T>(storage_);
     }
 
@@ -507,9 +507,9 @@ namespace xdataset
         VecConstMap<T>>::type
     Measurement::as_vector() const
     {
-        if (data_kind_ != DataKind::kVector)
+        if (shape_.kind() != DataKind::kVector)
             throw std::logic_error("as_vector: Measurement is not a vector (kind=" +
-                std::to_string(static_cast<int>(data_kind_)) + ")");
+                std::to_string(static_cast<int>(shape_.kind())) + ")");
         typedef Vec<T> VecType;
         const VecType& vec = boost::get<VecType>(storage_);
         return VecConstMap<T>(vec.data(), 1, vec.size());
@@ -523,9 +523,9 @@ namespace xdataset
         const VecXs&>::type
     Measurement::as_vector() const
     {
-        if (data_kind_ != DataKind::kVector)
+        if (shape_.kind() != DataKind::kVector)
             throw std::logic_error("as_vector: Measurement is not a vector (kind=" +
-                std::to_string(static_cast<int>(data_kind_)) + ")");
+                std::to_string(static_cast<int>(shape_.kind())) + ")");
         return boost::get<VecXs>(storage_);
     }
 
@@ -537,9 +537,9 @@ namespace xdataset
         MatConstMap<T>>::type
     Measurement::as_matrix() const
     {
-        if (data_kind_ != DataKind::kMatrix)
+        if (shape_.kind() != DataKind::kMatrix)
             throw std::logic_error("as_matrix: Measurement is not a matrix (kind=" +
-                std::to_string(static_cast<int>(data_kind_)) + ")");
+                std::to_string(static_cast<int>(shape_.kind())) + ")");
         typedef Mat<T> MatType;
         const MatType& mat = boost::get<MatType>(storage_);
         return MatConstMap<T>(mat.data(), mat.rows(), mat.cols());
@@ -553,9 +553,9 @@ namespace xdataset
         const MatXs&>::type
     Measurement::as_matrix() const
     {
-        if (data_kind_ != DataKind::kMatrix)
+        if (shape_.kind() != DataKind::kMatrix)
             throw std::logic_error("as_matrix: Measurement is not a matrix (kind=" +
-                std::to_string(static_cast<int>(data_kind_)) + ")");
+                std::to_string(static_cast<int>(shape_.kind())) + ")");
         return boost::get<MatXs>(storage_);
     }
 
