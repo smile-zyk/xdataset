@@ -146,28 +146,28 @@ if(BUILD_XDATASET_PYTHON)
                 "\"${Python3_EXECUTABLE}\" -m pip install numpy")
         endif()
 
-        pybind11_add_module(xdataset_pybind python/xdataset_pybind.cc)
+        # pybind11_add_module(xdataset_pybind python/xdataset_pybind.cc)
 
-        target_include_directories(xdataset_pybind PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset
-            ${CMAKE_CURRENT_SOURCE_DIR}
-            ${NUMPY_INCLUDE_DIR})
+        # target_include_directories(xdataset_pybind PRIVATE
+        #     ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset
+        #     ${CMAKE_CURRENT_SOURCE_DIR}
+        #     ${NUMPY_INCLUDE_DIR})
 
-        target_link_libraries(xdataset_pybind PRIVATE xdataset)
+        # target_link_libraries(xdataset_pybind PRIVATE xdataset)
 
-        # Guarantee the importable name "xdataset.pyd" regardless of the
-        # ABI-tagged suffix pybind11 would otherwise generate.
-        # The bindings stay on C++11 (the same standard as the library).
-        set_target_properties(xdataset_pybind PROPERTIES
-            CXX_STANDARD 11
-            CXX_STANDARD_REQUIRED ON
-            CXX_EXTENSIONS OFF
-            OUTPUT_NAME xdataset
-            PREFIX ""
-            SUFFIX ".pyd")
+        # # Guarantee the importable name "xdataset.pyd" regardless of the
+        # # ABI-tagged suffix pybind11 would otherwise generate.
+        # # The bindings stay on C++11 (the same standard as the library).
+        # set_target_properties(xdataset_pybind PROPERTIES
+        #     CXX_STANDARD 11
+        #     CXX_STANDARD_REQUIRED ON
+        #     CXX_EXTENSIONS OFF
+        #     OUTPUT_NAME xdataset
+        #     PREFIX ""
+        #     SUFFIX ".pyd")
 
-        # GCC 15 Debug needs -O1 for Eigen template inlining (same as xdataset).
-        target_compile_options(xdataset_pybind PRIVATE
-            $<$<CXX_COMPILER_ID:GNU>:$<$<CONFIG:Debug>:-O1>>)
+        # # GCC 15 Debug needs -O1 for Eigen template inlining (same as xdataset).
+        # target_compile_options(xdataset_pybind PRIVATE
+        #     $<$<CXX_COMPILER_ID:GNU>:$<$<CONFIG:Debug>:-O1>>)
     endif()
 endif()
