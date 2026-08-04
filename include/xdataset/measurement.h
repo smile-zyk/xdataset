@@ -197,6 +197,39 @@ namespace xdataset
         /// Preserves unit.  Not valid for scalar data.
         Measurement at(const std::vector<MultiIndexSelector>& selectors) const;
 
+        // ======== per-element transform ====================================
+
+        /// Apply a function to each scalar element of this Measurement.
+        /// Shape, kind, and unit are preserved.  The output dtype is deduced
+        /// from the return type of `func`, so it may differ from the input
+        /// dtype (e.g. complex → real for abs, double → int for round).
+        ///
+        /// For Scalars: func is called once on the scalar value.
+        /// For Vectors: func is called on each element of the vector.
+        /// For Matrices: func is called on each element of the matrix.
+        ///
+        /// The function must be callable with the Measurement's scalar type
+        /// (double, int, std::complex<double>, or std::string).  Passing a
+        /// function whose argument type does not match the Measurement's
+        /// data type is a compile error.
+        ///
+        /// Example:
+        ///   auto v = Value::Vector(VecXd{1.0, 2.0, 3.0});
+        ///   Measurement sq = v.as_measurement().transform([](double x) { return x * x; });
+        template <typename Func>
+        Measurement transform(Func&& func) const
+        {
+            switch (data_kind_) {
+                case DataKind::kScalar:
+                    return transform_scalar_dispatch(std::forward<Func>(func));
+                case DataKind::kVector:
+                    return transform_vector_dispatch(std::forward<Func>(func));
+                case DataKind::kMatrix:
+                    return transform_matrix_dispatch(std::forward<Func>(func));
+            }
+            return *this;
+        }
+
         // ======== unary operators (member functions to avoid ADL ambiguity) =====
 
         /// Negation: flips sign, preserves unit.
@@ -229,6 +262,116 @@ namespace xdataset
 
     private:
         void infer_metadata();
+
+        // ---- transform helpers ------------------------------------------
+        //
+        //  Each dispatch switches on data_type_ and calls the typed impl.
+        //  All switch alternatives are instantiated at compile time;
+        //  the int/long overload trick picks the int overload when Func(T)
+        //  is valid (SFINAE), otherwise the long overload silently returns
+        //  *this.  At runtime only the matching data_type_ branch executes.
+
+        // Scalar dispatch
+        template <typename Func>
+        Measurement transform_scalar_dispatch(Func&& func) const {
+            switch (data_type_) {
+                case DataType::kReal:
+                    return transform_scalar_impl<double>(std::forward<Func>(func), 0);
+                case DataType::kInteger:
+                    return transform_scalar_impl<int>(std::forward<Func>(func), 0);
+                case DataType::kComplex:
+                    return transform_scalar_impl<std::complex<double>>(std::forward<Func>(func), 0);
+                case DataType::kString:
+                    return transform_scalar_impl<std::string>(std::forward<Func>(func), 0);
+                default:
+                    return *this;
+            }
+        }
+
+        // Vector dispatch
+        template <typename Func>
+        Measurement transform_vector_dispatch(Func&& func) const {
+            switch (data_type_) {
+                case DataType::kReal:
+                    return transform_vector_impl<double>(std::forward<Func>(func), 0);
+                case DataType::kInteger:
+                    return transform_vector_impl<int>(std::forward<Func>(func), 0);
+                case DataType::kComplex:
+                    return transform_vector_impl<std::complex<double>>(std::forward<Func>(func), 0);
+                default:
+                    return *this;
+            }
+        }
+
+        // Matrix dispatch
+        template <typename Func>
+        Measurement transform_matrix_dispatch(Func&& func) const {
+            switch (data_type_) {
+                case DataType::kReal:
+                    return transform_matrix_impl<double>(std::forward<Func>(func), 0);
+                case DataType::kInteger:
+                    return transform_matrix_impl<int>(std::forward<Func>(func), 0);
+                case DataType::kComplex:
+                    return transform_matrix_impl<std::complex<double>>(std::forward<Func>(func), 0);
+                default:
+                    return *this;
+            }
+        }
+
+        // -- SFINAE scalar (int priority) ---------------------------------
+
+        template <typename T, typename Func>
+        auto transform_scalar_impl(Func&& func, int) const
+            -> decltype(func(std::declval<const T&>()), Measurement())
+        {
+            return Measurement(func(boost::get<T>(storage_)), unit_);
+        }
+
+        template <typename T, typename Func>
+        Measurement transform_scalar_impl(Func&& func, long) const {
+            (void)func; return *this;
+        }
+
+        // -- SFINAE vector (int priority) ---------------------------------
+
+        template <typename T, typename Func>
+        auto transform_vector_impl(Func&& func, int) const
+            -> decltype(func(std::declval<const T&>()), Measurement())
+        {
+            typedef decltype(func(std::declval<const T&>())) Out;
+            Index w = shape_[0];
+            Eigen::Matrix<Out, 1, Eigen::Dynamic> v(w);
+            const auto& src = boost::get<Eigen::Matrix<T, 1, Eigen::Dynamic>>(storage_);
+            for (Index i = 0; i < w; ++i) v(i) = func(src(i));
+            return Measurement(v, unit_);
+        }
+
+        template <typename T, typename Func>
+        Measurement transform_vector_impl(Func&& func, long) const {
+            (void)func; return *this;
+        }
+
+        // -- SFINAE matrix (int priority) ---------------------------------
+
+        template <typename T, typename Func>
+        auto transform_matrix_impl(Func&& func, int) const
+            -> decltype(func(std::declval<const T&>()), Measurement())
+        {
+            typedef decltype(func(std::declval<const T&>())) Out;
+            Index r = shape_[0], c = shape_[1];
+            Eigen::Matrix<Out, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> m(r, c);
+            const auto& src = boost::get<
+                Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(storage_);
+            for (Index i = 0; i < r; ++i)
+                for (Index j = 0; j < c; ++j)
+                    m(i, j) = func(src(i, j));
+            return Measurement(m, unit_);
+        }
+
+        template <typename T, typename Func>
+        Measurement transform_matrix_impl(Func&& func, long) const {
+            (void)func; return *this;
+        }
 
         DataKind             data_kind_;
         DataType             data_type_;

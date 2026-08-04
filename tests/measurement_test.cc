@@ -536,3 +536,100 @@ TEST(MeasurementAtTest, TooManySelectorsThrows)
 }
 
 // =========================================================================
+//  Measurement::transform
+// =========================================================================
+
+TEST(MeasurementTransformTest, ScalarSquare) {
+    Measurement m = Measurement::Real(3.0);
+    Measurement result = m.transform([](double x) { return x * x; });
+    EXPECT_EQ(result.data_kind(), DataKind::kScalar);
+    EXPECT_EQ(result.data_type(), DataType::kReal);
+    EXPECT_DOUBLE_EQ(result.as_scalar<double>(), 9.0);
+}
+
+TEST(MeasurementTransformTest, ScalarIntNegate) {
+    Measurement m = Measurement::Integer(5);
+    Measurement result = m.transform([](int x) { return -x; });
+    EXPECT_EQ(result.data_kind(), DataKind::kScalar);
+    EXPECT_EQ(result.data_type(), DataType::kInteger);
+    EXPECT_EQ(result.as_scalar<int>(), -5);
+}
+
+TEST(MeasurementTransformTest, ScalarComplexAbsToReal) {
+    Measurement m = Measurement::Complex(std::complex<double>(3.0, 4.0));
+    Measurement result = m.transform([](std::complex<double> x) { return std::abs(x); });
+    EXPECT_EQ(result.data_kind(), DataKind::kScalar);
+    EXPECT_EQ(result.data_type(), DataType::kReal);
+    EXPECT_DOUBLE_EQ(result.as_scalar<double>(), 5.0);
+}
+
+TEST(MeasurementTransformTest, ScalarDoubleToInt) {
+    Measurement m = Measurement::Real(2.7);
+    Measurement result = m.transform([](double x) { return static_cast<int>(x); });
+    EXPECT_EQ(result.data_kind(), DataKind::kScalar);
+    EXPECT_EQ(result.data_type(), DataType::kInteger);
+    EXPECT_EQ(result.as_scalar<int>(), 2);
+}
+
+TEST(MeasurementTransformTest, ScalarString) {
+    Measurement m = Measurement::String("hello");
+    Measurement result = m.transform([](const std::string& s) { return s + "!"; });
+    EXPECT_EQ(result.data_kind(), DataKind::kScalar);
+    EXPECT_EQ(result.data_type(), DataType::kString);
+    EXPECT_EQ(result.as_scalar<std::string>(), "hello!");
+}
+
+TEST(MeasurementTransformTest, VectorSquare) {
+    VecXd v(3); v << 1.0, 2.0, 3.0;
+    Measurement m = Measurement::Vector(v);
+    Measurement result = m.transform([](double x) { return x * x; });
+    EXPECT_EQ(result.data_kind(), DataKind::kVector);
+    EXPECT_EQ(result.data_type(), DataType::kReal);
+    auto vec = result.as_vector<double>();
+    EXPECT_DOUBLE_EQ(vec(0), 1.0);
+    EXPECT_DOUBLE_EQ(vec(1), 4.0);
+    EXPECT_DOUBLE_EQ(vec(2), 9.0);
+}
+
+TEST(MeasurementTransformTest, VectorIntNegate) {
+    VecXi v(3); v << 1, -2, 3;
+    Measurement m = Measurement::Vector(v);
+    Measurement result = m.transform([](int x) { return -x; });
+    EXPECT_EQ(result.data_kind(), DataKind::kVector);
+    EXPECT_EQ(result.data_type(), DataType::kInteger);
+    auto vec = result.as_vector<int>();
+    EXPECT_EQ(vec(0), -1);
+    EXPECT_EQ(vec(1), 2);
+    EXPECT_EQ(vec(2), -3);
+}
+
+TEST(MeasurementTransformTest, MatrixSquare) {
+    MatXd m(2, 2);
+    m << 1.0, 2.0, 3.0, 4.0;
+    Measurement meas = Measurement::Matrix(m);
+    Measurement result = meas.transform([](double x) { return x * x; });
+    EXPECT_EQ(result.data_kind(), DataKind::kMatrix);
+    EXPECT_EQ(result.data_type(), DataType::kReal);
+    auto mat = result.as_matrix<double>();
+    EXPECT_DOUBLE_EQ(mat(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(mat(0, 1), 4.0);
+    EXPECT_DOUBLE_EQ(mat(1, 0), 9.0);
+    EXPECT_DOUBLE_EQ(mat(1, 1), 16.0);
+}
+
+TEST(MeasurementTransformTest, MatrixComplexAbsToReal) {
+    MatXcd m(2, 2);
+    m << std::complex<double>(3.0, 4.0), std::complex<double>(0.0, -1.0),
+         std::complex<double>(-5.0, 0.0), std::complex<double>(1.0, 1.0);
+    Measurement meas = Measurement::Matrix(m);
+    Measurement result = meas.transform([](std::complex<double> x) { return std::abs(x); });
+    EXPECT_EQ(result.data_kind(), DataKind::kMatrix);
+    EXPECT_EQ(result.data_type(), DataType::kReal);
+    auto mat = result.as_matrix<double>();
+    EXPECT_DOUBLE_EQ(mat(0, 0), 5.0);
+    EXPECT_DOUBLE_EQ(mat(0, 1), 1.0);
+    EXPECT_DOUBLE_EQ(mat(1, 0), 5.0);
+    EXPECT_NEAR(mat(1, 1), std::sqrt(2.0), 1e-12);
+}
+
+// =========================================================================
