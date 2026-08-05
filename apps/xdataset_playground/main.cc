@@ -289,10 +289,10 @@ int main()
         // =====================================================================
         section("10. Measurement type inspection");
         {
-            Measurement d(3.14, Unit::parse("Ohm"));
-            Measurement i(42, Unit::parse("F"));
-            Measurement c(std::complex<double>(1.0, -2.0), Unit::parse("V"));
-            Measurement s(std::string("hello"));
+            Measurement d = Measurement::Scalar(3.14, Unit::parse("Ohm"));
+            Measurement i = Measurement::Scalar(42, Unit::parse("F"));
+            Measurement c = Measurement::Scalar(std::complex<double>(1.0, -2.0), Unit::parse("V"));
+            Measurement s = Measurement::Scalar(std::string("hello"));
 
             std::cout << "Measurement(3.14 m/s):     "
                       << "  ToString=\"" << d.to_string() << "\"" << std::endl;
