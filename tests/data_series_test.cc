@@ -49,7 +49,7 @@ TEST(ScalarTest, WriteAndRead) {
 
 TEST(ScalarTest, AppendGrowsSize) {
     DataSeries s = DataSeries::CreateScalar<double>(2, Unit(), 0.0);
-    s.append(Measurement(5.9));
+    s.append(Measurement::Real(5.9));
     EXPECT_EQ(s.size(), 3u);
     EXPECT_DOUBLE_EQ(s.scalar_at<double>(2), 5.9);
 }
@@ -92,7 +92,7 @@ TEST(ScalarTest, StringDtype) {
     EXPECT_EQ(labels.data_type(), DataType::kString);
     labels.scalar_at<std::string>(0) = "cat";
     labels.scalar_at<std::string>(1) = "dog";
-    labels.append(Measurement(std::string("bird")));
+    labels.append(Measurement::String(std::string("bird")));
 
     ASSERT_EQ(labels.size(), 4u);
     EXPECT_EQ(labels.scalar_at<std::string>(0), "cat");
@@ -258,7 +258,7 @@ TEST(VectorTest, AppendGrowsSize) {
     vecs.resize(2);
     VecXd v(4);
     v << 0.5, 0.5, 0.5, 0.5;
-    vecs.append(Measurement(v));
+    vecs.append(Measurement::Vector(v));
     EXPECT_EQ(vecs.size(), 3u);
     EXPECT_DOUBLE_EQ(vecs.vector_at<double>(2)(0), 0.5);
 }
@@ -355,8 +355,8 @@ TEST(VectorTest, DynamicAppendWithoutInitialRowCount) {
 
     Eigen::RowVector3d a(1.0, 2.0, 3.0);
     Eigen::RowVector3d b(4.0, 5.0, 6.0);
-    vecs.append(Measurement(VecXd(a)));
-    vecs.append(Measurement(VecXd(b)));
+    vecs.append(Measurement::Vector(VecXd(a)));
+    vecs.append(Measurement::Vector(VecXd(b)));
 
     ASSERT_EQ(vecs.size(), 2u);
     EXPECT_DOUBLE_EQ(vecs.vector_at<double>(1)(2), 6.0);
@@ -398,7 +398,7 @@ TEST(VectorExceptionTest, AppendWrongWidthThrows) {
     vecs.resize(1);
     VecXd bad(5);
     bad.setZero();
-    EXPECT_THROW(vecs.append(Measurement(bad)), std::bad_cast);
+    EXPECT_THROW(vecs.append(Measurement::Vector(bad)), std::bad_cast);
 }
 
 TEST(VectorExceptionTest, FromRowsMismatchedWidthThrows) {
@@ -444,7 +444,7 @@ TEST(MatrixTest, AppendGrowsSize) {
     DataSeries mats(DataType::kReal, xdataset::DataShape::Matrix(3, 3));
     mats.resize(2);
     xdataset::MatXd m = Eigen::Matrix3d::Random();
-    mats.append(Measurement(xdataset::MatXd(m)));
+    mats.append(Measurement::Matrix(xdataset::MatXd(m)));
     EXPECT_EQ(mats.size(), 3u);
 }
 
@@ -567,8 +567,8 @@ TEST(MatrixTest, DynamicAppendWithoutInitialRowCount) {
     a << 1, 2, 3, 4;
     Eigen::Matrix2d b;
     b << 5, 6, 7, 8;
-    mats.append(Measurement(xdataset::MatXd(a)));
-    mats.append(Measurement(xdataset::MatXd(b)));
+    mats.append(Measurement::Matrix(xdataset::MatXd(a)));
+    mats.append(Measurement::Matrix(xdataset::MatXd(b)));
 
     ASSERT_EQ(mats.size(), 2u);
     EXPECT_DOUBLE_EQ(mats.matrix_at<double>(1)(1, 0), 7.0);
@@ -589,7 +589,7 @@ TEST(MatrixExceptionTest, AppendWrongShapeThrows) {
     mats.resize(1);
     MatXd bad(3, 3);
     bad.setZero();
-    EXPECT_THROW(mats.append(Measurement(bad)), std::bad_cast);
+    EXPECT_THROW(mats.append(Measurement::Matrix(bad)), std::bad_cast);
 }
 
 TEST(MatrixExceptionTest, FromRowsMismatchedShapeThrows) {
@@ -613,8 +613,8 @@ TEST(FromExceptionTest, MatrixPointerLengthMismatchThrows) {
 // ---------------------------------------------------------------------------
 TEST(IteratorTest, MutableIteratorCollectsValues) {
     DataSeries s = DataSeries::CreateScalar<double>(0);
-    s.append(Measurement(1.25));
-    s.append(Measurement(3.5));
+    s.append(Measurement::Real(1.25));
+    s.append(Measurement::Real(3.5));
 
     std::vector<double> values;
     for (DataSeries::iterator it = s.begin(); it != s.end(); ++it) {
@@ -643,8 +643,8 @@ TEST(IteratorTest, ConstIteratorCollectsValues) {
 
 TEST(IteratorTest, RowViewToCell) {
     DataSeries s = DataSeries::CreateScalar<double>(0);
-    s.append(Measurement(1.25));
-    s.append(Measurement(3.5));
+    s.append(Measurement::Real(1.25));
+    s.append(Measurement::Real(3.5));
     Measurement copied = s.row(0).to_measurement();
     EXPECT_DOUBLE_EQ(copied.as_scalar<double>(), 1.25);
 }
@@ -818,9 +818,9 @@ TEST(DataSeriesUnitTest, CellAtCarriesUnit)
 
 TEST(CreateFromMeasurementsTest, ScalarDouble) {
     std::vector<Measurement> ms;
-    ms.push_back(Measurement(1.0, Unit::parse("V")));
-    ms.push_back(Measurement(2.0, Unit::parse("V")));
-    ms.push_back(Measurement(3.0, Unit::parse("V")));
+    ms.push_back(Measurement::Real(1.0).set_unit(Unit::parse("V")));
+    ms.push_back(Measurement::Real(2.0).set_unit(Unit::parse("V")));
+    ms.push_back(Measurement::Real(3.0).set_unit(Unit::parse("V")));
 
     DataSeries s = DataSeries::CreateFromMeasurements(ms);
     ASSERT_EQ(s.size(), 3u);
@@ -834,9 +834,9 @@ TEST(CreateFromMeasurementsTest, ScalarDouble) {
 
 TEST(CreateFromMeasurementsTest, ScalarInt) {
     std::vector<Measurement> ms;
-    ms.push_back(Measurement(10));
-    ms.push_back(Measurement(20));
-    ms.push_back(Measurement(30));
+    ms.push_back(Measurement::Integer(10));
+    ms.push_back(Measurement::Integer(20));
+    ms.push_back(Measurement::Integer(30));
 
     DataSeries s = DataSeries::CreateFromMeasurements(ms);
     ASSERT_EQ(s.size(), 3u);
@@ -849,8 +849,8 @@ TEST(CreateFromMeasurementsTest, ScalarInt) {
 TEST(CreateFromMeasurementsTest, ScalarComplex) {
     using cd = std::complex<double>;
     std::vector<Measurement> ms;
-    ms.push_back(Measurement(cd(1.0, 0.0)));
-    ms.push_back(Measurement(cd(0.0, 1.0)));
+    ms.push_back(Measurement::Complex(cd(1.0, 0.0)));
+    ms.push_back(Measurement::Complex(cd(0.0, 1.0)));
 
     DataSeries s = DataSeries::CreateFromMeasurements(ms);
     ASSERT_EQ(s.size(), 2u);
@@ -861,8 +861,8 @@ TEST(CreateFromMeasurementsTest, ScalarComplex) {
 
 TEST(CreateFromMeasurementsTest, ScalarString) {
     std::vector<Measurement> ms;
-    ms.push_back(Measurement(std::string("hello")));
-    ms.push_back(Measurement(std::string("world")));
+    ms.push_back(Measurement::String(std::string("hello")));
+    ms.push_back(Measurement::String(std::string("world")));
 
     DataSeries s = DataSeries::CreateFromMeasurements(ms);
     ASSERT_EQ(s.size(), 2u);
@@ -875,8 +875,8 @@ TEST(CreateFromMeasurementsTest, VectorInt) {
     std::vector<Measurement> ms;
     VecXi v1(3); v1 << 1, 2, 3;
     VecXi v2(3); v2 << 4, 5, 6;
-    ms.push_back(Measurement(v1));
-    ms.push_back(Measurement(v2));
+    ms.push_back(Measurement::Vector(v1));
+    ms.push_back(Measurement::Vector(v2));
 
     DataSeries s = DataSeries::CreateFromMeasurements(ms);
     ASSERT_EQ(s.size(), 2u);
@@ -894,8 +894,8 @@ TEST(CreateFromMeasurementsTest, MatrixDouble) {
     std::vector<Measurement> ms;
     MatXd m1(2, 2); m1 << 1, 2, 3, 4;
     MatXd m2(2, 2); m2 << 5, 6, 7, 8;
-    ms.push_back(Measurement(m1));
-    ms.push_back(Measurement(m2));
+    ms.push_back(Measurement::Matrix(m1));
+    ms.push_back(Measurement::Matrix(m2));
 
     DataSeries s = DataSeries::CreateFromMeasurements(ms);
     ASSERT_EQ(s.size(), 2u);
@@ -922,7 +922,7 @@ TEST(TransformTest, ScalarSquare) {
 
     DataSeries squared = s.transform([](const Measurement& m) {
         double v = m.as_scalar<double>();
-        return Measurement(v * v, m.unit());
+        return Measurement::Real(v * v).set_unit(m.unit());
     });
 
     ASSERT_EQ(squared.size(), 4u);
@@ -939,7 +939,7 @@ TEST(TransformTest, IntToDouble) {
         std::vector<int>{1, 2, 3});
 
     DataSeries doubled = s.transform([](const Measurement& m) {
-        return Measurement(static_cast<double>(m.as_scalar<int>()) * 2.0);
+        return Measurement::Real(static_cast<double>(m.as_scalar<int>()) * 2.0);
     });
 
     ASSERT_EQ(doubled.size(), 3u);
@@ -954,7 +954,7 @@ TEST(TransformTest, ScalarWithUnitChange) {
         std::vector<double>{1000.0, 2000.0}, Unit::parse("meter"));
 
     DataSeries scaled = s.transform([](const Measurement& m) {
-        return Measurement(m.as_scalar<double>() / 1000.0, Unit());
+        return Measurement::Real(m.as_scalar<double>() / 1000.0).set_unit(Unit());
     });
 
     ASSERT_EQ(scaled.size(), 2u);
@@ -971,7 +971,7 @@ TEST(TransformTest, VectorNorm) {
 
     DataSeries norms = vecs.transform([](const Measurement& m) {
         auto v = m.as_vector<double>();
-        return Measurement(std::sqrt(v(0) * v(0) + v(1) * v(1) + v(2) * v(2)));
+        return Measurement::Real(std::sqrt(v(0) * v(0) + v(1) * v(1) + v(2) * v(2)));
     });
 
     ASSERT_EQ(norms.size(), 2u);
@@ -985,7 +985,7 @@ TEST(TransformTest, StringToLength) {
         std::vector<std::string>{"a", "ab", "abc", "abcd"});
 
     DataSeries lengths = labels.transform([](const Measurement& m) {
-        return Measurement(static_cast<int>(m.as_scalar<std::string>().size()));
+        return Measurement::Integer(static_cast<int>(m.as_scalar<std::string>().size()));
     });
 
     ASSERT_EQ(lengths.size(), 4u);
@@ -999,7 +999,7 @@ TEST(TransformTest, StringToLength) {
 TEST(TransformTest, EmptySeries) {
     DataSeries s = DataSeries::CreateScalar<double>(0);
     DataSeries result = s.transform([](const Measurement& m) {
-        return Measurement(m.as_scalar<double>() * 2.0);
+        return Measurement::Real(m.as_scalar<double>() * 2.0);
     });
 
     EXPECT_EQ(result.size(), 0u);
@@ -1021,7 +1021,7 @@ TEST(TransformTest, MatrixElementwiseAbsolute) {
         for (Index r = 0; r < mat.rows(); ++r)
             for (Index c = 0; c < mat.cols(); ++c)
                 result(r, c) = std::abs(mat(r, c));
-        return Measurement(result);
+        return Measurement::Matrix(result);
     });
 
     ASSERT_EQ(abs_mats.size(), 2u);

@@ -1,4 +1,4 @@
-ï»¿#include "block_fixtures.h"
+#include "block_fixtures.h"
 
 #include <gtest/gtest.h>
 #include <complex>
@@ -222,12 +222,12 @@ namespace xdataset
         DataArray indep2 = w_data.indep(2);
         EXPECT_EQ(indep2.multi_dimension_spec().rank(), 2u);
 
-        // by name from dependent w ï¿½?w has named indeps {"x", "y", "z"}
+        // by name from dependent w ??w has named indeps {"x", "y", "z"}
         DataArray by_name = w_data.indep("z");
         EXPECT_EQ(by_name.multi_dimension_spec().rank(), indep1.multi_dimension_spec().rank());
     }
 
-    // IndependentIndepOneReturnsIndexSeries ï¿½?indep(1) on an Independent
+    // IndependentIndepOneReturnsIndexSeries ??indep(1) on an Independent
     // returns a dimension-level index series {0, 1, ..., N-1} for the
     // raw self-dimension data (un-expanded).
     TEST(DataArrayIndepTest, IndependentIndepOneReturnsIndexSeries)
@@ -235,7 +235,7 @@ namespace xdataset
         Block block(MakeInterleavedCreateInfo());
         DataArray z_data = block.GetOrCreateDataArray("z");
         // z has raw data {100.0, 200.0}, dims U2 x J{1,2} x U2.
-        DataArray self_indep = z_data.indep(1);   // self-reference ï¿½?index series
+        DataArray self_indep = z_data.indep(1);   // self-reference ??index series
         EXPECT_EQ(self_indep.data_kind(), DataArrayKind::kIndependent);
         EXPECT_EQ(self_indep.data().size(), 2u);   // index series for 2 raw entries
 
@@ -398,7 +398,7 @@ namespace xdataset
         EXPECT_EQ(selected.data_kind(), DataArrayKind::kIndependent);
         EXPECT_EQ(selected.multi_dimension_spec().rank(), 3u);
 
-        // After Equal(0) on z-self: raw z data had 2 entries, only index 0 selected ï¿½?1 entry.
+        // After Equal(0) on z-self: raw z data had 2 entries, only index 0 selected ??1 entry.
         EXPECT_EQ(selected.data().size(), 1u);
         EXPECT_DOUBLE_EQ(selected.data().scalar_at<double>(0), 100.0);
     }
@@ -521,7 +521,7 @@ namespace xdataset
         info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray m(info);
-        // Both selectors are Equal ï¿½?selected size is 1 each ï¿½?auto-reduce to scalar.
+        // Both selectors are Equal ??selected size is 1 each ??auto-reduce to scalar.
         DataArray selected = m.at({MultiIndexSelector::Equal(0), MultiIndexSelector::Equal(2)});
         EXPECT_EQ(selected.data().data_kind(), DataKind::kScalar);
         EXPECT_EQ(selected.data().size(), 2u);
@@ -547,7 +547,7 @@ namespace xdataset
         info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray m(info);
-        // Both selectors select >1 index ï¿½?stays matrix.
+        // Both selectors select >1 index ??stays matrix.
         DataArray selected = m.at(
             {MultiIndexSelector::In({0, 1}), MultiIndexSelector::In({1, 2})});
         EXPECT_EQ(selected.data().data_kind(), DataKind::kMatrix);
@@ -555,12 +555,12 @@ namespace xdataset
         EXPECT_EQ(selected.data().data_shape()[0], 2);
         EXPECT_EQ(selected.data().data_shape()[1], 2);
         EXPECT_EQ(selected.data().size(), 2u);
-        // row 0: cols 1,2 ï¿½?[[2,3],[5,6]]
+        // row 0: cols 1,2 ??[[2,3],[5,6]]
         EXPECT_EQ(selected.data().matrix_at<int>(0)(0, 0), 2);
         EXPECT_EQ(selected.data().matrix_at<int>(0)(0, 1), 3);
         EXPECT_EQ(selected.data().matrix_at<int>(0)(1, 0), 5);
         EXPECT_EQ(selected.data().matrix_at<int>(0)(1, 1), 6);
-        // row 1: cols 1,2 ï¿½?[[8,9],[11,12]]
+        // row 1: cols 1,2 ??[[8,9],[11,12]]
         EXPECT_EQ(selected.data().matrix_at<int>(1)(0, 0), 8);
         EXPECT_EQ(selected.data().matrix_at<int>(1)(0, 1), 9);
         EXPECT_EQ(selected.data().matrix_at<int>(1)(1, 0), 11);
@@ -583,7 +583,7 @@ namespace xdataset
         info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray v(info);
-        // In selects >1 index ï¿½?stays vector (no auto-reduce).
+        // In selects >1 index ??stays vector (no auto-reduce).
         DataArray selected = v.at({MultiIndexSelector::In({0, 2})});
         EXPECT_EQ(selected.data().data_kind(), DataKind::kVector);
         ASSERT_EQ(selected.data().data_shape().size(), 1u);
@@ -613,8 +613,8 @@ namespace xdataset
         info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray m(info);
-        // Single Equal selector ï¿½?padded with Any ï¿½?selected_rows=[1], selected_cols=[0,1,2].
-        // row_reduce ï¿½?vector of size 3.
+        // Single Equal selector ??padded with Any ??selected_rows=[1], selected_cols=[0,1,2].
+        // row_reduce ??vector of size 3.
         DataArray selected = m.at({MultiIndexSelector::Equal(1)});
         EXPECT_EQ(selected.data().data_kind(), DataKind::kVector);
         ASSERT_EQ(selected.data().data_shape().size(), 1u);
@@ -644,7 +644,7 @@ namespace xdataset
         info.multi_dimension_spec = MultiDimensionSpec().add_regular(2);
 
         DataArray v(info);
-        // Empty selectors ï¿½?padded with Any ï¿½?selects all indices ï¿½?stays vector.
+        // Empty selectors ??padded with Any ??selects all indices ??stays vector.
         DataArray selected = v.at({});
         EXPECT_EQ(selected.data().data_kind(), DataKind::kVector);
         ASSERT_EQ(selected.data().data_shape().size(), 1u);
@@ -771,7 +771,7 @@ namespace xdataset
     }
 
     // =========================================================================
-    //  DataArray min / max â€” innermost-dimension reduction
+    //  DataArray min / max ¡ª innermost-dimension reduction
     // =========================================================================
 
     TEST(DataArrayReduceTest, DependentReducesInnermostDimToDependent)
@@ -982,7 +982,7 @@ namespace xdataset
         // Square each value: 100->10000, ..., 105->11025
         DataArray squared = z_data.transform([](const Measurement& m) {
             double v = m.as_scalar<double>();
-            return Measurement(v * v, m.unit());
+            return Measurement::Real(v * v).set_unit(m.unit());
         });
 
         EXPECT_EQ(squared.data_kind(), DataArrayKind::kDependent);
@@ -998,7 +998,7 @@ namespace xdataset
         DataArray da = DataArray::CreateIndependent(orig);
 
         DataArray doubled = da.transform([](const Measurement& m) {
-            return Measurement(m.as_scalar<double>() * 2.0);
+            return Measurement::Real(m.as_scalar<double>() * 2.0);
         });
 
         EXPECT_EQ(doubled.data_kind(), DataArrayKind::kIndependent);
@@ -1015,7 +1015,7 @@ namespace xdataset
 
         DataArray labels = da.transform([](const Measurement& m) {
             double v = m.as_scalar<double>();
-            return Measurement(std::string("val_") + std::to_string(static_cast<int>(v)));
+            return Measurement::String(std::string("val_") + std::to_string(static_cast<int>(v)));
         });
 
         EXPECT_EQ(labels.data_kind(), DataArrayKind::kIndependent);

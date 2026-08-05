@@ -35,8 +35,6 @@ set(XDATASET_SOURCES
 	src/block.cc
 	src/data_frame.cc
 	src/data_series.cc
-	src/value.cc
-	src/operation.cc
 	src/measurement.cc
 	src/unit.cc
 	src/dataset.cc
@@ -67,8 +65,6 @@ if(BUILD_XDATASET_TEST)
         tests/dataset_test.cc
         tests/hdf5_io_test.cc
         tests/touchstone_io_test.cc
-        tests/value_test.cc
-        tests/operation_test.cc
     )
 
     target_include_directories(xdataset_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})

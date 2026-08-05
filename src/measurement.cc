@@ -1,6 +1,5 @@
 #include "measurement.h"
 #include "data_frame.h"
-#include "operation.h"
 #include "unit.h"
 
 #include <cmath>
@@ -88,27 +87,30 @@ namespace xdataset
     // Measurement -- static factories
     // =========================================================================
 
-    Measurement Measurement::Real(double value)
+    Measurement Measurement::Real(double value, const Unit& u)
     {
         Measurement m;
         m.storage_ = value;
         m.data_type_   = DataType::kReal;
+        m.unit_        = u;
         return m;
     }
 
-    Measurement Measurement::Integer(int value)
+    Measurement Measurement::Integer(int value, const Unit& u)
     {
         Measurement m;
         m.storage_ = value;
         m.data_type_   = DataType::kInteger;
+        m.unit_        = u;
         return m;
     }
 
-    Measurement Measurement::Complex(std::complex<double> value)
+    Measurement Measurement::Complex(std::complex<double> value, const Unit& u)
     {
         Measurement m;
         m.storage_ = value;
         m.data_type_   = DataType::kComplex;
+        m.unit_        = u;
         return m;
     }
 
@@ -128,31 +130,53 @@ namespace xdataset
         return m;
     }
 
-    Measurement Measurement::Vector(const VecXd& v)
+    Measurement Measurement::Vector(VecXd v, const Unit& u)
     {
         Measurement m;
-        m.storage_ = v;
+        const Index sz = v.size();
+        m.storage_ = std::move(v);
         m.data_type_   = DataType::kReal;
-        m.shape_.push_back(v.size());
+        m.unit_        = u;
+        m.shape_.push_back(sz);
         return m;
     }
 
-    Measurement Measurement::Vector(const VecXi& v)
+    Measurement Measurement::Vector(VecXi v, const Unit& u)
     {
         Measurement m;
-        m.storage_ = v;
+        const Index sz = v.size();
+        m.storage_ = std::move(v);
         m.data_type_   = DataType::kInteger;
-        m.shape_.push_back(v.size());
+        m.unit_        = u;
+        m.shape_.push_back(sz);
         return m;
     }
 
-    Measurement Measurement::Vector(const VecXcd& v)
+    Measurement Measurement::Vector(VecXcd v, const Unit& u)
     {
         Measurement m;
-        m.storage_ = v;
+        const Index sz = v.size();
+        m.storage_ = std::move(v);
         m.data_type_   = DataType::kComplex;
-        m.shape_.push_back(v.size());
+        m.unit_        = u;
+        m.shape_.push_back(sz);
         return m;
+    }
+
+    Measurement Measurement::Vector(VecConstMap<double> v, const Unit& u)
+    {
+        return Measurement::Vector(VecXd(v), u);
+    }
+
+    Measurement Measurement::Vector(VecConstMap<int> v, const Unit& u)
+    {
+        return Measurement::Vector(VecXi(v), u);
+    }
+
+    Measurement Measurement::Vector(VecConstMap<std::complex<double> > v,
+                                    const Unit& u)
+    {
+        return Measurement::Vector(VecXcd(v), u);
     }
 
     Measurement Measurement::Vector(const VecXs& v)
@@ -164,34 +188,59 @@ namespace xdataset
         return m;
     }
 
-    Measurement Measurement::Matrix(const MatXd& m)
+    Measurement Measurement::Matrix(MatXd m, const Unit& u)
     {
         Measurement mm;
-        mm.storage_ = m;
+        const Index rows = m.rows();
+        const Index cols = m.cols();
+        mm.storage_ = std::move(m);
         mm.data_type_   = DataType::kReal;
-        mm.shape_.push_back(m.rows());
-        mm.shape_.push_back(m.cols());
+        mm.unit_        = u;
+        mm.shape_.push_back(rows);
+        mm.shape_.push_back(cols);
         return mm;
     }
 
-    Measurement Measurement::Matrix(const MatXi& m)
+    Measurement Measurement::Matrix(MatXi m, const Unit& u)
     {
         Measurement mm;
-        mm.storage_ = m;
+        const Index rows = m.rows();
+        const Index cols = m.cols();
+        mm.storage_ = std::move(m);
         mm.data_type_   = DataType::kInteger;
-        mm.shape_.push_back(m.rows());
-        mm.shape_.push_back(m.cols());
+        mm.unit_        = u;
+        mm.shape_.push_back(rows);
+        mm.shape_.push_back(cols);
         return mm;
     }
 
-    Measurement Measurement::Matrix(const MatXcd& m)
+    Measurement Measurement::Matrix(MatXcd m, const Unit& u)
     {
         Measurement mm;
-        mm.storage_ = m;
+        const Index rows = m.rows();
+        const Index cols = m.cols();
+        mm.storage_ = std::move(m);
         mm.data_type_   = DataType::kComplex;
-        mm.shape_.push_back(m.rows());
-        mm.shape_.push_back(m.cols());
+        mm.unit_        = u;
+        mm.shape_.push_back(rows);
+        mm.shape_.push_back(cols);
         return mm;
+    }
+
+    Measurement Measurement::Matrix(MatConstMap<double> m, const Unit& u)
+    {
+        return Measurement::Matrix(MatXd(m), u);
+    }
+
+    Measurement Measurement::Matrix(MatConstMap<int> m, const Unit& u)
+    {
+        return Measurement::Matrix(MatXi(m), u);
+    }
+
+    Measurement Measurement::Matrix(MatConstMap<std::complex<double> > m,
+                                    const Unit& u)
+    {
+        return Measurement::Matrix(MatXcd(m), u);
     }
 
     Measurement Measurement::Matrix(const MatXs& m)
@@ -231,10 +280,10 @@ namespace xdataset
             throw std::logic_error("element_at(Index) requires vector data");
         switch (data_type_)
         {
-            case DataType::kReal:    return Measurement(boost::get<VecXd>(storage_)(i), unit_);
-            case DataType::kInteger: return Measurement(boost::get<VecXi>(storage_)(i), unit_);
-            case DataType::kComplex: return Measurement(boost::get<VecXcd>(storage_)(i), unit_);
-            case DataType::kString:  return Measurement(boost::get<VecXs>(storage_)(i), unit_);
+            case DataType::kReal:    return Measurement::Real(boost::get<VecXd>(storage_)(i), unit_);
+            case DataType::kInteger: return Measurement::Integer(boost::get<VecXi>(storage_)(i), unit_);
+            case DataType::kComplex: return Measurement::Complex(boost::get<VecXcd>(storage_)(i), unit_);
+            case DataType::kString:  return Measurement::String(boost::get<VecXs>(storage_)(i));
             default: break;  // kBoolean is scalar-only
         }
         throw std::logic_error("unsupported dtype");
@@ -246,10 +295,10 @@ namespace xdataset
             throw std::logic_error("element_at(Index, Index) requires matrix data");
         switch (data_type_)
         {
-            case DataType::kReal:    return Measurement(boost::get<MatXd>(storage_)(r, c), unit_);
-            case DataType::kInteger: return Measurement(boost::get<MatXi>(storage_)(r, c), unit_);
-            case DataType::kComplex: return Measurement(boost::get<MatXcd>(storage_)(r, c), unit_);
-            case DataType::kString:  return Measurement(boost::get<MatXs>(storage_)(r, c), unit_);
+            case DataType::kReal:    return Measurement::Real(boost::get<MatXd>(storage_)(r, c), unit_);
+            case DataType::kInteger: return Measurement::Integer(boost::get<MatXi>(storage_)(r, c), unit_);
+            case DataType::kComplex: return Measurement::Complex(boost::get<MatXcd>(storage_)(r, c), unit_);
+            case DataType::kString:  return Measurement::String(boost::get<MatXs>(storage_)(r, c));
             default: break;  // kBoolean is scalar-only
         }
         throw std::logic_error("unsupported dtype");
@@ -288,28 +337,28 @@ namespace xdataset
                     VecXd dst(static_cast<Index>(selected.size()));
                     for (std::size_t i = 0; i < selected.size(); ++i)
                         dst(static_cast<Index>(i)) = src(selected[i]);
-                    return Measurement(dst, unit_);
+                    return Measurement::Vector(dst).set_unit(unit_);
                 }
                 case DataType::kInteger: {
                     const auto& src = boost::get<VecXi>(storage_);
                     VecXi dst(static_cast<Index>(selected.size()));
                     for (std::size_t i = 0; i < selected.size(); ++i)
                         dst(static_cast<Index>(i)) = src(selected[i]);
-                    return Measurement(dst, unit_);
+                    return Measurement::Vector(dst).set_unit(unit_);
                 }
                 case DataType::kComplex: {
                     const auto& src = boost::get<VecXcd>(storage_);
                     VecXcd dst(static_cast<Index>(selected.size()));
                     for (std::size_t i = 0; i < selected.size(); ++i)
                         dst(static_cast<Index>(i)) = src(selected[i]);
-                    return Measurement(dst, unit_);
+                    return Measurement::Vector(dst).set_unit(unit_);
                 }
                 case DataType::kString: {
                     const auto& src = boost::get<VecXs>(storage_);
                     VecXs dst(static_cast<Index>(selected.size()));
                     for (std::size_t i = 0; i < selected.size(); ++i)
                         dst(static_cast<Index>(i)) = src(selected[i]);
-                    return Measurement(dst, unit_);
+                    return Measurement::Vector(dst).set_unit(unit_);
                 }
                 default: break;
             }
@@ -340,7 +389,7 @@ namespace xdataset
                         Index c = single_row ? remaining[i] : sel_cols[0];
                         dst(i) = src(r, c);
                     }
-                    return Measurement(dst, unit_);
+                    return Measurement::Vector(dst).set_unit(unit_);
                 }
                 case DataType::kInteger: {
                     const auto& src = boost::get<MatXi>(storage_);
@@ -350,7 +399,7 @@ namespace xdataset
                         Index c = single_row ? remaining[i] : sel_cols[0];
                         dst(i) = src(r, c);
                     }
-                    return Measurement(dst, unit_);
+                    return Measurement::Vector(dst).set_unit(unit_);
                 }
                 case DataType::kComplex: {
                     const auto& src = boost::get<MatXcd>(storage_);
@@ -360,7 +409,7 @@ namespace xdataset
                         Index c = single_row ? remaining[i] : sel_cols[0];
                         dst(i) = src(r, c);
                     }
-                    return Measurement(dst, unit_);
+                    return Measurement::Vector(dst).set_unit(unit_);
                 }
                 case DataType::kString: {
                     const auto& src = boost::get<MatXs>(storage_);
@@ -370,7 +419,7 @@ namespace xdataset
                         Index c = single_row ? remaining[i] : sel_cols[0];
                         dst(i) = src(r, c);
                     }
-                    return Measurement(dst, unit_);
+                    return Measurement::Vector(dst).set_unit(unit_);
                 }
                 default: break;
             }
@@ -387,7 +436,7 @@ namespace xdataset
                 for (Index i = 0; i < static_cast<Index>(sel_rows.size()); ++i)
                     for (Index j = 0; j < static_cast<Index>(sel_cols.size()); ++j)
                         dst(i, j) = src(sel_rows[i], sel_cols[j]);
-                return Measurement(dst, unit_);
+                return Measurement::Matrix(dst).set_unit(unit_);
             }
             case DataType::kInteger: {
                 const auto& src = boost::get<MatXi>(storage_);
@@ -396,7 +445,7 @@ namespace xdataset
                 for (Index i = 0; i < static_cast<Index>(sel_rows.size()); ++i)
                     for (Index j = 0; j < static_cast<Index>(sel_cols.size()); ++j)
                         dst(i, j) = src(sel_rows[i], sel_cols[j]);
-                return Measurement(dst, unit_);
+                return Measurement::Matrix(dst).set_unit(unit_);
             }
             case DataType::kComplex: {
                 const auto& src = boost::get<MatXcd>(storage_);
@@ -405,7 +454,7 @@ namespace xdataset
                 for (Index i = 0; i < static_cast<Index>(sel_rows.size()); ++i)
                     for (Index j = 0; j < static_cast<Index>(sel_cols.size()); ++j)
                         dst(i, j) = src(sel_rows[i], sel_cols[j]);
-                return Measurement(dst, unit_);
+                return Measurement::Matrix(dst).set_unit(unit_);
             }
             case DataType::kString: {
                 const auto& src = boost::get<MatXs>(storage_);
@@ -414,7 +463,7 @@ namespace xdataset
                 for (Index i = 0; i < static_cast<Index>(sel_rows.size()); ++i)
                     for (Index j = 0; j < static_cast<Index>(sel_cols.size()); ++j)
                         dst(i, j) = src(sel_rows[i], sel_cols[j]);
-                return Measurement(dst, unit_);
+                return Measurement::Matrix(dst).set_unit(unit_);
             }
             default: break;
         }
@@ -737,41 +786,5 @@ MeasurementDataFrame Measurement::to_dataframe(const std::string& name) const
 {
     return MeasurementDataFrame(*this, name);
 }
-
-// =========================================================================
-// Unary operators (via OperationXxx)
-// =========================================================================
-
-Measurement Measurement::operator-() const { return OperationNegate(Value(*this)).as_measurement(); }
-Measurement Measurement::operator!() const { return OperationNot(Value(*this)).as_measurement(); }
-Measurement Measurement::operator~() const { return OperationBitNot(Value(*this)).as_measurement(); }
-
-// =========================================================================
-// Binary operators (via OperationXxx)
-// =========================================================================
-
-Measurement operator+(const Measurement& a, const Measurement& b) { return OperationAdd(Value(a),Value(b)).as_measurement(); }
-Measurement operator-(const Measurement& a, const Measurement& b) { return OperationSub(Value(a),Value(b)).as_measurement(); }
-Measurement operator*(const Measurement& a, const Measurement& b) { return OperationMul(Value(a),Value(b)).as_measurement(); }
-Measurement operator/(const Measurement& a, const Measurement& b) { return OperationDiv(Value(a),Value(b)).as_measurement(); }
-Measurement operator%(const Measurement& a, const Measurement& b) { return OperationMod(Value(a),Value(b)).as_measurement(); }
-
-Measurement pow(const Measurement& base, const Measurement& exp) { return OperationPow(Value(base),Value(exp)).as_measurement(); }
-
-Measurement operator==(const Measurement& a, const Measurement& b) { return OperationEq(Value(a),Value(b)).as_measurement(); }
-Measurement operator!=(const Measurement& a, const Measurement& b) { return OperationNeq(Value(a),Value(b)).as_measurement(); }
-Measurement operator<(const Measurement& a, const Measurement& b)  { return OperationLt(Value(a),Value(b)).as_measurement(); }
-Measurement operator>(const Measurement& a, const Measurement& b)  { return OperationGt(Value(a),Value(b)).as_measurement(); }
-Measurement operator<=(const Measurement& a, const Measurement& b) { return OperationLe(Value(a),Value(b)).as_measurement(); }
-Measurement operator>=(const Measurement& a, const Measurement& b) { return OperationGe(Value(a),Value(b)).as_measurement(); }
-
-Measurement operator&&(const Measurement& a, const Measurement& b) { return OperationAnd(Value(a),Value(b)).as_measurement(); }
-Measurement operator||(const Measurement& a, const Measurement& b) { return OperationOr(Value(a),Value(b)).as_measurement(); }
-
-Measurement operator&(const Measurement& a, const Measurement& b)  { return OperationBitAnd(Value(a),Value(b)).as_measurement(); }
-Measurement operator|(const Measurement& a, const Measurement& b)  { return OperationBitOr(Value(a),Value(b)).as_measurement(); }
-Measurement operator^(const Measurement& a, const Measurement& b)  { return OperationBitXor(Value(a),Value(b)).as_measurement(); }
-Measurement operator<<(const Measurement& a, const Measurement& b) { return OperationShl(Value(a),Value(b)).as_measurement(); }
-Measurement operator>>(const Measurement& a, const Measurement& b) { return OperationShr(Value(a),Value(b)).as_measurement(); }
 
 } // namespace xdataset

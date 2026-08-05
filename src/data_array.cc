@@ -1,6 +1,5 @@
 #include "data_array.h"
 #include "data_series.h"
-#include "operation.h"
 #include "dimension_spec.h"
 #include "multi_dimension_spec.h"
 
@@ -799,83 +798,5 @@ DataArray DataArray::with_self_data(const DataSeries& new_self) const
     result.replace_self_data(DataSeries(new_self));
     return result;
 }
-
-// =========================================================================
-DataArray operator+(const DataArray& a, const DataArray& b)  { return OperationAdd(Value(a),Value(b)).as_data_array(); }
-DataArray operator-(const DataArray& a, const DataArray& b)  { return OperationSub(Value(a),Value(b)).as_data_array(); }
-DataArray operator*(const DataArray& a, const DataArray& b)  { return OperationMul(Value(a),Value(b)).as_data_array(); }
-DataArray operator/(const DataArray& a, const DataArray& b)  { return OperationDiv(Value(a),Value(b)).as_data_array(); }
-DataArray operator+(const DataArray& a, const Measurement& b){ return OperationAdd(Value(a),Value(b)).as_data_array(); }
-DataArray operator-(const DataArray& a, const Measurement& b){ return OperationSub(Value(a),Value(b)).as_data_array(); }
-DataArray operator*(const DataArray& a, const Measurement& b){ return OperationMul(Value(a),Value(b)).as_data_array(); }
-DataArray operator/(const DataArray& a, const Measurement& b){ return OperationDiv(Value(a),Value(b)).as_data_array(); }
-DataArray operator+(const Measurement& a, const DataArray& b){ return OperationAdd(Value(a),Value(b)).as_data_array(); }
-DataArray operator-(const Measurement& a, const DataArray& b){ return OperationSub(Value(a),Value(b)).as_data_array(); }
-DataArray operator*(const Measurement& a, const DataArray& b){ return OperationMul(Value(a),Value(b)).as_data_array(); }
-DataArray operator/(const Measurement& a, const DataArray& b){ return OperationDiv(Value(a),Value(b)).as_data_array(); }
-
-// -- comparison (AA, AM, MA)
-DataArray operator==(const DataArray& a, const DataArray& b) { return OperationEq(Value(a),Value(b)).as_data_array(); }
-DataArray operator!=(const DataArray& a, const DataArray& b) { return OperationNeq(Value(a),Value(b)).as_data_array(); }
-DataArray operator<(const DataArray& a, const DataArray& b)  { return OperationLt(Value(a),Value(b)).as_data_array(); }
-DataArray operator>(const DataArray& a, const DataArray& b)  { return OperationGt(Value(a),Value(b)).as_data_array(); }
-DataArray operator<=(const DataArray& a, const DataArray& b) { return OperationLe(Value(a),Value(b)).as_data_array(); }
-DataArray operator>=(const DataArray& a, const DataArray& b) { return OperationGe(Value(a),Value(b)).as_data_array(); }
-
-DataArray operator==(const DataArray& a, const Measurement& b) { return OperationEq(Value(a),Value(b)).as_data_array(); }
-DataArray operator!=(const DataArray& a, const Measurement& b) { return OperationNeq(Value(a),Value(b)).as_data_array(); }
-DataArray operator<(const DataArray& a, const Measurement& b)  { return OperationLt(Value(a),Value(b)).as_data_array(); }
-DataArray operator>(const DataArray& a, const Measurement& b)  { return OperationGt(Value(a),Value(b)).as_data_array(); }
-DataArray operator<=(const DataArray& a, const Measurement& b) { return OperationLe(Value(a),Value(b)).as_data_array(); }
-DataArray operator>=(const DataArray& a, const Measurement& b) { return OperationGe(Value(a),Value(b)).as_data_array(); }
-
-DataArray operator==(const Measurement& a, const DataArray& b) { return OperationEq(Value(a),Value(b)).as_data_array(); }
-DataArray operator!=(const Measurement& a, const DataArray& b) { return OperationNeq(Value(a),Value(b)).as_data_array(); }
-DataArray operator<(const Measurement& a, const DataArray& b)  { return OperationLt(Value(a),Value(b)).as_data_array(); }
-DataArray operator>(const Measurement& a, const DataArray& b)  { return OperationGt(Value(a),Value(b)).as_data_array(); }
-DataArray operator<=(const Measurement& a, const DataArray& b) { return OperationLe(Value(a),Value(b)).as_data_array(); }
-DataArray operator>=(const Measurement& a, const DataArray& b) { return OperationGe(Value(a),Value(b)).as_data_array(); }
-
-// -- logical (AA, AM, MA)
-DataArray operator&&(const DataArray& a, const DataArray& b){ return OperationAnd(Value(a),Value(b)).as_data_array(); }
-DataArray operator||(const DataArray& a, const DataArray& b){ return OperationOr(Value(a),Value(b)).as_data_array(); }
-DataArray operator&&(const DataArray& a, const Measurement& b){ return OperationAnd(Value(a),Value(b)).as_data_array(); }
-DataArray operator||(const DataArray& a, const Measurement& b){ return OperationOr(Value(a),Value(b)).as_data_array(); }
-DataArray operator&&(const Measurement& a, const DataArray& b){ return OperationAnd(Value(a),Value(b)).as_data_array(); }
-DataArray operator||(const Measurement& a, const DataArray& b){ return OperationOr(Value(a),Value(b)).as_data_array(); }
-
-// -- bitwise (AA, AM, MA)
-DataArray operator&(const DataArray& a, const DataArray& b) { return OperationBitAnd(Value(a),Value(b)).as_data_array(); }
-DataArray operator|(const DataArray& a, const DataArray& b) { return OperationBitOr(Value(a),Value(b)).as_data_array(); }
-DataArray operator^(const DataArray& a, const DataArray& b) { return OperationBitXor(Value(a),Value(b)).as_data_array(); }
-DataArray operator&(const DataArray& a, const Measurement& b){ return OperationBitAnd(Value(a),Value(b)).as_data_array(); }
-DataArray operator|(const DataArray& a, const Measurement& b){ return OperationBitOr(Value(a),Value(b)).as_data_array(); }
-DataArray operator^(const DataArray& a, const Measurement& b){ return OperationBitXor(Value(a),Value(b)).as_data_array(); }
-DataArray operator&(const Measurement& a, const DataArray& b){ return OperationBitAnd(Value(a),Value(b)).as_data_array(); }
-DataArray operator|(const Measurement& a, const DataArray& b){ return OperationBitOr(Value(a),Value(b)).as_data_array(); }
-DataArray operator^(const Measurement& a, const DataArray& b){ return OperationBitXor(Value(a),Value(b)).as_data_array(); }
-
-// -- shift (AA, AM, MA)
-DataArray operator<<(const DataArray& a, const DataArray& b){ return OperationShl(Value(a),Value(b)).as_data_array(); }
-DataArray operator>>(const DataArray& a, const DataArray& b){ return OperationShr(Value(a),Value(b)).as_data_array(); }
-DataArray operator<<(const DataArray& a, const Measurement& b){ return OperationShl(Value(a),Value(b)).as_data_array(); }
-DataArray operator>>(const DataArray& a, const Measurement& b){ return OperationShr(Value(a),Value(b)).as_data_array(); }
-DataArray operator<<(const Measurement& a, const DataArray& b){ return OperationShl(Value(a),Value(b)).as_data_array(); }
-DataArray operator>>(const Measurement& a, const DataArray& b){ return OperationShr(Value(a),Value(b)).as_data_array(); }
-
-// -- modulo (AA, AM, MA)
-DataArray operator%(const DataArray& a, const DataArray& b) { return OperationMod(Value(a),Value(b)).as_data_array(); }
-DataArray operator%(const DataArray& a, const Measurement& b){ return OperationMod(Value(a),Value(b)).as_data_array(); }
-DataArray operator%(const Measurement& a, const DataArray& b){ return OperationMod(Value(a),Value(b)).as_data_array(); }
-
-// -- unary
-DataArray operator-(const DataArray& v) { return OperationNegate(Value(v)).as_data_array(); }
-DataArray operator!(const DataArray& v) { return OperationNot(Value(v)).as_data_array(); }
-DataArray operator~(const DataArray& v) { return OperationBitNot(Value(v)).as_data_array(); }
-
-// -- pow
-DataArray pow(const DataArray& base, const DataArray& exp)      { return OperationPow(Value(base),Value(exp)).as_data_array(); }
-DataArray pow(const DataArray& base, const Measurement& exp)    { return OperationPow(Value(base),Value(exp)).as_data_array(); }
-DataArray pow(const Measurement& base, const DataArray& exp)    { return OperationPow(Value(base),Value(exp)).as_data_array(); }
 
 } // namespace xdataset

@@ -1,7 +1,6 @@
 #include "block.h"
 #include "dataset.h"
 #include "dataset_io.h"
-#include "operation.h"
 #include "unit.h"
 
 #include <cmath>
@@ -306,16 +305,6 @@ int main()
 
             std::cout << "Measurement(3.14).as_scalar<double>() = " << d.as_scalar<double>() << std::endl;
         }
-
-        // 11 . UNIT
-        // dist(3.0, meter) / time(2.0, sec)
-
-        Measurement dist(3.0, Unit::parse("meter"));
-        Measurement time(2.0, Unit::parse("sec"));
-        Measurement speed = OperationDiv(Value(dist), Value(time)).as_measurement();
-        std::cout << "\nSpeed = " << speed.to_string() << std::endl;
-        std::cout << "Speed value = " << speed.as_scalar<double>() << std::endl;
-        std::cout << "Speed unit = " << speed.unit().to_string() << std::endl;
 
         // =====================================================================
         // 12 . LNA simulation Dataset → LNA_Design.h5

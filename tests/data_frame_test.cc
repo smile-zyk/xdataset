@@ -31,33 +31,33 @@ namespace xdataset
 
     TEST(MeasurementTest, StringifyScalarTypes)
     {
-        EXPECT_EQ(Measurement(3.14).to_string(), "3.14");
-        EXPECT_EQ(Measurement(42).to_string(), "42");
-        EXPECT_EQ(Measurement(std::complex<double>(1.0, -2.0)).to_string(), "1-2i");
-        EXPECT_EQ(Measurement(std::string("hello")).to_string(), "hello");
+        EXPECT_EQ(Measurement::Real(3.14).to_string(), "3.14");
+        EXPECT_EQ(Measurement::Integer(42).to_string(), "42");
+        EXPECT_EQ(Measurement::Complex(std::complex<double>(1.0, -2.0)).to_string(), "1-2i");
+        EXPECT_EQ(Measurement::String(std::string("hello")).to_string(), "hello");
     }
 
     TEST(MeasurementTest, KindAndDtype)
     {
-        EXPECT_EQ(Measurement(3.14).data_type(),    DataType::kReal);
-        EXPECT_EQ(Measurement(42).data_type(),      DataType::kInteger);
-        EXPECT_EQ(Measurement(std::complex<double>(1,2)).data_type(), DataType::kComplex);
-        EXPECT_EQ(Measurement(std::string("s")).data_type(), DataType::kString);
+        EXPECT_EQ(Measurement::Real(3.14).data_type(),    DataType::kReal);
+        EXPECT_EQ(Measurement::Integer(42).data_type(),      DataType::kInteger);
+        EXPECT_EQ(Measurement::Complex(std::complex<double>(1,2)).data_type(), DataType::kComplex);
+        EXPECT_EQ(Measurement::String(std::string("s")).data_type(), DataType::kString);
 
-        EXPECT_EQ(Measurement(1.0).data_type(), DataType::kReal);
-        EXPECT_NE(Measurement(1.0).data_type(), DataType::kInteger);
-        EXPECT_EQ(Measurement(0).data_type(), DataType::kInteger);
-        EXPECT_EQ(Measurement(std::complex<double>(0, 0)).data_type(), DataType::kComplex);
-        EXPECT_EQ(Measurement(std::string("ok")).data_type(), DataType::kString);
+        EXPECT_EQ(Measurement::Real(1.0).data_type(), DataType::kReal);
+        EXPECT_NE(Measurement::Real(1.0).data_type(), DataType::kInteger);
+        EXPECT_EQ(Measurement::Integer(0).data_type(), DataType::kInteger);
+        EXPECT_EQ(Measurement::Complex(std::complex<double>(0, 0)).data_type(), DataType::kComplex);
+        EXPECT_EQ(Measurement::String(std::string("ok")).data_type(), DataType::kString);
     }
 
     TEST(MeasurementTest, AsScalar)
     {
-        Measurement m(42);
+        Measurement m = Measurement::Integer(42);
         EXPECT_EQ(m.data_kind(), DataKind::kScalar);
         EXPECT_EQ(m.as_scalar<int>(), 42);
 
-        Measurement m2(std::string("abc"));
+        Measurement m2 = Measurement::String(std::string("abc"));
         EXPECT_EQ(m2.data_kind(), DataKind::kScalar);
         EXPECT_EQ(m2.as_scalar<std::string>(), "abc");
     }
@@ -90,7 +90,7 @@ namespace xdataset
                 {
                     DataFrameRow r;
                     r.multi_index = {i};
-                    r.fields.push_back(Measurement(static_cast<int>(i)));
+                    r.fields.push_back(Measurement::Integer(static_cast<int>(i)));
                     rows.push_back(std::move(r));
                 }
                 return rows;
@@ -148,11 +148,11 @@ namespace xdataset
     {
         DataFrameRow r1;
         r1.multi_index = {0};
-        r1.fields.push_back(Measurement(10));
+        r1.fields.push_back(Measurement::Integer(10));
 
         DataFrameRow r2;
         r2.multi_index = {1};
-        r2.fields.push_back(Measurement(20));
+        r2.fields.push_back(Measurement::Integer(20));
 
         std::vector<DataFrameRow> rows;
         rows.push_back(r1);
@@ -174,8 +174,8 @@ namespace xdataset
     {
         DataFrameRow r;
         r.multi_index = {42};
-        r.fields.push_back(Measurement(3.14));
-        r.fields.push_back(Measurement(7));
+        r.fields.push_back(Measurement::Real(3.14));
+        r.fields.push_back(Measurement::Integer(7));
 
         std::vector<DataFrameRow> rows;
         rows.push_back(r);
@@ -234,8 +234,8 @@ namespace xdataset
         {
             DataFrameRow r;
             r.multi_index = {i};
-            r.fields.push_back(Measurement(i * 10));
-            r.fields.push_back(Measurement(std::string(1, 'A' + i)));
+            r.fields.push_back(Measurement::Integer(i * 10));
+            r.fields.push_back(Measurement::String(std::string(1, 'A' + i)));
             rows.push_back(std::move(r));
         }
 
@@ -272,7 +272,7 @@ namespace xdataset
         {
             DataFrameRow r;
             r.multi_index = {i};
-            r.fields.push_back(Measurement(i));
+            r.fields.push_back(Measurement::Integer(i));
             rows.push_back(std::move(r));
         }
 
@@ -303,7 +303,7 @@ namespace xdataset
         {
             DataFrameRow r;
             r.multi_index = {i};
-            r.fields.push_back(Measurement(i));
+            r.fields.push_back(Measurement::Integer(i));
             rows.push_back(std::move(r));
         }
 
@@ -322,7 +322,7 @@ namespace xdataset
         {
             DataFrameRow r;
             r.multi_index = {i};
-            r.fields.push_back(Measurement(i));
+            r.fields.push_back(Measurement::Integer(i));
             rows.push_back(std::move(r));
         }
 
@@ -341,7 +341,7 @@ namespace xdataset
         {
             DataFrameRow r;
             r.multi_index = {i};
-            r.fields.push_back(Measurement(i));
+            r.fields.push_back(Measurement::Integer(i));
             rows.push_back(std::move(r));
         }
 
@@ -361,7 +361,7 @@ namespace xdataset
         {
             DataFrameRow r;
             r.multi_index = {i};
-            r.fields.push_back(Measurement(i));
+            r.fields.push_back(Measurement::Integer(i));
             rows.push_back(std::move(r));
         }
 
@@ -386,7 +386,7 @@ namespace xdataset
         {
             DataFrameRow r;
             r.multi_index = {i};
-            r.fields.push_back(Measurement(i));
+            r.fields.push_back(Measurement::Integer(i));
             rows.push_back(std::move(r));
         }
 
@@ -451,7 +451,7 @@ namespace xdataset
         std::vector<DataFrameRow> rows;
         DataFrameRow r;
         r.multi_index = {0};
-        r.fields.push_back(Measurement(42));
+        r.fields.push_back(Measurement::Integer(42));
         rows.push_back(std::move(r));
 
         TestDataFrame model;
@@ -471,15 +471,15 @@ namespace xdataset
         {
             DataFrameRow r;
             r.multi_index = {0};
-            r.fields.push_back(Measurement(1));
-            r.fields.push_back(Measurement(std::string("short")));
+            r.fields.push_back(Measurement::Integer(1));
+            r.fields.push_back(Measurement::String(std::string("short")));
             rows.push_back(std::move(r));
         }
         {
             DataFrameRow r;
             r.multi_index = {1};
-            r.fields.push_back(Measurement(99999));
-            r.fields.push_back(Measurement(std::string("very_long_string")));
+            r.fields.push_back(Measurement::Integer(99999));
+            r.fields.push_back(Measurement::String(std::string("very_long_string")));
             rows.push_back(std::move(r));
         }
 
@@ -499,7 +499,7 @@ namespace xdataset
         std::vector<DataFrameRow> rows;
         DataFrameRow r;
         r.multi_index = {1, 2, 3};
-        r.fields.push_back(Measurement(100.0));
+        r.fields.push_back(Measurement::Real(100.0));
         rows.push_back(std::move(r));
 
         TestDataFrame model;

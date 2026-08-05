@@ -1,5 +1,4 @@
 #include "data_series.h"
-#include "operation.h"
 
 #include <algorithm>
 #include <complex>
@@ -360,26 +359,26 @@ Measurement DataSeries::measurement_at(Index i) const {
     if (i < 0 || static_cast<std::size_t>(i) >= size()) throw std::out_of_range("index out of range");
 
     if (shape_.kind() == DataKind::kScalar) {
-        if (data_type_ == DataType::kReal) return Measurement(scalar_at<double>(i), unit_);
-        else if (data_type_ == DataType::kInteger) return Measurement(scalar_at<int>(i), unit_);
-        else if (data_type_ == DataType::kComplex) return Measurement(scalar_at<std::complex<double> >(i), unit_);
-        else return Measurement(scalar_at<std::string>(i), unit_);
+        if (data_type_ == DataType::kReal) return Measurement::Real(scalar_at<double>(i), unit_);
+        else if (data_type_ == DataType::kInteger) return Measurement::Integer(scalar_at<int>(i), unit_);
+        else if (data_type_ == DataType::kComplex) return Measurement::Complex(scalar_at<std::complex<double> >(i), unit_);
+        else return Measurement::String(scalar_at<std::string>(i));
     }
 
     if (shape_.kind() == DataKind::kVector) {
-        if (data_type_ == DataType::kReal) return Measurement(VecXd(vector_at<double>(i)), unit_);
-        else if (data_type_ == DataType::kInteger) return Measurement(VecXi(vector_at<int>(i)), unit_);
-        else if (data_type_ == DataType::kComplex) return Measurement(VecXcd(vector_at<std::complex<double> >(i)), unit_);
-        else return Measurement(VecXs(vector_at<std::string>(i)), unit_);
+        if (data_type_ == DataType::kReal) return Measurement::Vector(vector_at<double>(i), unit_);
+        else if (data_type_ == DataType::kInteger) return Measurement::Vector(vector_at<int>(i), unit_);
+        else if (data_type_ == DataType::kComplex) return Measurement::Vector(vector_at<std::complex<double> >(i), unit_);
+        else return Measurement::Vector(vector_at<std::string>(i));
     }
 
     if (data_type_ == DataType::kReal)
-        return Measurement(MatXd(matrix_at<double>(i)), unit_);
+        return Measurement::Matrix(matrix_at<double>(i), unit_);
     if (data_type_ == DataType::kInteger)
-        return Measurement(MatXi(matrix_at<int>(i)), unit_);
+        return Measurement::Matrix(matrix_at<int>(i), unit_);
     if (data_type_ == DataType::kComplex)
-        return Measurement(MatXcd(matrix_at<std::complex<double> >(i)), unit_);
-    return Measurement(MatXs(matrix_at<std::string>(i)), unit_);
+        return Measurement::Matrix(matrix_at<std::complex<double> >(i), unit_);
+    return Measurement::Matrix(matrix_at<std::string>(i));
 }
 
 // =========================================================================

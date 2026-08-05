@@ -79,15 +79,6 @@ namespace xdataset
         /// Default: kReal scalar 0.0, dimensionless unit.
         Measurement();
 
-        /// Construct from a concrete value.  Kind / dtype / shape are
-        /// inferred from T and (for vectors / matrices) the value's size.
-        template <typename T>
-        Measurement(T value);
-
-        /// Construct from a concrete value with an explicit unit.
-        template <typename T>
-        Measurement(T value, Unit unit);
-
         // Copy / move (compiler-generated is fine -- variant is deep-copyable)
         Measurement(const Measurement&) = default;
         Measurement& operator=(const Measurement&) = default;
@@ -97,29 +88,55 @@ namespace xdataset
         // ======== static factories ==========================================
 
         /// @{
-        /// Scalar factories (0-d).
-        static Measurement Real(double value);
-        static Measurement Integer(int value);
-        static Measurement Complex(std::complex<double> value);
+        /// Scalar factories (0-d).  Real / Integer / Complex carry an optional
+        /// unit (default: dimensionless).  Boolean and String values cannot
+        /// carry a physical unit, so their factories take no unit.
+        static Measurement Real(double value, const Unit& u = Unit());
+        static Measurement Integer(int value, const Unit& u = Unit());
+        static Measurement Complex(std::complex<double> value, const Unit& u = Unit());
         static Measurement String(std::string value);
         static Measurement Boolean(bool value);
         /// @}
 
         /// @{
-        /// Vector factories (1-d) -- numeric (行向量).
-        static Measurement Vector(const VecXd& v);
-        static Measurement Vector(const VecXi& v);
-        static Measurement Vector(const VecXcd& v);
+        /// Vector factories (1-d) -- numeric (行向量), with optional unit.
+        /// By-value parameters: lvalues copy, rvalues move (no extra copy for
+        /// `Measurement::Vector(MatXi(...))` style temporaries).
+        static Measurement Vector(VecXd v, const Unit& u = Unit());
+        static Measurement Vector(VecXi v, const Unit& u = Unit());
+        static Measurement Vector(VecXcd v, const Unit& u = Unit());
         /// @}
-        static Measurement Vector(const VecXs& v);
+        /// Vector factory from an Eigen Map view (e.g. DataSeries::vector_at).
+        /// Copies the viewed data into a standalone Measurement.
+        static Measurement Vector(VecConstMap<double> v, const Unit& u = Unit());
+        static Measurement Vector(VecConstMap<int> v, const Unit& u = Unit());
+        static Measurement Vector(VecConstMap<std::complex<double> > v,
+                                  const Unit& u = Unit());
+        static Measurement Vector(const VecXs& v);   // string rows: no unit
 
         /// @{
-        /// Matrix factories (2-d) -- numeric (RowMajor).
-        static Measurement Matrix(const MatXd& m);
-        static Measurement Matrix(const MatXi& m);
-        static Measurement Matrix(const MatXcd& m);
+        /// Scalar factory dispatching on the element type T.  Used internally
+        /// by transform() when the callback returns a scalar of an arbitrary
+        /// type; the appropriate Real / Integer / Complex factory is selected
+        /// at compile time.  String outputs carry no unit.
+        template <typename T>
+        static Measurement Scalar(const T& v, const Unit& u = Unit());
         /// @}
-        static Measurement Matrix(const MatXs& m);
+
+        /// @{
+        /// Matrix factories (2-d) -- numeric (RowMajor), with optional unit.
+        /// By-value parameters: lvalues copy, rvalues move.
+        static Measurement Matrix(MatXd m, const Unit& u = Unit());
+        static Measurement Matrix(MatXi m, const Unit& u = Unit());
+        static Measurement Matrix(MatXcd m, const Unit& u = Unit());
+        /// @}
+        /// Matrix factory from an Eigen Map view (e.g. DataSeries::matrix_at).
+        /// Copies the viewed data into a standalone Measurement.
+        static Measurement Matrix(MatConstMap<double> m, const Unit& u = Unit());
+        static Measurement Matrix(MatConstMap<int> m, const Unit& u = Unit());
+        static Measurement Matrix(MatConstMap<std::complex<double> > m,
+                                  const Unit& u = Unit());
+        static Measurement Matrix(const MatXs& m);   // string cells: no unit
 
         // ======== metadata queries ==========================================
 
@@ -131,12 +148,13 @@ namespace xdataset
         /// Number of elements in one cell: scalar=1, vector=shape[0], matrix=shape[0]*shape[1]
         Index element_count() const { return shape_.element_count(); }
 
-        void set_unit(const Unit& u) {
+        Measurement& set_unit(const Unit& u) {
             if (data_type_ == DataType::kBoolean) {
                 if (u.has_dimension())
                     throw std::invalid_argument("Boolean measurements cannot have a unit");
             }
             unit_ = u;
+            return *this;
         }
 
         /// True when the stored value is not the default-constructed zero.
@@ -230,17 +248,6 @@ namespace xdataset
             return *this;
         }
 
-        // ======== unary operators (member functions to avoid ADL ambiguity) =====
-
-        /// Negation: flips sign, preserves unit.
-        Measurement operator-() const;
-
-        /// Logical NOT: returns Integer 0/1, dimensionless.
-        Measurement operator!() const;
-
-        /// Bitwise NOT (Integer only, dimensionless).
-        Measurement operator~() const;
-
         // ======== formatting ================================================
 
         /// Return a human-readable string representation.
@@ -262,6 +269,7 @@ namespace xdataset
 
     private:
         void infer_metadata();
+
 
         // ---- transform helpers ------------------------------------------
         //
@@ -327,7 +335,7 @@ namespace xdataset
             decltype(std::declval<Func>()(std::declval<const T&>()), 0) = 0>
         Measurement transform_scalar_impl(Func&& func, int) const
         {
-            return Measurement(func(boost::get<T>(storage_)), unit_);
+            return Scalar(func(boost::get<T>(storage_)), unit_);
         }
 
         template <typename T, typename Func>
@@ -346,7 +354,7 @@ namespace xdataset
             Eigen::Matrix<Out, 1, Eigen::Dynamic> v(w);
             const auto& src = boost::get<Eigen::Matrix<T, 1, Eigen::Dynamic>>(storage_);
             for (Index i = 0; i < w; ++i) v(i) = func(src(i));
-            return Measurement(v, unit_);
+            return Measurement::Vector(v, unit_);
         }
 
         template <typename T, typename Func>
@@ -368,7 +376,7 @@ namespace xdataset
             for (Index i = 0; i < r; ++i)
                 for (Index j = 0; j < c; ++j)
                     m(i, j) = func(src(i, j));
-            return Measurement(m, unit_);
+            return Measurement::Matrix(m, unit_);
         }
 
         template <typename T, typename Func>
@@ -382,31 +390,6 @@ namespace xdataset
         Storage              storage_;
         Unit                 unit_;
     };
-
-    // =========================================================================
-    //  Measurement arithmetic operators (delegate to OperationXxx)
-    // =========================================================================
-
-    XDATASET_API Measurement operator+(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator-(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator*(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator/(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator==(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator!=(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator<(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator>(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator<=(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator>=(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator&&(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator||(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator&(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator|(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator^(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator<<(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator>>(const Measurement& lhs, const Measurement& rhs);
-    XDATASET_API Measurement operator%(const Measurement& lhs, const Measurement& rhs);
-
-    XDATASET_API Measurement pow(const Measurement& base, const Measurement& exponent);
 
     // =========================================================================
     // MeasurementFormatter -- boost::static_visitor that renders any stored
@@ -469,24 +452,6 @@ namespace xdataset
     // =========================================================================
     // Template implementation
     // =========================================================================
-
-    // -- Measurement constructor -------------------------------------------------
-
-    template <typename T>
-    Measurement::Measurement(T value)
-        : storage_(std::move(value))
-        , unit_()
-    {
-        infer_metadata();
-    }
-
-    template <typename T>
-    Measurement::Measurement(T value, Unit unit)
-        : storage_(std::move(value))
-        , unit_(std::move(unit))
-    {
-        infer_metadata();
-    }
 
     // -- as_scalar<T> ------------------------------------------------------------
 
@@ -557,6 +522,38 @@ namespace xdataset
             throw std::logic_error("as_matrix: Measurement is not a matrix (kind=" +
                 std::to_string(static_cast<int>(shape_.kind())) + ")");
         return boost::get<MatXs>(storage_);
+    }
+
+    // =========================================================================
+    //  Measurement::Scalar -- scalar factory dispatch by element type
+    // =========================================================================
+
+    template <>
+    inline Measurement Measurement::Scalar<double>(const double& v,
+                                                   const Unit& u)
+    {
+        return Measurement::Real(v, u);
+    }
+
+    template <>
+    inline Measurement Measurement::Scalar<int>(const int& v,
+                                                const Unit& u)
+    {
+        return Measurement::Integer(v, u);
+    }
+
+    template <>
+    inline Measurement Measurement::Scalar<std::complex<double> >(
+        const std::complex<double>& v, const Unit& u)
+    {
+        return Measurement::Complex(v, u);
+    }
+
+    template <>
+    inline Measurement Measurement::Scalar<std::string>(
+        const std::string& v, const Unit&)
+    {
+        return Measurement::String(v);   // strings carry no unit
     }
 
 } // namespace xdataset

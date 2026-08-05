@@ -38,58 +38,58 @@ using xdataset::MatXs;
 // =========================================================================
 
 TEST(CellTest, ScalarCellCreateAndMutate) {
-    Measurement m = Measurement(42.0);
+    Measurement m = Measurement::Real(42.0);
     EXPECT_EQ(m.data_kind(), DataKind::kScalar);
     EXPECT_EQ(m.data_type(), DataType::kReal);
     EXPECT_DOUBLE_EQ(m.as_scalar<double>(), 42.0);
 
-    m = Measurement(3.5);
+    m = Measurement::Real(3.5);
     EXPECT_DOUBLE_EQ(m.as_scalar<double>(), 3.5);
 }
 
 TEST(CellTest, IntegerCellDtype) {
-    Measurement m = Measurement(7);
+    Measurement m = Measurement::Integer(7);
     EXPECT_EQ(m.data_type(), DataType::kInteger);
     EXPECT_EQ(m.as_scalar<int>(), 7);
 }
 
 TEST(CellTest, ComplexCellDtype) {
     using cd = std::complex<double>;
-    Measurement m = Measurement(cd(1.0, 2.0));
+    Measurement m = Measurement::Complex(cd(1.0, 2.0));
     EXPECT_EQ(m.data_type(), DataType::kComplex);
     EXPECT_DOUBLE_EQ(m.as_scalar<cd>().real(), 1.0);
     EXPECT_DOUBLE_EQ(m.as_scalar<cd>().imag(), 2.0);
 }
 
 TEST(CellTest, StringCellDtype) {
-    Measurement m = Measurement(std::string("hello"));
+    Measurement m = Measurement::String(std::string("hello"));
     EXPECT_EQ(m.data_type(), DataType::kString);
     EXPECT_EQ(m.as_scalar<std::string>(), "hello");
 }
 
 TEST(CellTest, AppendCellToSeries) {
-    Measurement m = Measurement(3.5);
+    Measurement m = Measurement::Real(3.5);
     DataSeries s = DataSeries::CreateScalar<double>(0);
-    s.append(Measurement(1.25));
+    s.append(Measurement::Real(1.25));
     s.append(m);
     ASSERT_EQ(s.size(), 2u);
     EXPECT_DOUBLE_EQ(s.scalar_at<double>(1), 3.5);
 }
 
 TEST(CellTest, AppendTypePromotionIntToReal) {
-    Measurement int_cell = Measurement(10);
+    Measurement int_cell = Measurement::Integer(10);
     DataSeries s = DataSeries::CreateScalar<double>(0);
     EXPECT_THROW(s.append(int_cell), std::bad_cast);
 }
 
 TEST(CellTest, AppendTypePromotionIntToComplex) {
-    Measurement int_cell = Measurement(10);
+    Measurement int_cell = Measurement::Integer(10);
     DataSeries s = DataSeries::CreateScalar<std::complex<double>>(0);
     EXPECT_THROW(s.append(int_cell), std::bad_cast);
 }
 
 TEST(CellTest, AppendTypePromotionRealToComplex) {
-    Measurement real_cell(3.5);
+    Measurement real_cell = Measurement::Real(3.5);
     DataSeries s = DataSeries::CreateScalar<std::complex<double>>(0);
     EXPECT_THROW(s.append(real_cell), std::bad_cast);
 }
@@ -98,24 +98,24 @@ TEST(CellTest, AppendStillThrowsOnCompleteMismatch) {
     // Vector DataSeries, trying to append a different-shaped vector - still throws.
     VecXd v(4); v << 1., 2., 3., 4.;
     DataSeries s = DataSeries::CreateVector<double>(3, 0);
-    EXPECT_THROW(s.append(Measurement(v)), std::bad_cast);
+    EXPECT_THROW(s.append(Measurement::Vector(v)), std::bad_cast);
 }
 
 TEST(CellTest, AppendVectorShapeMismatchThrows) {
     VecXd vd(3); vd << 1., 2., 3.;
     DataSeries s(DataType::kComplex, xdataset::DataShape::Vector(2));
-    EXPECT_THROW(s.append(Measurement(vd)), std::bad_cast);
+    EXPECT_THROW(s.append(Measurement::Vector(vd)), std::bad_cast);
 }
 
 TEST(CellTest, AppendUnitMismatchThrows) {
     // First append succeeds and sets the series unit.
-    Measurement m_m = Measurement(1.0, xdataset::Unit::parse("meter"));
+    Measurement m_m = Measurement::Real(1.0).set_unit(xdataset::Unit::parse("meter"));
     DataSeries s = DataSeries::CreateScalar<double>(0);
     s.append(m_m);
     EXPECT_TRUE(s.unit().same_dimension(xdataset::Unit::parse("meter")));
 
     // Subsequent append with incompatible unit must throw.
-    Measurement m_s = Measurement(2.0, xdataset::Unit::parse("sec"));
+    Measurement m_s = Measurement::Real(2.0).set_unit(xdataset::Unit::parse("sec"));
     EXPECT_THROW(s.append(m_s), std::invalid_argument);
 }
 
@@ -163,7 +163,7 @@ TEST(CellUnitTest, DefaultCellIsDimensionless)
 
 TEST(CellUnitTest, CopyPropagatesUnit)
 {
-    Measurement m = Measurement(3.14);
+    Measurement m = Measurement::Real(3.14);
     m.set_unit(xdataset::Unit::parse("meter"));
     Measurement m2(m);
     EXPECT_TRUE(m2.unit().same_dimension(m.unit()));
@@ -171,7 +171,7 @@ TEST(CellUnitTest, CopyPropagatesUnit)
 
 TEST(CellUnitTest, MovePropagatesUnit)
 {
-    Measurement m = Measurement(2.72);
+    Measurement m = Measurement::Real(2.72);
     m.set_unit(xdataset::Unit::parse("Hz"));
     Measurement m2(std::move(m));
     EXPECT_TRUE(m2.unit().same_dimension(xdataset::Unit::parse("Hz")));
@@ -179,7 +179,7 @@ TEST(CellUnitTest, MovePropagatesUnit)
 
 TEST(CellUnitTest, AssignPropagatesUnit)
 {
-    Measurement m1 = Measurement(1.0);
+    Measurement m1 = Measurement::Real(1.0);
     m1.set_unit(xdataset::Unit::parse("meter"));
     Measurement m2;
     m2 = m1;
@@ -195,7 +195,7 @@ TEST(CellUnitTest, AssignPropagatesUnit)
 
 TEST(MeasurementCanonTest, CanonicalizedCmToMeter)
 {
-    Measurement m(5.0, xdataset::Unit::parse("cm"));
+    Measurement m = Measurement::Real(5.0).set_unit(xdataset::Unit::parse("cm"));
     Measurement c = m.canonicalized();
     // 5 cm -> 0.05 m
     EXPECT_DOUBLE_EQ(c.as_scalar<double>(), 0.05);
@@ -205,7 +205,7 @@ TEST(MeasurementCanonTest, CanonicalizedCmToMeter)
 
 TEST(MeasurementCanonTest, CanonicalizedFastPath)
 {
-    Measurement m(3.0, xdataset::Unit::parse("Hz"));  // already coherent SI
+    Measurement m = Measurement::Real(3.0).set_unit(xdataset::Unit::parse("Hz"));  // already coherent SI
     Measurement c = m.canonicalized();
     EXPECT_DOUBLE_EQ(c.as_scalar<double>(), 3.0);
     EXPECT_TRUE(c.unit().same_dimension(xdataset::Unit::parse("Hz")));
@@ -213,7 +213,7 @@ TEST(MeasurementCanonTest, CanonicalizedFastPath)
 
 TEST(MeasurementCanonTest, CanonicalizedStringNoValueChange)
 {
-    Measurement m(std::string("hello"), xdataset::Unit::parse("meter"));
+    Measurement m = Measurement::String(std::string("hello")).set_unit(xdataset::Unit::parse("meter"));
     Measurement c = m.canonicalized();
     EXPECT_EQ(c.as_scalar<std::string>(), "hello");
     EXPECT_TRUE(c.unit().same_dimension(xdataset::Unit::parse("meter")));
@@ -225,7 +225,7 @@ TEST(MeasurementCanonTest, CanonicalizedStringNoValueChange)
 
 TEST(MeasurementFormatTest, AutoScaleMega)
 {
-    Measurement m(1e9, xdataset::Unit::parse("Hz"));
+    Measurement m = Measurement::Real(1e9).set_unit(xdataset::Unit::parse("Hz"));
     std::string s = m.to_string();
     // 1e9 Hz -> 1 GHz
     EXPECT_TRUE(s.find("GHz") != std::string::npos);
@@ -233,7 +233,7 @@ TEST(MeasurementFormatTest, AutoScaleMega)
 
 TEST(MeasurementFormatTest, AutoScaleMilli)
 {
-    Measurement m(0.002, xdataset::Unit::parse("V"));
+    Measurement m = Measurement::Real(0.002).set_unit(xdataset::Unit::parse("V"));
     std::string s = m.to_string();
     // 0.002 V -> 2 mV
     EXPECT_TRUE(s.find("2") != std::string::npos);
@@ -242,7 +242,7 @@ TEST(MeasurementFormatTest, AutoScaleMilli)
 
 TEST(MeasurementFormatTest, AutoScaleKiloMeter)
 {
-    Measurement m(5000, xdataset::Unit::parse("meter"));
+    Measurement m = Measurement::Real(5000).set_unit(xdataset::Unit::parse("meter"));
     std::string s = m.to_string();
     // 5000 meter -> 5 Kmeter
     EXPECT_TRUE(s.find("5") != std::string::npos);
@@ -251,7 +251,7 @@ TEST(MeasurementFormatTest, AutoScaleKiloMeter)
 
 TEST(MeasurementFormatTest, AutoScaleMilliMeter)
 {
-    Measurement m(0.003, xdataset::Unit::parse("meter"));
+    Measurement m = Measurement::Real(0.003).set_unit(xdataset::Unit::parse("meter"));
     std::string s = m.to_string();
     // 0.003 meter -> 3 mmeter
     EXPECT_TRUE(s.find("3") != std::string::npos);
@@ -260,7 +260,7 @@ TEST(MeasurementFormatTest, AutoScaleMilliMeter)
 
 TEST(MeasurementFormatTest, AutoScaleNoneForDimensionless)
 {
-    Measurement m(3.14);
+    Measurement m = Measurement::Real(3.14);
     std::string s = m.to_string();
     // 3.14 stays 3.14 (in [1, 1000))
     EXPECT_NE(s.find("3.14"), std::string::npos);
@@ -268,7 +268,7 @@ TEST(MeasurementFormatTest, AutoScaleNoneForDimensionless)
 
 TEST(MeasurementFormatTest, AutoScaleMegaDimensionless)
 {
-    Measurement m(1000000);
+    Measurement m = Measurement::Integer(1000000);
     std::string s = m.to_string();
     // 1000000 -> 1 M (dimensionless auto-scale)
     EXPECT_TRUE(s.find("M") != std::string::npos);
@@ -277,7 +277,7 @@ TEST(MeasurementFormatTest, AutoScaleMegaDimensionless)
 
 TEST(MeasurementFormatTest, AutoScaleKiloFor100Hz)
 {
-    Measurement m(100.0, xdataset::Unit::parse("Hz"));
+    Measurement m = Measurement::Real(100.0).set_unit(xdataset::Unit::parse("Hz"));
     std::string s = m.to_string();
     // 100 Hz stays 100 Hz (1 <= 100 < 1000)
     EXPECT_TRUE(s.find("100") != std::string::npos);
@@ -289,7 +289,7 @@ TEST(MeasurementFormatTest, AutoScaleKiloFor100Hz)
 
 TEST(MeasurementToDataFrameTest, Scalar)
 {
-    Measurement m(3.14, xdataset::Unit::parse("meter"));
+    Measurement m = Measurement::Real(3.14).set_unit(xdataset::Unit::parse("meter"));
     MeasurementDataFrame df = m.to_dataframe("distance");
 
     EXPECT_EQ(df.row_count(), 1u);
@@ -361,7 +361,7 @@ TEST(MeasurementToDataFrameTest, ToCsvRoundtrip)
 
 TEST(MeasurementAtTest, ScalarThrows)
 {
-    Measurement m(42.0);
+    Measurement m = Measurement::Real(42.0);
     EXPECT_THROW(m.at({MultiIndexSelector::Any()}), std::logic_error);
 }
 
@@ -393,7 +393,7 @@ TEST(MeasurementAtTest, VectorAtInPreservesUnit)
 {
     Unit u = Unit::parse("V");
     VecXd v(3); v << 1.0, 2.0, 3.0;
-    Measurement m(v, u);
+    Measurement m = Measurement::Vector(v).set_unit(u);
 
     Measurement result = m.at({MultiIndexSelector::In({1, 2})});
     EXPECT_TRUE(result.unit().same_dimension(u));
@@ -481,7 +481,7 @@ TEST(MeasurementAtTest, MatrixAtPreservesUnit)
     Unit u = Unit::parse("V");
     MatXd mat(2, 2);
     mat << 1.0, 2.0, 3.0, 4.0;
-    Measurement m(mat, u);
+    Measurement m = Measurement::Matrix(mat).set_unit(u);
 
     Measurement result = m.at({MultiIndexSelector::Equal(0), MultiIndexSelector::Equal(0)});
     ASSERT_EQ(result.data_kind(), DataKind::kScalar);
