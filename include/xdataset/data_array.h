@@ -72,14 +72,12 @@ namespace xdataset
         /// multi_dimension_spec().compute_cell_count().  The data_frame cache is
         /// invalidated.  The new series must be canonicalized before replacement.
         /// This mutates the DataArray in place.
-        void replace_self_data(DataSeries&& new_self);
-        void replace_self_data(const DataSeries& new_self);
+        void replace_self_data(DataSeries new_self);
 
         /// Return a new DataArray with the same independent dimensions /
         /// multi_dimension_spec but with `new_self` as the self data.
         /// The original DataArray is unchanged.
-        DataArray with_self_data(DataSeries&& new_self) const;
-        DataArray with_self_data(const DataSeries& new_self) const;
+        DataArray with_self_data(DataSeries new_self) const;
 
         /// Apply a transformation callback to the self DataSeries and return a
         /// new DataArray with the same independent dimensions / multi_dimension_spec
@@ -176,9 +174,6 @@ namespace xdataset
             const tsl::ordered_map<std::string, const DataArray*>& indep_variables);
 
     private:
-        /// Shared implementation for min() / max(): reduce along the innermost
-        /// dimension.  See min() for the exact semantics.
-        DataArray reduce_minmax(bool want_max) const;
 
         /// Unified data storage.  The last entry (key = kSelf) is always the
         /// self data; preceding entries are independent dimension / variable

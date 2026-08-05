@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "detail/storage.h"
+#include "data_shape.h"
 #include "measurement.h"
 #include "unit.h"
 #include "xdataset_predefine.h"

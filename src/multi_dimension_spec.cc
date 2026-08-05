@@ -23,7 +23,7 @@ namespace xdataset
 
     MultiDimensionSpec& MultiDimensionSpec::add_dimension(const DimensionSpec& dim)
     {
-        if (dim.is_ragged() && !dims_.empty())   // skip first dim ¡ª may be stored in isolation
+        if (dim.is_ragged() && !dims_.empty())   // skip first dim ï¿½ï¿½ may be stored in isolation
         {
             const std::vector<std::size_t>& sizes = dim.as_ragged()->sizes;
             const std::size_t expected = compute_cell_count();
@@ -324,6 +324,32 @@ namespace xdataset
             groups[i].flat_end = (i + 1 < groups.size()) ? groups[i + 1].flat_start : total_cells;
             visitor(groups[i]);
         }
+    }
+
+    std::string MultiDimensionSpec::to_string() const
+    {
+        std::string s = "[";
+        for (std::size_t i = 0; i < dims_.size(); ++i)
+        {
+            if (i > 0) s += ", ";
+            if (dims_[i].is_regular())
+            {
+                s += std::to_string(dims_[i].regular_size());
+            }
+            else
+            {
+                const auto& sizes = dims_[i].ragged_sizes();
+                s += "[";
+                for (std::size_t j = 0; j < sizes.size(); ++j)
+                {
+                    if (j > 0) s += ", ";
+                    s += std::to_string(sizes[j]);
+                }
+                s += "]";
+            }
+        }
+        s += "]";
+        return s;
     }
 
 } // namespace xdataset

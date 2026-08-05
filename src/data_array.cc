@@ -561,132 +561,107 @@ namespace xdataset
             }
             return 0;
         }
+
+        /// Reduce along the innermost dimension by taking the element-wise
+        /// minimum (want_max=false) or maximum (want_max=true) of each group.
+        /// See DataArray::min() / DataArray::max() for the full semantics.
+        DataArray reduce_innermost(const DataArray& da, bool want_max)
+        {
+            if (da.data().data_kind() != DataKind::kScalar)
+            {
+                throw std::logic_error(
+                    want_max ? "max is only supported for scalar data"
+                             : "min is only supported for scalar data");
+            }
+
+            const std::size_t rank = da.multi_dimension_spec().rank();
+            if (rank == 0)
+            {
+                throw std::logic_error("min/max requires at least one dimension");
+            }
+
+            const auto better = [want_max](const Measurement& a, const Measurement& b) -> bool
+            {
+                const int cmp = compare_values(a, b);
+                return want_max ? (cmp > 0) : (cmp < 0);
+            };
+
+            struct GroupAcc
+            {
+                Measurement best;
+                bool        have = false;
+            };
+
+            std::vector<GroupAcc> groups;
+
+            if (rank >= 2)
+            {
+                da.multi_dimension_spec().for_each_group_at_dim(
+                    static_cast<Index>(rank - 2),
+                    [&](const MultiDimensionSpec::DimGroup& g)
+                    {
+                        GroupAcc acc;
+                        da.multi_dimension_spec().for_each_leaf_row(
+                            [&](const MultiDimensionSpec::LeafRow& leaf)
+                            {
+                                const Measurement val =
+                                    (da.data_kind() == DataArrayKind::kIndependent)
+                                        ? da.data().measurement_at(
+                                              leaf.dimension_row_indices[rank - 1])
+                                        : da.data().measurement_at(leaf.row_flat);
+                                if (!acc.have) { acc.best = val; acc.have = true; }
+                                else if (better(val, acc.best)) { acc.best = val; }
+                            },
+                            g.flat_start, g.flat_end);
+                        groups.push_back(std::move(acc));
+                    });
+            }
+            else
+            {
+                GroupAcc acc;
+                const Index total =
+                    static_cast<Index>(da.multi_dimension_spec().compute_cell_count());
+                for (Index f = 0; f < total; ++f)
+                {
+                    const Measurement val = da.data().measurement_at(f);
+                    if (!acc.have) { acc.best = val; acc.have = true; }
+                    else if (better(val, acc.best)) { acc.best = val; }
+                }
+                groups.push_back(std::move(acc));
+            }
+
+            DataSeries out(da.data().data_type(), da.data().data_shape());
+            for (const GroupAcc& acc : groups)
+                out.append(acc.best);
+
+            DataArrayCreateInfo info;
+
+            if (rank >= 2)
+            {
+                info.kind = DataArrayKind::kDependent;
+                const auto& indep_names = da.indep_names();
+                for (std::size_t i = 0; i < rank - 1; ++i)
+                    info.datas[indep_names[i]] = da.indep_data(indep_names[i]);
+                info.datas[DataArray::kSelf] = std::move(out);
+
+                MultiDimensionSpec spec;
+                for (std::size_t i = 0; i < rank - 1; ++i)
+                    spec.add_dimension(da.multi_dimension_spec().dim(static_cast<Index>(i)));
+                info.multi_dimension_spec = std::move(spec);
+            }
+            else
+            {
+                info.kind = DataArrayKind::kIndependent;
+                info.datas[DataArray::kSelf] = std::move(out);
+                info.multi_dimension_spec = MultiDimensionSpec().add_regular(1);
+            }
+
+            return DataArray(std::move(info));
+        }
     } // anonymous namespace
 
-    DataArray DataArray::min() const { return reduce_minmax(false); }
-    DataArray DataArray::max() const { return reduce_minmax(true); }
-
-    DataArray DataArray::reduce_minmax(bool want_max) const
-    {
-        if (data().data_kind() != DataKind::kScalar)
-        {
-            throw std::logic_error(
-                want_max ? "max is only supported for scalar data"
-                         : "min is only supported for scalar data");
-        }
-
-        const std::size_t rank = multi_dimension_spec_.rank();
-        if (rank == 0)
-        {
-            throw std::logic_error("min/max requires at least one dimension");
-        }
-
-        const auto better = [want_max](const Measurement& a, const Measurement& b) -> bool
-        {
-            // True when `a` replaces `b` as the running extreme.
-            const int cmp = compare_values(a, b);
-            return want_max ? (cmp > 0) : (cmp < 0);
-        };
-
-        struct GroupAcc
-        {
-            Measurement best;
-            bool        have = false;
-        };
-
-        std::vector<GroupAcc> groups;
-
-        // The innermost dimension (rank - 1) is the reduction axis.  Its
-        // "outer prefix" is dims [0 .. rank - 2], so for_each_group_at_dim
-        // must be called with (rank - 2).  For rank == 1 the whole column is
-        // a single group.
-        if (rank >= 2)
-        {
-            multi_dimension_spec_.for_each_group_at_dim(
-                static_cast<Index>(rank - 2),
-                [&](const MultiDimensionSpec::DimGroup& g)
-                {
-                    GroupAcc acc;
-                    multi_dimension_spec_.for_each_leaf_row(
-                        [&](const MultiDimensionSpec::LeafRow& leaf)
-                        {
-                            // Dependent: self data is expanded, index by flat row.
-                            // Independent: self is the raw innermost dimension,
-                            // index by the innermost dimension row.
-                            const Measurement val =
-                                (data_kind_ == DataArrayKind::kIndependent)
-                                    ? data().measurement_at(
-                                          leaf.dimension_row_indices[rank - 1])
-                                    : data().measurement_at(leaf.row_flat);
-                            if (!acc.have)
-                            {
-                                acc.best = val;
-                                acc.have = true;
-                            }
-                            else if (better(val, acc.best))
-                            {
-                                acc.best = val;
-                            }
-                        },
-                        g.flat_start, g.flat_end);
-                    groups.push_back(std::move(acc));
-                });
-        }
-        else
-        {
-            GroupAcc acc;
-            const Index total =
-                static_cast<Index>(multi_dimension_spec_.compute_cell_count());
-            for (Index f = 0; f < total; ++f)
-            {
-                const Measurement val = data().measurement_at(f);
-                if (!acc.have)
-                {
-                    acc.best = val;
-                    acc.have = true;
-                }
-                else if (better(val, acc.best))
-                {
-                    acc.best = val;
-                }
-            }
-            groups.push_back(std::move(acc));
-        }
-
-        // Reduced values become the new kSelf data (one row per group).
-        DataSeries out(data().data_type(), data().data_shape());
-        for (const GroupAcc& acc : groups)
-            out.append(acc.best);
-
-        DataArrayCreateInfo info;
-
-        if (rank >= 2)
-        {
-            // Remaining dimensions survive: the reduced values become
-            // dependent data over the remaining independent dimensions,
-            // so the result is always Dependent (even if the input was
-            // Independent — the input's own values are now the data).
-            info.kind = DataArrayKind::kDependent;
-            auto it = datas_.begin();
-            for (std::size_t i = 0; i < rank - 1; ++i, ++it)
-                info.datas[it->first] = it->second;
-            info.datas[kSelf] = std::move(out);   // kSelf must stay last
-
-            MultiDimensionSpec spec;
-            for (std::size_t i = 0; i < rank - 1; ++i)
-                spec.add_dimension(multi_dimension_spec_.dim(static_cast<Index>(i)));
-            info.multi_dimension_spec = std::move(spec);
-        }
-        else
-        {
-            // No dimensions left: demote to a single-value Independent.
-            info.kind = DataArrayKind::kIndependent;
-            info.datas[kSelf] = std::move(out);
-            info.multi_dimension_spec = MultiDimensionSpec().add_regular(1);
-        }
-
-        return DataArray(std::move(info));
-    }
+    DataArray DataArray::min() const { return reduce_innermost(*this, false); }
+    DataArray DataArray::max() const { return reduce_innermost(*this, true); }
 
     // Static factory methods
 
@@ -754,7 +729,7 @@ namespace xdataset
 //  DataArray -- replace_self_data / with_self_data
 // =========================================================================
 
-void DataArray::replace_self_data(DataSeries&& new_self)
+void DataArray::replace_self_data(DataSeries new_self)
 {
     // For Dependent, validate that the new series size matches the cell count.
     if (data_kind_ == DataArrayKind::kDependent && !multi_dimension_spec_.empty())
@@ -780,22 +755,10 @@ void DataArray::replace_self_data(DataSeries&& new_self)
     data_frame_cache_.reset();
 }
 
-void DataArray::replace_self_data(const DataSeries& new_self)
-{
-    replace_self_data(DataSeries(new_self));
-}
-
-DataArray DataArray::with_self_data(DataSeries&& new_self) const
+DataArray DataArray::with_self_data(DataSeries new_self) const
 {
     DataArray result(*this);
     result.replace_self_data(std::move(new_self));
-    return result;
-}
-
-DataArray DataArray::with_self_data(const DataSeries& new_self) const
-{
-    DataArray result(*this);
-    result.replace_self_data(DataSeries(new_self));
     return result;
 }
 

@@ -28,6 +28,7 @@ set(HDF5_TARGET hdf5::hdf5)
 message(STATUS "HDF5: found at ${HDF5_ROOT} (version ${HDF5_VERSION})")
 
 set(XDATASET_SOURCES
+	src/data_shape.cc
 	src/dimension_spec.cc
 	src/multi_dimension_spec.cc
 	src/multi_index_selector.cc

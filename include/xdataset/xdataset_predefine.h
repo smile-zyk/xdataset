@@ -75,47 +75,19 @@ namespace xdataset
         kBoolean
     };
 
-    struct DataShape {
-        std::vector<Index> dims;
-
-        DataShape() = default;
-        DataShape(std::initializer_list<Index> il) : dims(il) {}
-        explicit DataShape(const std::vector<Index>& v) : dims(v) {}
-
-        // ------------------------------------------------------------------
-        //  Named static constructors
-        // ------------------------------------------------------------------
-
-        static DataShape Scalar()            { return DataShape{}; }
-        static DataShape Vector(Index width) { return DataShape{width}; }
-        static DataShape Matrix(Index rows, Index cols) { return DataShape{rows, cols}; }
-
-        // ------------------------------------------------------------------
-
-        Index& operator[](size_t i)             { return dims[i]; }
-        Index  operator[](size_t i) const       { return dims[i]; }
-        size_t size()                     const { return dims.size(); }
-        bool   empty()                    const { return dims.empty(); }
-        void   clear()                          { dims.clear(); }
-        void   push_back(Index v)               { dims.push_back(v); }
-
-        bool operator==(const DataShape& o) const { return dims == o.dims; }
-        bool operator!=(const DataShape& o) const { return dims != o.dims; }
-
-        DataKind kind() const {
-            if (dims.empty())    return DataKind::kScalar;
-            if (dims.size() == 1) return DataKind::kVector;
-            return DataKind::kMatrix;
+    /// Render a DataType as "Double" / "Integer" / "Complex" / "String" / "Boolean".
+    inline const char* DataTypeToString(DataType type)
+    {
+        switch (type)
+        {
+            case DataType::kInteger: return "Integer";
+            case DataType::kReal:    return "Double";
+            case DataType::kComplex: return "Complex";
+            case DataType::kString:  return "String";
+            case DataType::kBoolean: return "Boolean";
         }
-
-        Index element_count() const {
-            if (dims.empty())    return 1;
-            if (dims.size() == 1) return dims[0];
-            return dims[0] * dims[1];
-        }
-
-        std::vector<Index> copy() const { return dims; }
-    };
+        return "Unknown";
+    }
 }
 
 #endif // XDATASET_PREDEFINE_H

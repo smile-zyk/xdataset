@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "xdataset_predefine.h"
+#include "data_shape.h"
 #include "unit.h"
 #include "multi_index_selector.h"
 

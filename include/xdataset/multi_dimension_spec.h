@@ -4,6 +4,7 @@
 #include "dimension_spec.h"
 #include "xdataset_predefine.h"
 #include <functional>
+#include <string>
 #include <vector>
 
 namespace xdataset
@@ -80,6 +81,9 @@ namespace xdataset
         std::size_t group_count_at_dim(Index dim_idx) const;
 
         void for_each_group_at_dim(Index dim_idx, const DimGroupVisitor& visitor) const;
+
+        /// Render as a human-readable string, e.g. "[3, 4, 5]" or "[3, [2, 1, 2]]".
+        std::string to_string() const;
 
     private:
         std::vector<DimensionSpec> dims_;
