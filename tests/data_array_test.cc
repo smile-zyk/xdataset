@@ -208,6 +208,28 @@ namespace xdataset
         EXPECT_NE(csv.find("\"1,1,1\",20,3,200,1.005 K"), std::string::npos);
     }
 
+    TEST(DataArrayMutabilityTest, MutableDataAndIndepDataAccessorsAllowDirectMutation)
+    {
+        DataSeries indep_values = DataSeries::CreateScalar<int>(2, Unit(), 0);
+        indep_values.scalar_at<int>(0) = 1;
+        indep_values.scalar_at<int>(1) = 2;
+        DataArray indep = DataArray::CreateIndependent(std::move(indep_values));
+
+        DataSeries dep_values = DataSeries::CreateScalar<int>(2, Unit(), 0);
+        dep_values.scalar_at<int>(0) = 10;
+        dep_values.scalar_at<int>(1) = 20;
+
+        tsl::ordered_map<std::string, const DataArray*> indep_vars;
+        indep_vars["x"] = &indep;
+        DataArray dep = DataArray::CreateDependent(std::move(dep_values), indep_vars);
+
+        dep.data().scalar_at<int>(0) = 100;
+        EXPECT_EQ(dep.data().scalar_at<int>(0), 100);
+
+        dep.indep_data("x").scalar_at<int>(1) = 200;
+        EXPECT_EQ(dep.indep_data("x").scalar_at<int>(1), 200);
+    }
+
     TEST(DataArrayIndepTest, DependentIndepFromInsideOutByIndexAndName)
     {
         Block block(MakeInterleavedCreateInfo());
@@ -771,7 +793,7 @@ namespace xdataset
     }
 
     // =========================================================================
-    //  DataArray min / max ¡ª innermost-dimension reduction
+    //  DataArray min / max ï¿½ï¿½ innermost-dimension reduction
     // =========================================================================
 
     TEST(DataArrayReduceTest, DependentReducesInnermostDimToDependent)

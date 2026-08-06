@@ -64,7 +64,18 @@ namespace xdataset
         /// For Dependent:   the dependent variable data (already expanded).
         const DataSeries& data() const
         {
-            return datas_.rbegin()->second;
+            auto it = datas_.end();
+            --it;
+            return it.value();
+        }
+
+        /// Mutable self data accessor. Callers may modify the returned
+        /// DataSeries directly through its own API.
+        DataSeries& data()
+        {
+            auto it = datas_.end();
+            --it;
+            return it.value();
         }
 
         /// Replace the self DataSeries (the last entry in datas_ with key = kSelf).
@@ -132,8 +143,10 @@ namespace xdataset
         std::vector<std::string> indep_names() const;
 
         const DataSeries& indep_data(Index index) const;
+        DataSeries& indep_data(Index index);
 
         const DataSeries& indep_data(const std::string& name) const;
+        DataSeries& indep_data(const std::string& name);
 
         DataArray indep(Index index = 1) const;
 

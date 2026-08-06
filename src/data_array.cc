@@ -171,6 +171,21 @@ namespace xdataset
         return it->second;
     }
 
+    DataSeries& DataArray::indep_data(Index index)
+    {
+        if (index <= 0)
+            throw std::invalid_argument("indep_data index must be 1-based and greater than 0");
+
+        const std::size_t rank = multi_dimension_spec_.rank();
+        if (static_cast<std::size_t>(index) > rank)
+            throw std::out_of_range("indep_data index out of range");
+
+        const std::size_t target = rank - static_cast<std::size_t>(index);
+        auto it = datas_.begin();
+        std::advance(it, static_cast<std::ptrdiff_t>(target));
+        return it.value();
+    }
+
     const DataSeries& DataArray::indep_data(const std::string& name) const
     {
         if (data_kind_ == DataArrayKind::kDependent && name == kSelf)
@@ -197,6 +212,33 @@ namespace xdataset
         }
 
         return it->second;
+    }
+
+    DataSeries& DataArray::indep_data(const std::string& name)
+    {
+        if (data_kind_ == DataArrayKind::kDependent && name == kSelf)
+            throw std::invalid_argument(
+                "indep_data: kSelf is not an independent variable for Dependent DataArray");
+
+        auto it = datas_.find(name);
+        if (it == datas_.end())
+            throw std::invalid_argument("indep_data name not found: " + name);
+
+        if (data_kind_ == DataArrayKind::kDependent)
+        {
+            const std::size_t rank = multi_dimension_spec_.rank();
+            std::size_t pos = 0;
+            for (auto dit = datas_.begin(); dit != datas_.end(); ++dit, ++pos)
+            {
+                if (dit->first == name)
+                    break;
+            }
+            if (pos >= rank)
+                throw std::invalid_argument(
+                    "indep_data: '" + name + "' is not an independent variable");
+        }
+
+        return it.value();
     }
 
     DataArray DataArray::indep(Index index) const
