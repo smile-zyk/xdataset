@@ -6,7 +6,7 @@
 
 #include <complex>
 #include <string>
-#include <vector>
+#include <type_traits>
 
 // ---------------------------------------------------------------------------
 //  Windows DLL export / import
@@ -73,6 +73,44 @@ namespace xdataset
         kComplex,
         kString,
         kBoolean
+    };
+
+    template <typename T>
+    struct IsSupported : std::false_type {};
+
+    template <>
+    struct IsSupported<double> : std::true_type {};
+
+    template <>
+    struct IsSupported<int> : std::true_type {};
+
+    template <>
+    struct IsSupported<std::complex<double> > : std::true_type {};
+
+    template <>
+    struct IsSupported<std::string> : std::true_type {};
+
+    template <typename T>
+    struct DataTypeOf;
+
+    template <>
+    struct DataTypeOf<double> {
+        static const DataType tag = DataType::kReal;
+    };
+
+    template <>
+    struct DataTypeOf<int> {
+        static const DataType tag = DataType::kInteger;
+    };
+
+    template <>
+    struct DataTypeOf<std::complex<double> > {
+        static const DataType tag = DataType::kComplex;
+    };
+
+    template <>
+    struct DataTypeOf<std::string> {
+        static const DataType tag = DataType::kString;
     };
 
     /// Render a DataType as "Double" / "Integer" / "Complex" / "String" / "Boolean".

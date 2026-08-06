@@ -4,59 +4,18 @@
 #include <Eigen/Dense>
 #include <unsupported/Eigen/CXX11/Tensor>
 
-#include <complex>
 #include <cstddef>
 #include <memory>
 #include <stdexcept>
-#include <string>
-#include <type_traits>
 #include <vector>
 
-#include "../xdataset_predefine.h"
+#include "xdataset_predefine.h"
 
 namespace xdataset {
 
 // ---------------------------------------------------------------------------
 //  Type-traits helpers
 // ---------------------------------------------------------------------------
-
-template <typename T>
-struct IsSupported : std::false_type {};
-
-template <>
-struct IsSupported<double> : std::true_type {};
-
-template <>
-struct IsSupported<int> : std::true_type {};
-
-template <>
-struct IsSupported<std::complex<double> > : std::true_type {};
-
-template <>
-struct IsSupported<std::string> : std::true_type {};
-
-template <typename T>
-struct DataTypeOf;
-
-template <>
-struct DataTypeOf<double> {
-    static const DataType tag = DataType::kReal;
-};
-
-template <>
-struct DataTypeOf<int> {
-    static const DataType tag = DataType::kInteger;
-};
-
-template <>
-struct DataTypeOf<std::complex<double> > {
-    static const DataType tag = DataType::kComplex;
-};
-
-template <>
-struct DataTypeOf<std::string> {
-    static const DataType tag = DataType::kString;
-};
 
 template <typename T>
 struct NumericVectorTypes {
