@@ -223,10 +223,10 @@ namespace xdataset
         indep_vars["x"] = &indep;
         DataArray dep = DataArray::CreateDependent(std::move(dep_values), indep_vars);
 
-        dep.data().scalar_at<int>(0) = 100;
+        dep.set_data(0, Measurement::Integer(100));
         EXPECT_EQ(dep.data().scalar_at<int>(0), 100);
 
-        dep.indep_data("x").scalar_at<int>(1) = 200;
+        dep.set_indep_data("x", 1, Measurement::Integer(200));
         EXPECT_EQ(dep.indep_data("x").scalar_at<int>(1), 200);
     }
 
@@ -948,16 +948,16 @@ namespace xdataset
     }
 
     // =========================================================================
-    //  DataArray replace_self_data
+    //  DataArray set_data / clone
     // =========================================================================
 
-    TEST(DataArrayReplaceSelfTest, IndependentReplace) {
+    TEST(DataArraySetDataTest, IndependentReplace) {
         DataSeries orig = MakeScalarSeriesFrom({10.0, 20.0, 30.0});
         DataArray da = DataArray::CreateIndependent(orig);
         EXPECT_EQ(da.data().size(), 3u);
 
         DataSeries new_self = MakeScalarSeriesFrom({1.0, 2.0, 3.0});
-        da.replace_self_data(new_self);
+        da.set_data(new_self);
 
         ASSERT_EQ(da.data().size(), 3u);
         EXPECT_DOUBLE_EQ(da.data().scalar_at<double>(0), 1.0);
@@ -965,7 +965,7 @@ namespace xdataset
         EXPECT_DOUBLE_EQ(da.data().scalar_at<double>(2), 3.0);
     }
 
-    TEST(DataArrayReplaceSelfTest, DependentReplace) {
+    TEST(DataArraySetDataTest, DependentReplace) {
         Block block(MakeValueRichCreateInfo());
         DataArray z_data = block.GetOrCreateDataArray("z");
         EXPECT_EQ(z_data.data().size(), 6u);
@@ -973,7 +973,7 @@ namespace xdataset
 
         DataSeries new_self = MakeScalarSeriesFrom(
             {999.0, 998.0, 997.0, 996.0, 995.0, 994.0});
-        z_data.replace_self_data(new_self);
+        z_data.set_data(new_self);
 
         ASSERT_EQ(z_data.data().size(), 6u);
         EXPECT_DOUBLE_EQ(z_data.data().scalar_at<double>(0), 999.0);
@@ -984,13 +984,77 @@ namespace xdataset
         EXPECT_EQ(table.GetRow(0).fields[2].to_string(), "999");
     }
 
-    TEST(DataArrayReplaceSelfTest, DependentSizeMismatchThrows) {
+    TEST(DataArraySetDataTest, DependentSizeMismatchThrows) {
         Block block(MakeValueRichCreateInfo());
         DataArray z_data = block.GetOrCreateDataArray("z");
         EXPECT_EQ(z_data.data().size(), 6u);
 
         DataSeries bad = MakeScalarSeriesFrom({1.0, 2.0});  // only 2 rows
-        EXPECT_THROW(z_data.replace_self_data(bad), std::invalid_argument);
+        EXPECT_THROW(z_data.set_data(bad), std::invalid_argument);
+    }
+
+    TEST(DataArraySetDataTest, CloneCreatesIndependentCopy) {
+        DataSeries values = MakeScalarSeriesFrom({1.0, 2.0, 3.0});
+        DataArray original = DataArray::CreateIndependent(values);
+
+        DataArray cloned = original.clone();
+        cloned.set_data(0, Measurement::Real(99.0));
+
+        EXPECT_DOUBLE_EQ(original.data().scalar_at<double>(0), 1.0);
+        EXPECT_DOUBLE_EQ(cloned.data().scalar_at<double>(0), 99.0);
+    }
+
+    TEST(DataArraySetDataTest, SetDataRowUpdatesTargetSeries) {
+        DataSeries values = MakeScalarSeriesFrom({1.0, 2.0, 3.0});
+        DataArray array = DataArray::CreateIndependent(values);
+
+        array.set_data(1, Measurement::Real(42.0));
+
+        EXPECT_DOUBLE_EQ(array.data().scalar_at<double>(1), 42.0);
+    }
+
+    TEST(DataArraySetDataTest, SetIndepDataByIndexAndNameUpdatesChosenSeries) {
+        DataSeries indep_values = DataSeries::CreateScalar<int>(2, Unit(), 0);
+        indep_values.scalar_at<int>(0) = 1;
+        indep_values.scalar_at<int>(1) = 2;
+        DataArray indep = DataArray::CreateIndependent(std::move(indep_values));
+
+        DataSeries dep_values = DataSeries::CreateScalar<int>(2, Unit(), 0);
+        dep_values.scalar_at<int>(0) = 10;
+        dep_values.scalar_at<int>(1) = 20;
+
+        tsl::ordered_map<std::string, const DataArray*> indep_vars;
+        indep_vars["x"] = &indep;
+        DataArray dep = DataArray::CreateDependent(std::move(dep_values), indep_vars);
+
+        dep.set_indep_data(1, 1, Measurement::Integer(999));
+        EXPECT_EQ(dep.indep_data(1).scalar_at<int>(1), 999);
+
+        dep.set_indep_data("x", 0, Measurement::Integer(123));
+        EXPECT_EQ(dep.indep_data("x").scalar_at<int>(0), 123);
+    }
+
+    TEST(DataArraySetDataTest, SetIndepDataBulkReplacesTargetSeries) {
+        DataSeries indep_values = DataSeries::CreateScalar<int>(2, Unit(), 0);
+        indep_values.scalar_at<int>(0) = 1;
+        indep_values.scalar_at<int>(1) = 2;
+        DataArray indep = DataArray::CreateIndependent(std::move(indep_values));
+
+        DataSeries dep_values = DataSeries::CreateScalar<int>(2, Unit(), 0);
+        dep_values.scalar_at<int>(0) = 10;
+        dep_values.scalar_at<int>(1) = 20;
+
+        tsl::ordered_map<std::string, const DataArray*> indep_vars;
+        indep_vars["x"] = &indep;
+        DataArray dep = DataArray::CreateDependent(std::move(dep_values), indep_vars);
+
+        DataSeries replacement = DataSeries::CreateScalar<int>(2, Unit(), 0);
+        replacement.scalar_at<int>(0) = 100;
+        replacement.scalar_at<int>(1) = 200;
+
+        dep.set_indep_data("x", std::move(replacement));
+        EXPECT_EQ(dep.indep_data("x").scalar_at<int>(0), 100);
+        EXPECT_EQ(dep.indep_data("x").scalar_at<int>(1), 200);
     }
 
     // =========================================================================

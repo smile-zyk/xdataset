@@ -67,6 +67,13 @@ namespace xdataset
         validate_datas_internal(info.datas, info.multi_dimension_spec, info.kind);
     }
 
+    const DataSeries& DataArray::data() const
+    {
+        auto it = datas_.end();
+        --it;
+        return it.value();
+    }
+
     DataArray::DataArray(const DataArrayCreateInfo& info)
         : datas_(info.datas),
           multi_dimension_spec_(info.multi_dimension_spec),
@@ -108,22 +115,6 @@ namespace xdataset
             data_frame_cache_.reset();
         }
         return *this;
-    }
-
-    tsl::ordered_map<std::string, DataSeries> DataArray::indep_datas() const
-    {
-        tsl::ordered_map<std::string, DataSeries> result;
-        const std::size_t rank = multi_dimension_spec_.rank();
-        std::size_t i = 0;
-        for (const auto& item : datas_)
-        {
-            // Dependent: stop after rank entries (exclude kSelf).
-            if (data_kind_ == DataArrayKind::kDependent && i >= rank)
-                break;
-            result.emplace(item.first, item.second);
-            ++i;
-        }
-        return result;
     }
 
     std::vector<std::string> DataArray::indep_names() const
@@ -171,21 +162,6 @@ namespace xdataset
         return it->second;
     }
 
-    DataSeries& DataArray::indep_data(Index index)
-    {
-        if (index <= 0)
-            throw std::invalid_argument("indep_data index must be 1-based and greater than 0");
-
-        const std::size_t rank = multi_dimension_spec_.rank();
-        if (static_cast<std::size_t>(index) > rank)
-            throw std::out_of_range("indep_data index out of range");
-
-        const std::size_t target = rank - static_cast<std::size_t>(index);
-        auto it = datas_.begin();
-        std::advance(it, static_cast<std::ptrdiff_t>(target));
-        return it.value();
-    }
-
     const DataSeries& DataArray::indep_data(const std::string& name) const
     {
         if (data_kind_ == DataArrayKind::kDependent && name == kSelf)
@@ -212,33 +188,6 @@ namespace xdataset
         }
 
         return it->second;
-    }
-
-    DataSeries& DataArray::indep_data(const std::string& name)
-    {
-        if (data_kind_ == DataArrayKind::kDependent && name == kSelf)
-            throw std::invalid_argument(
-                "indep_data: kSelf is not an independent variable for Dependent DataArray");
-
-        auto it = datas_.find(name);
-        if (it == datas_.end())
-            throw std::invalid_argument("indep_data name not found: " + name);
-
-        if (data_kind_ == DataArrayKind::kDependent)
-        {
-            const std::size_t rank = multi_dimension_spec_.rank();
-            std::size_t pos = 0;
-            for (auto dit = datas_.begin(); dit != datas_.end(); ++dit, ++pos)
-            {
-                if (dit->first == name)
-                    break;
-            }
-            if (pos >= rank)
-                throw std::invalid_argument(
-                    "indep_data: '" + name + "' is not an independent variable");
-        }
-
-        return it.value();
     }
 
     DataArray DataArray::indep(Index index) const
@@ -768,10 +717,10 @@ namespace xdataset
     }
 
 // =========================================================================
-//  DataArray -- replace_self_data / with_self_data
+//  DataArray -- set_data / clone
 // =========================================================================
 
-void DataArray::replace_self_data(DataSeries new_self)
+void DataArray::set_data(DataSeries new_self)
 {
     // For Dependent, validate that the new series size matches the cell count.
     if (data_kind_ == DataArrayKind::kDependent && !multi_dimension_spec_.empty())
@@ -780,7 +729,7 @@ void DataArray::replace_self_data(DataSeries new_self)
         if (new_self.size() != static_cast<Index>(expected))
         {
             throw std::invalid_argument(
-                "replace_self_data: new series size " +
+                "set_data: new series size " +
                 std::to_string(new_self.size()) +
                 " does not match multi_dimension_spec cell count " +
                 std::to_string(expected));
@@ -797,11 +746,270 @@ void DataArray::replace_self_data(DataSeries new_self)
     data_frame_cache_.reset();
 }
 
-DataArray DataArray::with_self_data(DataSeries new_self) const
+void DataArray::set_data(Index row, Measurement value)
 {
-    DataArray result(*this);
-    result.replace_self_data(std::move(new_self));
-    return result;
+    if (row < 0 || static_cast<std::size_t>(row) >= data().size())
+        throw std::out_of_range("set_data row out of range");
+
+    if (value.data_kind() != data().data_kind())
+        throw std::invalid_argument("set_data: measurement kind does not match series");
+
+    if (value.data_type() != data().data_type())
+        throw std::invalid_argument("set_data: measurement dtype does not match series");
+
+    if (value.shape() != data().data_shape())
+        throw std::invalid_argument("set_data: measurement shape does not match series");
+
+    DataSeries& self_series = datas_[kSelf];
+
+    if (value.data_kind() == DataKind::kScalar)
+    {
+        if (value.data_type() == DataType::kReal)
+            self_series.scalar_at<double>(row) = value.as_scalar<double>();
+        else if (value.data_type() == DataType::kInteger)
+            self_series.scalar_at<int>(row) = value.as_scalar<int>();
+        else if (value.data_type() == DataType::kComplex)
+            self_series.scalar_at<std::complex<double>>(row) = value.as_scalar<std::complex<double>>();
+        else if (value.data_type() == DataType::kString)
+            self_series.scalar_at<std::string>(row) = value.as_scalar<std::string>();
+        else
+            throw std::invalid_argument("set_data: unsupported scalar dtype");
+    }
+    else if (value.data_kind() == DataKind::kVector)
+    {
+        if (value.data_type() == DataType::kReal)
+            self_series.vector_at<double>(row) = value.as_vector<double>();
+        else if (value.data_type() == DataType::kInteger)
+            self_series.vector_at<int>(row) = value.as_vector<int>();
+        else if (value.data_type() == DataType::kComplex)
+            self_series.vector_at<std::complex<double>>(row) = value.as_vector<std::complex<double>>();
+        else if (value.data_type() == DataType::kString)
+            self_series.vector_at<std::string>(row) = value.as_vector<std::string>();
+        else
+            throw std::invalid_argument("set_data: unsupported vector dtype");
+    }
+    else
+    {
+        if (value.data_type() == DataType::kReal)
+            self_series.matrix_at<double>(row) = value.as_matrix<double>();
+        else if (value.data_type() == DataType::kInteger)
+            self_series.matrix_at<int>(row) = value.as_matrix<int>();
+        else if (value.data_type() == DataType::kComplex)
+            self_series.matrix_at<std::complex<double>>(row) = value.as_matrix<std::complex<double>>();
+        else if (value.data_type() == DataType::kString)
+            self_series.matrix_at<std::string>(row) = value.as_matrix<std::string>();
+        else
+            throw std::invalid_argument("set_data: unsupported matrix dtype");
+    }
+
+    data_frame_cache_.reset();
+}
+
+void DataArray::set_indep_data(DataSeries new_series)
+{
+    if (datas_.size() <= 1)
+        throw std::invalid_argument("set_indep_data: no independent data series available");
+
+    auto it = datas_.begin();
+    std::advance(it, static_cast<std::ptrdiff_t>(datas_.size() - 2));
+
+    if (new_series.size() != it->second.size())
+    {
+        throw std::invalid_argument(
+            "set_indep_data: new series size " + std::to_string(new_series.size()) +
+            " does not match existing series size " + std::to_string(it->second.size()));
+    }
+
+    new_series.canonicalize();
+    it.value() = std::move(new_series);
+    data_frame_cache_.reset();
+}
+
+void DataArray::set_indep_data(Index indep_index, DataSeries new_series)
+{
+    if (indep_index <= 0)
+        throw std::invalid_argument("indep_index must be 1-based and greater than 0");
+
+    const std::size_t rank = multi_dimension_spec_.rank();
+    if (static_cast<std::size_t>(indep_index) > rank)
+        throw std::out_of_range("indep_index out of range");
+
+    const std::size_t target = rank - static_cast<std::size_t>(indep_index);
+    auto it = datas_.begin();
+    std::advance(it, static_cast<std::ptrdiff_t>(target));
+
+    if (new_series.size() != it->second.size())
+    {
+        throw std::invalid_argument(
+            "set_indep_data: new series size " + std::to_string(new_series.size()) +
+            " does not match existing series size " + std::to_string(it->second.size()));
+    }
+
+    new_series.canonicalize();
+    it.value() = std::move(new_series);
+    data_frame_cache_.reset();
+}
+
+void DataArray::set_indep_data(const std::string& indep_name, DataSeries new_series)
+{
+    if (indep_name.empty())
+        throw std::invalid_argument("indep_name must not be empty");
+
+    auto it = datas_.find(indep_name);
+    if (it == datas_.end())
+        throw std::invalid_argument("indep_data name not found: " + indep_name);
+
+    if (new_series.size() != it->second.size())
+    {
+        throw std::invalid_argument(
+            "set_indep_data: new series size " + std::to_string(new_series.size()) +
+            " does not match existing series size " + std::to_string(it->second.size()));
+    }
+
+    new_series.canonicalize();
+    it.value() = std::move(new_series);
+    data_frame_cache_.reset();
+}
+
+void DataArray::set_indep_data(Index indep_index, Index row, Measurement value)
+{
+    if (indep_index <= 0)
+        throw std::invalid_argument("indep_index must be 1-based and greater than 0");
+
+    const std::size_t rank = multi_dimension_spec_.rank();
+    if (static_cast<std::size_t>(indep_index) > rank)
+        throw std::out_of_range("indep_index out of range");
+
+    const std::size_t target = rank - static_cast<std::size_t>(indep_index);
+    auto it = datas_.begin();
+    std::advance(it, static_cast<std::ptrdiff_t>(target));
+
+    if (row < 0 || static_cast<std::size_t>(row) >= it->second.size())
+        throw std::out_of_range("set_indep_data row out of range");
+
+    if (value.data_kind() != it->second.data_kind())
+        throw std::invalid_argument("set_indep_data: measurement kind does not match series");
+
+    if (value.data_type() != it->second.data_type())
+        throw std::invalid_argument("set_indep_data: measurement dtype does not match series");
+
+    if (value.shape() != it->second.data_shape())
+        throw std::invalid_argument("set_indep_data: measurement shape does not match series");
+
+    DataSeries& target_series = it.value();
+
+    if (value.data_kind() == DataKind::kScalar)
+    {
+        if (value.data_type() == DataType::kReal)
+            target_series.scalar_at<double>(row) = value.as_scalar<double>();
+        else if (value.data_type() == DataType::kInteger)
+            target_series.scalar_at<int>(row) = value.as_scalar<int>();
+        else if (value.data_type() == DataType::kComplex)
+            target_series.scalar_at<std::complex<double>>(row) = value.as_scalar<std::complex<double>>();
+        else if (value.data_type() == DataType::kString)
+            target_series.scalar_at<std::string>(row) = value.as_scalar<std::string>();
+        else
+            throw std::invalid_argument("set_indep_data: unsupported scalar dtype");
+    }
+    else if (value.data_kind() == DataKind::kVector)
+    {
+        if (value.data_type() == DataType::kReal)
+            target_series.vector_at<double>(row) = value.as_vector<double>();
+        else if (value.data_type() == DataType::kInteger)
+            target_series.vector_at<int>(row) = value.as_vector<int>();
+        else if (value.data_type() == DataType::kComplex)
+            target_series.vector_at<std::complex<double>>(row) = value.as_vector<std::complex<double>>();
+        else if (value.data_type() == DataType::kString)
+            target_series.vector_at<std::string>(row) = value.as_vector<std::string>();
+        else
+            throw std::invalid_argument("set_indep_data: unsupported vector dtype");
+    }
+    else
+    {
+        if (value.data_type() == DataType::kReal)
+            target_series.matrix_at<double>(row) = value.as_matrix<double>();
+        else if (value.data_type() == DataType::kInteger)
+            target_series.matrix_at<int>(row) = value.as_matrix<int>();
+        else if (value.data_type() == DataType::kComplex)
+            target_series.matrix_at<std::complex<double>>(row) = value.as_matrix<std::complex<double>>();
+        else if (value.data_type() == DataType::kString)
+            target_series.matrix_at<std::string>(row) = value.as_matrix<std::string>();
+        else
+            throw std::invalid_argument("set_indep_data: unsupported matrix dtype");
+    }
+
+    data_frame_cache_.reset();
+}
+
+void DataArray::set_indep_data(const std::string& indep_name, Index row, Measurement value)
+{
+    if (indep_name.empty())
+        throw std::invalid_argument("indep_name must not be empty");
+
+    auto it = datas_.find(indep_name);
+    if (it == datas_.end())
+        throw std::invalid_argument("indep_data name not found: " + indep_name);
+
+    if (row < 0 || static_cast<std::size_t>(row) >= it->second.size())
+        throw std::out_of_range("set_indep_data row out of range");
+
+    if (value.data_kind() != it->second.data_kind())
+        throw std::invalid_argument("set_indep_data: measurement kind does not match series");
+
+    if (value.data_type() != it->second.data_type())
+        throw std::invalid_argument("set_indep_data: measurement dtype does not match series");
+
+    if (value.shape() != it->second.data_shape())
+        throw std::invalid_argument("set_indep_data: measurement shape does not match series");
+
+    DataSeries& target_series = it.value();
+
+    if (value.data_kind() == DataKind::kScalar)
+    {
+        if (value.data_type() == DataType::kReal)
+            target_series.scalar_at<double>(row) = value.as_scalar<double>();
+        else if (value.data_type() == DataType::kInteger)
+            target_series.scalar_at<int>(row) = value.as_scalar<int>();
+        else if (value.data_type() == DataType::kComplex)
+            target_series.scalar_at<std::complex<double>>(row) = value.as_scalar<std::complex<double>>();
+        else if (value.data_type() == DataType::kString)
+            target_series.scalar_at<std::string>(row) = value.as_scalar<std::string>();
+        else
+            throw std::invalid_argument("set_indep_data: unsupported scalar dtype");
+    }
+    else if (value.data_kind() == DataKind::kVector)
+    {
+        if (value.data_type() == DataType::kReal)
+            target_series.vector_at<double>(row) = value.as_vector<double>();
+        else if (value.data_type() == DataType::kInteger)
+            target_series.vector_at<int>(row) = value.as_vector<int>();
+        else if (value.data_type() == DataType::kComplex)
+            target_series.vector_at<std::complex<double>>(row) = value.as_vector<std::complex<double>>();
+        else if (value.data_type() == DataType::kString)
+            target_series.vector_at<std::string>(row) = value.as_vector<std::string>();
+        else
+            throw std::invalid_argument("set_indep_data: unsupported vector dtype");
+    }
+    else
+    {
+        if (value.data_type() == DataType::kReal)
+            target_series.matrix_at<double>(row) = value.as_matrix<double>();
+        else if (value.data_type() == DataType::kInteger)
+            target_series.matrix_at<int>(row) = value.as_matrix<int>();
+        else if (value.data_type() == DataType::kComplex)
+            target_series.matrix_at<std::complex<double>>(row) = value.as_matrix<std::complex<double>>();
+        else if (value.data_type() == DataType::kString)
+            target_series.matrix_at<std::string>(row) = value.as_matrix<std::string>();
+        else
+            throw std::invalid_argument("set_indep_data: unsupported matrix dtype");
+    }
+
+    data_frame_cache_.reset();
+}
+
+DataArray DataArray::clone() const
+{
+    return DataArray(*this);
 }
 
 } // namespace xdataset

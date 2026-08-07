@@ -13,6 +13,8 @@
 
 namespace xdataset
 {
+    using DataSeriesMap = tsl::ordered_map<std::string, DataSeries>;
+
     enum class DataArrayKind
     {
         kDependent,
@@ -30,7 +32,7 @@ namespace xdataset
         /// multi_dimension_spec.rank() + 1: the first rank entries are
         /// independent variable data (expanded), and the last (kSelf) is
         /// the dependent data (also expanded).
-        tsl::ordered_map<std::string, DataSeries> datas;
+        DataSeriesMap datas;
 
         MultiDimensionSpec multi_dimension_spec;
         DataArrayKind kind = DataArrayKind::kDependent;
@@ -62,33 +64,37 @@ namespace xdataset
         /// Self data — the last entry in datas_ (key = kSelf).
         /// For Independent: raw (un-expanded) dimension data of the last dimension.
         /// For Dependent:   the dependent variable data (already expanded).
-        const DataSeries& data() const
-        {
-            auto it = datas_.end();
-            --it;
-            return it.value();
-        }
-
-        /// Mutable self data accessor. Callers may modify the returned
-        /// DataSeries directly through its own API.
-        DataSeries& data()
-        {
-            auto it = datas_.end();
-            --it;
-            return it.value();
-        }
+        const DataSeries& data() const;
 
         /// Replace the self DataSeries (the last entry in datas_ with key = kSelf).
         /// For Dependent DataArrays, the new series must have the same size as
         /// multi_dimension_spec().compute_cell_count().  The data_frame cache is
         /// invalidated.  The new series must be canonicalized before replacement.
         /// This mutates the DataArray in place.
-        void replace_self_data(DataSeries new_self);
+        void set_data(DataSeries new_self);
 
-        /// Return a new DataArray with the same independent dimensions /
-        /// multi_dimension_spec but with `new_self` as the self data.
-        /// The original DataArray is unchanged.
-        DataArray with_self_data(DataSeries new_self) const;
+        /// Replace the value at a specific row in the self data series.
+        void set_data(Index row, Measurement value);
+
+        /// Replace the last independent data series wholesale.
+        /// The new series length must match the existing series length so the
+        /// multi_dimension_spec and downstream indep() semantics remain valid.
+        void set_indep_data(DataSeries new_series);
+
+        /// Replace an independent data series wholesale by index.
+        void set_indep_data(Index indep_index, DataSeries new_series);
+
+        /// Replace an independent data series wholesale by name.
+        void set_indep_data(const std::string& indep_name, DataSeries new_series);
+
+        /// Replace the value at a specific row in an independent data series by index.
+        void set_indep_data(Index indep_index, Index row, Measurement value);
+
+        /// Replace the value at a specific row in an independent data series by name.
+        void set_indep_data(const std::string& indep_name, Index row, Measurement value);
+
+        /// Return a deep copy of this DataArray.
+        DataArray clone() const;
 
         /// Apply a transformation callback to the self DataSeries and return a
         /// new DataArray with the same independent dimensions / multi_dimension_spec
@@ -106,7 +112,7 @@ namespace xdataset
         {
             DataSeries new_self = data().transform(std::forward<Func>(callback));
             DataArray result(*this);
-            result.replace_self_data(std::move(new_self));
+            result.set_data(std::move(new_self));
             return result;
         }
 
@@ -129,24 +135,17 @@ namespace xdataset
         const DataFrame& GetOrCreateDataFrame(const std::string& variable_name = "data") const;
 
         /// Full unified data map. The last entry is always kSelf.
-        const tsl::ordered_map<std::string, DataSeries>& datas() const
+        const DataSeriesMap& datas() const
         {
             return datas_;
         }
-
-        /// Independent-variable data only.
-        /// - Independent: all entries (all are independent dimension data).
-        /// - Dependent:   the first rank() entries (excludes kSelf).
-        tsl::ordered_map<std::string, DataSeries> indep_datas() const;
 
         /// Ordered names of independent variables.
         std::vector<std::string> indep_names() const;
 
         const DataSeries& indep_data(Index index) const;
-        DataSeries& indep_data(Index index);
 
         const DataSeries& indep_data(const std::string& name) const;
-        DataSeries& indep_data(const std::string& name);
 
         DataArray indep(Index index = 1) const;
 
@@ -191,7 +190,7 @@ namespace xdataset
         /// Unified data storage.  The last entry (key = kSelf) is always the
         /// self data; preceding entries are independent dimension / variable
         /// data.
-        tsl::ordered_map<std::string, DataSeries> datas_;
+        DataSeriesMap datas_;
 
         MultiDimensionSpec multi_dimension_spec_;
         DataArrayKind       data_kind_;
