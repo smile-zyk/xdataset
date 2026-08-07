@@ -20,7 +20,10 @@ DataSeries::DataSeries()
       unit_() {}
 
 DataSeries::DataSeries(DataType dtype, const DataShape& shape)
-    : data_type_(dtype), shape_(shape), storage_(make_storage(dtype, shape)), unit_() {}
+    : data_type_(dtype == DataType::kBoolean ? DataType::kInteger : dtype)
+    , shape_(shape)
+    , storage_(make_storage(dtype == DataType::kBoolean ? DataType::kInteger : dtype, shape))
+    , unit_() {}
 
 DataSeries::DataSeries(const DataSeries& other)
     : data_type_(other.data_type_), shape_(other.shape_),
@@ -303,7 +306,11 @@ void DataSeries::assign_from(const DataSeries& src, Index src_row, Index dst_row
 
 void DataSeries::append(const Measurement& m)
 {
-    if (m.data_type() != data_type_ || m.shape() != shape_)
+    // kBoolean Measurement is stored as int (0/1) inside an Integer DataSeries.
+    const bool meas_is_bool = (m.data_type() == DataType::kBoolean);
+    if (!meas_is_bool && (m.data_type() != data_type_ || m.shape() != shape_))
+        throw std::bad_cast();
+    if (meas_is_bool && (data_type_ != DataType::kInteger || m.shape() != shape_))
         throw std::bad_cast();
 
     // First non-dimensionless measurement sets the series' unit.
@@ -319,7 +326,8 @@ void DataSeries::append(const Measurement& m)
     }
 
     if (shape_.kind() == DataKind::kScalar) {
-        if (data_type_ == DataType::kReal) append_scalar(boost::get<double>(m.storage()));
+        if (meas_is_bool) append_scalar(static_cast<int>(boost::get<bool>(m.storage())));
+        else if (data_type_ == DataType::kReal) append_scalar(boost::get<double>(m.storage()));
         else if (data_type_ == DataType::kInteger) append_scalar(boost::get<int>(m.storage()));
         else if (data_type_ == DataType::kComplex) append_scalar(boost::get<std::complex<double> >(m.storage()));
         else append_scalar(boost::get<std::string>(m.storage()));

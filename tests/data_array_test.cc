@@ -219,7 +219,7 @@ namespace xdataset
         dep_values.scalar_at<int>(0) = 10;
         dep_values.scalar_at<int>(1) = 20;
 
-        tsl::ordered_map<std::string, const DataArray*> indep_vars;
+        ordered_map<std::string, const DataArray*> indep_vars;
         indep_vars["x"] = &indep;
         DataArray dep = DataArray::CreateDependent(std::move(dep_values), indep_vars);
 
@@ -1023,7 +1023,7 @@ namespace xdataset
         dep_values.scalar_at<int>(0) = 10;
         dep_values.scalar_at<int>(1) = 20;
 
-        tsl::ordered_map<std::string, const DataArray*> indep_vars;
+        ordered_map<std::string, const DataArray*> indep_vars;
         indep_vars["x"] = &indep;
         DataArray dep = DataArray::CreateDependent(std::move(dep_values), indep_vars);
 
@@ -1044,7 +1044,7 @@ namespace xdataset
         dep_values.scalar_at<int>(0) = 10;
         dep_values.scalar_at<int>(1) = 20;
 
-        tsl::ordered_map<std::string, const DataArray*> indep_vars;
+        ordered_map<std::string, const DataArray*> indep_vars;
         indep_vars["x"] = &indep;
         DataArray dep = DataArray::CreateDependent(std::move(dep_values), indep_vars);
 

@@ -3,7 +3,7 @@
 
 #include <memory>
 #include <string>
-#include <tsl/ordered_map.h>
+#include "ordered_map.h"
 #include <vector>
 
 #include "data_series.h"
@@ -13,7 +13,7 @@
 
 namespace xdataset
 {
-    using DataSeriesMap = tsl::ordered_map<std::string, DataSeries>;
+    using DataSeriesMap = ordered_map<std::string, DataSeries>;
 
     enum class DataArrayKind
     {
@@ -183,7 +183,7 @@ namespace xdataset
         // Dependent variable with named independent DataArray objects.
         static DataArray CreateDependent(
             DataSeries data,
-            const tsl::ordered_map<std::string, const DataArray*>& indep_variables);
+            const ordered_map<std::string, const DataArray*>& indep_variables);
 
     private:
 

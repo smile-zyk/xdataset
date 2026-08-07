@@ -23,7 +23,7 @@ namespace xdataset
 
 struct XDATASET_API Group
 {
-    tsl::ordered_map<std::string, std::unique_ptr<Group>> subgroups;
+    ordered_map<std::string, std::unique_ptr<Group>> subgroups;
     std::unique_ptr<Block> block;
 
     bool is_leaf()  const { return block != nullptr; }
