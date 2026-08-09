@@ -108,9 +108,15 @@ std::string Unit::to_string() const
     // Step 3: reverse lookup the canonical dim
     const std::string* base_name = reg.reverse_lookup(canonical.dim_);
 
-    // Step 4: canonical -> just return the name or key
+    // Step 3b: if no exact match, try factorisation (e.g. A*W)
+    std::string decomposed;
+    if (!base_name)
+        decomposed = reg.decompose(canonical.dim_);
+
+    // Step 4: canonical -> just return the name, decomposition, or key
     if (mult_ == 1.0) {
         if (base_name) return *base_name;
+        if (!decomposed.empty()) return decomposed;
         return canonical.dim_.key();
     }
 
@@ -121,6 +127,8 @@ std::string Unit::to_string() const
         if (it->second == mult_) {
             if (base_name)
                 return it->first + *base_name;
+            if (!decomposed.empty())
+                return it->first + "(" + decomposed + ")";
             std::ostringstream oss;
             oss << mult_ << '*' << canonical.dim_.key();
             return oss.str();

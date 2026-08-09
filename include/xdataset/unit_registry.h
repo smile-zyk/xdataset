@@ -72,6 +72,15 @@ public:
     /// base name, or nullptr if not registered.
     const std::string* reverse_lookup(const UnitData& dim) const;
 
+    /// Decompose a compound dimension into a product / quotient of
+    /// registered base-unit names.  Returns "" when no decomposition
+    /// is possible (caller falls back to UnitData::key()).
+    ///
+    /// Examples:
+    ///   {m:2,kg:1,s:-3,A:1}  → "A*W"      (A * Watt)
+    ///   {m:1,s:-1}           → "m/sec"    (meter / second)
+    std::string decompose(const UnitData& dim) const;
+
     /// Given a multiplier + dimension, return the type-B predef name,
     /// or nullptr if not registered.
     const std::string* reverse_predef_lookup(double mult,

@@ -413,6 +413,97 @@ TEST(UnitTest, ToStringCompound)
     EXPECT_FALSE(ms.to_string().empty());
 }
 
+// =========================================================================
+//  to_string: decomposition (factorisation) of compound units
+// =========================================================================
+
+TEST(UnitTest, ToStringDecomposeAW)
+{
+    // A * W  →  "A*W"  (not bare SI exponents)
+    Unit a = Unit::parse("A").canonicalized();
+    Unit w = Unit::parse("W").canonicalized();
+    Unit aw = a * w;
+    EXPECT_EQ(aw.to_string(), "A*W");
+}
+
+TEST(UnitTest, ToStringDecomposeMeterPerSec)
+{
+    // meter / sec  →  "meter/sec"
+    Unit m = Unit::parse("meter").canonicalized();
+    Unit s = Unit::parse("sec").canonicalized();
+    Unit ms = m / s;
+    EXPECT_EQ(ms.to_string(), "meter/sec");
+}
+
+TEST(UnitTest, ToStringDecomposeOhmTimesA)
+{
+    // Ohm * A  →  "V"  (reduces to registered unit)
+    Unit ohm = Unit::parse("Ohm").canonicalized();
+    Unit a   = Unit::parse("A").canonicalized();
+    Unit va  = ohm * a;
+    EXPECT_EQ(va.to_string(), "V");
+}
+
+TEST(UnitTest, ToStringDecomposeVPerA)
+{
+    // V / A  →  "Ohm"
+    Unit v = Unit::parse("V").canonicalized();
+    Unit a = Unit::parse("A").canonicalized();
+    Unit r = v / a;
+    EXPECT_EQ(r.to_string(), "Ohm");
+}
+
+TEST(UnitTest, ToStringDecomposeHzSec)
+{
+    // Hz * sec  →  dimensionless (empty string)
+    Unit hz  = Unit::parse("Hz").canonicalized();
+    Unit sec = Unit::parse("sec").canonicalized();
+    Unit dim = hz * sec;
+    EXPECT_TRUE(dim.to_string().empty());
+}
+
+TEST(UnitTest, ToStringDecomposeWS)
+{
+    // W * sec  →  "J"  (Joule)
+    Unit w = Unit::parse("W").canonicalized();
+    Unit s = Unit::parse("sec").canonicalized();
+    Unit j = w * s;
+    EXPECT_EQ(j.to_string(), "J");
+}
+
+TEST(UnitTest, ToStringDecomposeCompoundWithMultipleParts)
+{
+    // W  already registered, N not in registry but can decompose to kg*meter/sec^2
+    // Just test decomposition doesn't crash / returns non-empty for something
+    // we know can be decomposed.
+    Unit a   = Unit::parse("A").canonicalized();
+    Unit w   = Unit::parse("W").canonicalized();
+    Unit aw  = a * w;
+    EXPECT_FALSE(aw.to_string().empty());
+    // Round-trip: the decomposed string should parse back to same dimension.
+    Unit rt = Unit::parse(aw.to_string());
+    EXPECT_TRUE(rt.canonicalized().same_dimension(aw));
+}
+
+TEST(UnitTest, ToStringDecomposeRoundTrip)
+{
+    // Verify decomposed strings parse back correctly.
+    auto check_roundtrip = [](const char* a_str, const char* b_str) {
+        Unit a = Unit::parse(a_str).canonicalized();
+        Unit b = Unit::parse(b_str).canonicalized();
+        Unit c = a * b;
+        std::string s = c.to_string();
+        EXPECT_FALSE(s.empty());
+        Unit rt = Unit::parse(s);
+        EXPECT_TRUE(rt.canonicalized().same_dimension(c))
+            << a_str << "*" << b_str << " → \"" << s << "\" round-trip failed";
+    };
+    check_roundtrip("A", "W");
+    check_roundtrip("V", "sec");
+    check_roundtrip("Ohm", "A");
+    check_roundtrip("Hz", "meter");
+}
+
 TEST(UnitTest, ToStringDefaultDoesNotCrash)
 {
     Unit u;

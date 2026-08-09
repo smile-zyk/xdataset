@@ -6,6 +6,95 @@ namespace xdataset
 {
 
 // =========================================================================
+//  Helper: does `probe` divide `target`?
+// =========================================================================
+//
+//  Returns true iff for every SI dimension the probe exponent is either
+//  zero or has the same sign as the target exponent and its absolute
+//  value does not exceed the target's absolute value.  Intuitively:
+//  `target / probe` will not introduce new dimensions or flip signs.
+
+static bool divides(const UnitData& probe, const UnitData& target)
+{
+    auto check = [](int8_t p, int8_t t) -> bool {
+        if (p == 0) return true;
+        if (t == 0) return false;
+        if ((p > 0) != (t > 0)) return false;
+        return std::abs(p) <= std::abs(t);
+    };
+    return check(probe.m,   target.m)   && check(probe.kg, target.kg) &&
+           check(probe.s,   target.s)   && check(probe.A,  target.A)  &&
+           check(probe.K,   target.K)   && check(probe.mol, target.mol) &&
+           check(probe.cd,  target.cd);
+}
+
+/// Return true when `cand` is a "better" decomposition than `best`
+/// (which may be empty).  Ties are broken by:
+///   1) fewer separators  2) prefers '/' over '*'  3) shorter string.
+static bool better_candidate(const std::string& cand,
+                             const std::string& best)
+{
+    if (best.empty()) return true;
+    auto count_sep = [](const std::string& s) {
+        int n = 0;
+        for (char c : s)
+            if (c == '*' || c == '/') ++n;
+        return n;
+    };
+    int cs = count_sep(cand);
+    int bs = count_sep(best);
+    if (cs != bs) return cs < bs;
+    // Both have same number of separators — prefer '/' form.
+    bool chas_div = (cand.find('/') != std::string::npos);
+    bool bhas_div = (best.find('/') != std::string::npos);
+    if (chas_div != bhas_div) return chas_div;
+    return cand.size() < best.size();
+}
+
+// =========================================================================
+//  UnitRegistry::decompose
+// =========================================================================
+
+std::string UnitRegistry::decompose(const UnitData& dim) const
+{
+    // 0) Already a registered unit?
+    const std::string* exact = reverse_lookup(dim);
+    if (exact) return *exact;
+
+    // Dimensionless → nothing to decompose.
+    if (dim.empty()) return std::string();
+
+    std::string best;
+
+    for (std::map<std::string, UnitData>::const_iterator it = base_map_.begin();
+         it != base_map_.end(); ++it) {
+        const std::string& probe_name = it->first;
+        const UnitData&    probe_dim  = it->second;
+
+        // ---- probe * remainder = target ? ----
+        UnitData rem_mul = dim / probe_dim;
+        if (divides(probe_dim, dim) && !rem_mul.empty()) {
+            // a) probe * decompose(remainder)
+            std::string dec = decompose(rem_mul);
+            if (!dec.empty()) {
+                std::string cand = probe_name + "*" + dec;
+                if (better_candidate(cand, best))
+                    best = cand;
+            }
+            // b) probe / decompose(remainder.inv())
+            std::string dec_inv = decompose(rem_mul.inv());
+            if (!dec_inv.empty()) {
+                std::string cand = probe_name + "/" + dec_inv;
+                if (better_candidate(cand, best))
+                    best = cand;
+            }
+        }
+    }
+
+    return best;
+}
+
+// =========================================================================
 //  UnitRegistry implementation
 // =========================================================================
 
