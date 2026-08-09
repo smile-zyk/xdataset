@@ -699,10 +699,9 @@ Measurement Measurement::canonicalized() const {
 
     double mult = unit_.multiplier();
     Unit target = unit_.canonicalized();
-    bool affine = unit_.is_affine();
 
     // Fast path: already canonical
-    if (!affine && mult == 1.0) {
+    if (mult == 1.0) {
         Measurement result(*this);
         result.unit_ = target;
         return result;
@@ -724,10 +723,10 @@ Measurement Measurement::canonicalized() const {
         double v = (data_type_ == DataType::kInteger)
                    ? static_cast<double>(boost::get<int>(storage_))
                    : boost::get<double>(storage_);
-        v = affine ? units::convert(v, unit_.raw(), target.raw()) : v * mult;
+        v *= mult;
         if (res_dtype == DataType::kComplex) {
             std::complex<double> cv = boost::get<std::complex<double> >(storage_);
-            if (!affine) cv *= mult;
+            cv *= mult;
             result.storage_ = cv;
         } else {
             result.storage_ = v;
@@ -738,7 +737,7 @@ Measurement Measurement::canonicalized() const {
     if (shape_.kind() == DataKind::kVector) {
         if (res_dtype == DataType::kComplex) {
             VecXcd vec = boost::get<VecXcd>(storage_);
-            if (!affine) vec *= mult;
+            vec *= mult;
             result.storage_ = vec;
         } else {
             VecXd vec(count);
@@ -746,7 +745,7 @@ Measurement Measurement::canonicalized() const {
                 double v = (data_type_ == DataType::kInteger)
                            ? static_cast<double>(boost::get<VecXi>(storage_)(i))
                            : boost::get<VecXd>(storage_)(i);
-                vec(i) = affine ? units::convert(v, unit_.raw(), target.raw()) : v * mult;
+                vec(i) = v * mult;
             }
             result.storage_ = vec;
         }
@@ -756,7 +755,7 @@ Measurement Measurement::canonicalized() const {
     // Matrix
     if (res_dtype == DataType::kComplex) {
         MatXcd mat = boost::get<MatXcd>(storage_);
-        if (!affine) mat *= mult;
+        mat *= mult;
         result.storage_ = mat;
     } else {
         Index rows = shape_[0], cols = shape_[1];
@@ -766,7 +765,7 @@ Measurement Measurement::canonicalized() const {
                 double v = (data_type_ == DataType::kInteger)
                            ? static_cast<double>(boost::get<MatXi>(storage_)(r, c))
                            : boost::get<MatXd>(storage_)(r, c);
-                mat(r, c) = affine ? units::convert(v, unit_.raw(), target.raw()) : v * mult;
+                mat(r, c) = v * mult;
             }
         }
         result.storage_ = mat;

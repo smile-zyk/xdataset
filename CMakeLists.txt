@@ -10,7 +10,6 @@ option(BUILD_XDATASET_TEST "Build xdataset unit tests" ON)
 
 find_package(Eigen3 3.3 CONFIG REQUIRED)
 find_package(Boost 1.72 CONFIG REQUIRED)
-find_package(llnl-units CONFIG REQUIRED)
 
 # HDF5: prefer Homebrew/system HDF5 via HDF5_ROOT hint, fall back to CMake's FindHDF5
 if(HDF5_ROOT)
@@ -37,11 +36,14 @@ set(XDATASET_SOURCES
 	src/data_series.cc
 	src/measurement.cc
 	src/unit.cc
+	src/unit_registry.cc
 	src/dataset.cc
 	src/hdf5_io.cc
 	src/touchstone_io.cc
 	src/data_array_io.cc
 )
+
+# ── xdataset shared lib ─────────────────────────────────────────────────
 
 add_library(xdataset SHARED ${XDATASET_SOURCES})
 target_compile_definitions(xdataset PRIVATE XDATASET_BUILD_DLL)
@@ -54,6 +56,16 @@ if(BUILD_XDATASET_TEST)
     include(GoogleTest)
     enable_testing()
 
+    # ── units test ─────────────────────────────────────────────────
+
+    add_executable(xdataset_units_test
+        tests/unit_test.cc
+    )
+    target_link_libraries(xdataset_units_test PRIVATE xdataset GTest::gtest_main)
+    gtest_discover_tests(xdataset_units_test)
+
+    # ── full xdataset test ─────────────────────────────────────────
+
     add_executable(xdataset_test
         tests/data_series_test.cc
         tests/measurement_test.cc
@@ -61,7 +73,6 @@ if(BUILD_XDATASET_TEST)
         tests/block_test.cc
         tests/data_array_test.cc
         tests/data_frame_test.cc
-        tests/unit_test.cc
         tests/dataset_test.cc
         tests/hdf5_io_test.cc
         tests/touchstone_io_test.cc
@@ -79,7 +90,7 @@ add_executable(xdataset_playground
 target_include_directories(xdataset PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(xdataset_playground PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xdataset ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(xdataset PUBLIC Eigen3::Eigen Boost::headers llnl-units::units ${HDF5_TARGET})
+target_link_libraries(xdataset PUBLIC Eigen3::Eigen Boost::headers ${HDF5_TARGET})
 target_link_libraries(xdataset_playground PRIVATE xdataset)
 
 # =============================================================================

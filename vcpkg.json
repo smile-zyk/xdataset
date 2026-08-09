@@ -2,9 +2,7 @@
     "dependencies": [
         "gtest",
         "eigen3",
-        "llnl-units",
-        "boost-variant",
-        "tsl-ordered-map"
+        "boost-variant"
     ],
     "overrides": [
         {

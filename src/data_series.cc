@@ -70,9 +70,8 @@ void DataSeries::canonicalize() {
 
     const double mult = unit_.multiplier();
     const Unit target = unit_.canonicalized();
-    const bool affine = unit_.is_affine();
 
-    if (!affine && mult == 1.0) {
+    if (mult == 1.0) {
         unit_ = target;
         return;
     }
@@ -81,17 +80,17 @@ void DataSeries::canonicalize() {
         Index idx = static_cast<Index>(i);
         if (shape_.kind() == DataKind::kScalar) {
             double& v = scalar_at<double>(idx);
-            v = affine ? units::convert(v, unit_.raw(), target.raw()) : v * mult;
+            v *= mult;
         } else if (shape_.kind() == DataKind::kVector) {
             typename NumericVectorTypes<double>::MapType v = vector_at<double>(idx);
             for (Index j = 0; j < v.size(); ++j) {
-                v(j) = affine ? units::convert(v(j), unit_.raw(), target.raw()) : v(j) * mult;
+                v(j) *= mult;
             }
         } else {
             typename NumericMatrixTypes<double>::MapType m = matrix_at<double>(idx);
             for (Index r = 0; r < m.rows(); ++r) {
                 for (Index c = 0; c < m.cols(); ++c) {
-                    m(r, c) = affine ? units::convert(m(r, c), unit_.raw(), target.raw()) : m(r, c) * mult;
+                    m(r, c) *= mult;
                 }
             }
         }

@@ -15,15 +15,15 @@ TEST(UnitTest, DefaultIsDimensionlessUnit)
 {
     Unit u;
     EXPECT_FALSE(u.has_dimension());
-    EXPECT_TRUE(u.is_dimensionless());
+    EXPECT_TRUE(u.is_canonical());
     EXPECT_DOUBLE_EQ(u.multiplier(), 1.0);
 }
 
-TEST(UnitTest, NoneAliasIsDimensionless)
+TEST(UnitTest, DefaultIsDefaultConstructed)
 {
-    Unit u = Unit::None();
+    Unit u;
     EXPECT_FALSE(u.has_dimension());
-    EXPECT_TRUE(u.is_dimensionless());
+    EXPECT_TRUE(u.is_canonical());
     EXPECT_DOUBLE_EQ(u.multiplier(), 1.0);
     EXPECT_TRUE(u == Unit());
 }
@@ -78,14 +78,14 @@ TEST(UnitTest, ScaleFactorMIsDimensionless)
 {
     Unit u = Unit::parse("M");
     EXPECT_FALSE(u.has_dimension());
-    EXPECT_FALSE(u.is_dimensionless());
+    EXPECT_FALSE(u.is_canonical() && !u.has_dimension());
 }
 
 TEST(UnitTest, ScaleFactor_uIsDimlessAndUnit)
 {
     Unit u = Unit::parse("_");
     EXPECT_FALSE(u.has_dimension());
-    EXPECT_TRUE(u.is_dimensionless());
+    EXPECT_TRUE(u.is_canonical() && !u.has_dimension());
 }
 
 // =========================================================================
@@ -327,16 +327,16 @@ TEST(UnitTest, HasDimensionFalseForScaleFactors)
 TEST(UnitTest, IsDimensionlessAndUnit)
 {
     Unit dflt;
-    EXPECT_TRUE(dflt.is_dimensionless());
+    EXPECT_TRUE(dflt.is_canonical() && !dflt.has_dimension());
 
     Unit underscore = Unit::parse("_");
-    EXPECT_TRUE(underscore.is_dimensionless());
+    EXPECT_TRUE(underscore.is_canonical() && !underscore.has_dimension());
 
     Unit hz = Unit::parse("Hz");
-    EXPECT_FALSE(hz.is_dimensionless());
+    EXPECT_FALSE(hz.is_canonical() && !hz.has_dimension());
 
     Unit meg = Unit::parse("M");
-    EXPECT_FALSE(meg.is_dimensionless());
+    EXPECT_FALSE(meg.is_canonical() && !meg.has_dimension());
 }
 
 // =========================================================================

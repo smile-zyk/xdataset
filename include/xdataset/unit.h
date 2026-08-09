@@ -1,23 +1,36 @@
 #ifndef UNIT_H
 #define UNIT_H
 
-#include <llnl-units/units.hpp>
 #include <string>
 
-#include "xdataset_predefine.h"
+#include "unit_data.h"
+
+// XDATASET_API: DLL export/import on Windows, no-op elsewhere.
+#ifndef XDATASET_API
+  #ifdef _WIN32
+    #ifdef XDATASET_BUILD_DLL
+      #define XDATASET_API __declspec(dllexport)
+    #else
+      #define XDATASET_API __declspec(dllimport)
+    #endif
+  #else
+    #define XDATASET_API
+  #endif
+#endif
 
 namespace xdataset
 {
 
 // =========================================================================
-//  Unit — a physical unit type that only accepts REL-defined strings
+//  Unit — a physical unit type backed by a 7-SI-exponent vector
 // =========================================================================
 //
-//  Wraps llnl-units internally but restricts input parsing to the REL unit
-//  vocabulary.  Construction by users goes through `Unit::parse()` which
-//  validates against the REL lookup tables; construction from canonical base
-//  units (used internally by operator*/operator/ /
-//  canonicalize) bypasses validation — those are always valid SI.
+//  Stores a physical unit as {multiplier, UnitData}.  Multiplier
+//  carries scale factors (1e3 for "k", 1e-3 for "m", etc.) while
+//  UnitData carries the 7 SI base-unit exponents.
+//
+//  Construction by users goes through `Unit::parse()` which validates
+//  against the REL unit vocabulary registered in UnitRegistry.
 // =========================================================================
 
 /// Result of best_display: how to convert a raw value for display.
@@ -34,7 +47,7 @@ public:
     /// Default: dimensionless, multiplier 1.
     Unit();
 
-    /// True when the unit is in canonical form (multiplier == 1, non-affine).
+    /// True when the unit is in canonical form (multiplier == 1).
     bool is_canonical() const;
 
     /// Return a canonicalised copy (multiplier absorbed, unit = base_units).
@@ -45,22 +58,16 @@ public:
     /// Physical multiplier (value scale factor).
     double multiplier() const;
 
-    /// True when base_units has the e_flag set (degC, degF, etc.).
-    bool is_affine() const;
-
     /// True when a and b represent the same physical dimension.
     bool same_dimension(const Unit& other) const;
 
     /// True when the physical dimension is empty (regardless of multiplier).
     bool has_dimension() const;
 
-    /// True when dimensionless AND multiplier == 1.
-    bool is_dimensionless() const;
-
     // ---- string conversion ----------------------------------------------
 
     /// Human-readable string.  Tries REL vocabulary first, falls back to
-    /// llnl-units' native to_string.
+    /// raw SI-exponent combination (e.g. "kg*m^2*s^-3*A^-1").
     std::string to_string() const;
 
     // ---- display -------------------------------------------------------
@@ -76,13 +83,6 @@ public:
     /// string is not in the REL vocabulary.
     static Unit parse(const std::string& s);
 
-    /// The dimensionless unit (equivalent to the default-constructed Unit).
-    /// Provided as a named alias so call sites can write Unit::None().
-    static Unit None();
-
-    /// Access the underlying llnl precise_unit (e.g. for units::convert).
-    const units::precise_unit& raw() const { return unit_; }
-
     // ---- arithmetic on dimensions (inputs must be canonical) ------------
 
     Unit operator*(const Unit& other) const;
@@ -94,11 +94,12 @@ public:
     bool operator!=(const Unit& other) const;
 
 private:
-    // Private constructor from llnl precise_unit — only for internal use
+    // Private constructor — only for internal use
     // by canonicalize / multiply_dim / etc.
-    explicit Unit(units::precise_unit pu);
+    explicit Unit(double mult, UnitData dim);
 
-    units::precise_unit unit_;
+    double   mult_ = 1.0;
+    UnitData dim_;
 };
 } // namespace xdataset
 
