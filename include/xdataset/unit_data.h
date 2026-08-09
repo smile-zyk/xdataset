@@ -122,22 +122,22 @@ struct UnitData
     //
     //  Produces a canonical key string for reverse-lookup maps.
     //  Examples:
-    //    {0,0,-1,0,0,0,0}   → "s^-1"
-    //    {2,1,-3,-1,0,0,0}  → "kg*m^2*s^-3*A^-1"
-    //    {1,0,0,0,0,0,0}    → "m"
+    //    {0,0,-1,0,0,0,0}   → "sec^-1"
+    //    {2,1,-3,-1,0,0,0}  → "kg*meter^2*sec^-3*A^-1"
+    //    {1,0,0,0,0,0,0}    → "meter"
     //    {0,0,0,0,0,0,0}    → ""   (dimensionless)
 
     std::string key() const
     {
         struct Part { std::string name; int8_t exp; };
         const Part parts[] = {
-            {"m",   m},
-            {"kg",  kg},
-            {"s",   s},
-            {"A",   A},
-            {"K",   K},
-            {"mol", mol},
-            {"cd",  cd},
+            {"meter", m},
+            {"kg",    kg},
+            {"sec",   s},
+            {"A",     A},
+            {"K",     K},
+            {"mol",   mol},
+            {"cd",    cd},
         };
         std::string r;
         for (std::size_t i = 0; i < 7; ++i) {

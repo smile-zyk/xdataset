@@ -29,36 +29,42 @@ UnitRegistry::UnitRegistry()
     //  Type A: scalable base units
     // ===============================================================
 
-    register_base("meter", UnitData(1,0,0,0,0,0,0));
+    register_base("meter", UnitData(1,0,0,0,0,0,0));           // meter
     register_alias("meters", "meter");
     register_alias("metre",  "meter");
     register_alias("metres", "meter");
 
-    register_base("sec", UnitData(0,0,1,0,0,0,0));
+    register_base("sec", UnitData(0,0,1,0,0,0,0));             // second
 
-    register_base("Hz",  UnitData(0,0,-1,0,0,0,0));
-    register_base("Ohm", UnitData(2,1,-3,-2,0,0,0));
+    register_base("Hz",  UnitData(0,0,-1,0,0,0,0));            // Hertz = s⁻¹
+    register_base("Ohm", UnitData(2,1,-3,-2,0,0,0));           // Ohm = kg·m²·s⁻³·A⁻²
     register_alias("Ohms", "Ohm");
-    register_base("S",   UnitData(-2,-1,3,2,0,0,0));
-    register_base("F",   UnitData(-2,-1,4,2,0,0,0));
-    register_base("H",   UnitData(2,1,-2,-2,0,0,0));
-    register_base("V",   UnitData(2,1,-3,-1,0,0,0));
-    register_base("A",   UnitData(0,0,0,1,0,0,0));
-    register_base("W",   UnitData(2,1,-3,0,0,0,0));
+    register_base("S",   UnitData(-2,-1,3,2,0,0,0));           // Siemens = kg⁻¹·m⁻²·s³·A²
+    register_base("F",   UnitData(-2,-1,4,2,0,0,0));           // Farad = kg⁻¹·m⁻²·s⁴·A²
+    register_base("H",   UnitData(2,1,-2,-2,0,0,0));           // Henry = kg·m²·s⁻²·A⁻²
+    register_base("V",   UnitData(2,1,-3,-1,0,0,0));           // Volt = kg·m²·s⁻³·A⁻¹
+    register_base("A",   UnitData(0,0,0,1,0,0,0));             // Ampere
+    register_base("W",   UnitData(2,1,-3,0,0,0,0));            // Watt = kg·m²·s⁻³
+
+    register_base("C",   UnitData(0,0,1,1,0,0,0));             // Coulomb = A·s
+    register_base("J",   UnitData(2,1,-2,0,0,0,0));            // Joule = kg·m²·s⁻²
+    register_base("N",   UnitData(1,1,-2,0,0,0,0));            // Newton = kg·m·s⁻²
+    register_base("Wb",  UnitData(2,1,-2,-1,0,0,0));           // Weber = kg·m²·s⁻²·A⁻¹
+    register_base("Pa",  UnitData(-1,1,-2,0,0,0,0));           // Pascal = kg·m⁻¹·s⁻²
 
     // ===============================================================
     //  Type B: pre-defined (non-scalable)
     // ===============================================================
 
-    register_predef("cm",   1e-2,            UnitData(1,0,0,0,0,0,0));
-    register_predef("mil",  2.54e-5,         UnitData(1,0,0,0,0,0,0));
-    register_predef("mils", 2.54e-5,         UnitData(1,0,0,0,0,0,0));
-    register_predef("in",   2.54e-2,         UnitData(1,0,0,0,0,0,0));
-    register_predef("ft",   12 * 2.54e-2,    UnitData(1,0,0,0,0,0,0));
-    register_predef("mi",   5280 * 12 * 2.54e-2, UnitData(1,0,0,0,0,0,0));
-    register_predef("nmi",  1852.0,          UnitData(1,0,0,0,0,0,0));
-    register_predef("PHz",  1e15,            UnitData(0,0,-1,0,0,0,0));
-    register_predef("dB",   1.0,             UnitData(0,0,0,0,0,0,0));
+    register_predef("cm",   1e-2,            UnitData(1,0,0,0,0,0,0));    // centimeter
+    register_predef("mil",  2.54e-5,         UnitData(1,0,0,0,0,0,0));    // mil (thousandth of an inch)
+    register_predef("mils", 2.54e-5,         UnitData(1,0,0,0,0,0,0));    // plural alias
+    register_predef("in",   2.54e-2,         UnitData(1,0,0,0,0,0,0));    // inch
+    register_predef("ft",   12 * 2.54e-2,    UnitData(1,0,0,0,0,0,0));    // foot
+    register_predef("mi",   5280 * 12 * 2.54e-2, UnitData(1,0,0,0,0,0,0)); // mile
+    register_predef("nmi",  1852.0,          UnitData(1,0,0,0,0,0,0));    // nautical mile
+    register_predef("PHz",  1e15,            UnitData(0,0,-1,0,0,0,0));   // petahertz
+    register_predef("dB",   1.0,             UnitData(0,0,0,0,0,0,0));    // decibel (dimensionless)
 }
 
 void UnitRegistry::register_base(const std::string& name, const UnitData& dim)

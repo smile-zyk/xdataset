@@ -28,12 +28,8 @@ Unit Unit::parse(const std::string& s)
 
     UnitRegistry& reg = UnitRegistry::Instance();
 
-    // 1) Type B: predef exact match?
-    const UnitRegistry::PredefEntry* predef = reg.lookup_predef(s);
-    if (predef)
-        return Unit(predef->mult, predef->dim);
-
-    // 2) Greedy scale-prefix stripping.
+    // 1) Greedy scale-prefix stripping (must run before type B to
+    //    let "T"/"G"/"K" match as prefixes, not Tesla/Gauss/Kelvin).
     UnitRegistry::ScalePrefixMatch m = reg.try_strip_scale_prefix(s);
     if (m.found) {
         // remainder empty -> pure scale factor (e.g. "M", "k")
@@ -45,6 +41,11 @@ Unit Unit::parse(const std::string& s)
         if (dim)
             return Unit(m.factor, *dim);
     }
+
+    // 2) Type B: predef exact match?
+    const UnitRegistry::PredefEntry* predef = reg.lookup_predef(s);
+    if (predef)
+        return Unit(predef->mult, predef->dim);
 
     // 3) No prefix -> overall lookup in type A
     const UnitData* dim = reg.lookup_base(s);
