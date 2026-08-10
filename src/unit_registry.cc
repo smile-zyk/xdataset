@@ -1,10 +1,7 @@
 #include "unit_registry.h"
 
-#include <stdexcept>
-
 namespace xdataset
 {
-
 // =========================================================================
 //  Helper: does `probe` divide `target`?
 // =========================================================================
