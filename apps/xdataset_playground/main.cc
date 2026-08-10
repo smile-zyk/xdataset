@@ -344,7 +344,7 @@ int main()
                 auto id_ds = DataSeries::CreateScalarFromMemory<double>(id.data(), total); id_ds.set_unit("A");
                 auto gm_ds = DataSeries::CreateScalarFromMemory<double>(gm_val.data(), total); gm_ds.set_unit("S");
                 auto vth_ds = DataSeries::CreateScalarFromMemory<double>(vth_val.data(), total); vth_ds.set_unit("V");
-                info.dependent_specs.push_back(DependentSpec{"Id", std::move(id_ds)});
+                info.dependent_specs.push_back(DependentSpec{"Id.i", std::move(id_ds)});
                 info.dependent_specs.push_back(DependentSpec{"gm", std::move(gm_ds)});
                 info.dependent_specs.push_back(DependentSpec{"Vth", std::move(vth_ds)});
                 ds.AddBlock("amplifier/DC/bias", std::move(info));
