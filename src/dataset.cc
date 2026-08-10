@@ -20,85 +20,88 @@ namespace xdataset
         return parts;
     }
 
-    const Group* Dataset::navigate(const std::string& path) const
+    // =========================================================================
+    //  navigate — walk the tree to a node at `path`
+    // =========================================================================
+
+    const TreeNode* Dataset::navigate(const std::string& path) const
     {
         auto parts = SplitPath(path);
-        const Group* node = &root_;
+        const TreeNode* node = &root_;
         for (const auto& seg : parts)
         {
-            auto it = node->subgroups.find(seg);
-            if (it == node->subgroups.end()) return nullptr;
+            const InternalNode* internal = boost::get<InternalNode>(node);
+            if (!internal) return nullptr;
+            auto it = internal->children.find(seg);
+            if (it == internal->children.end()) return nullptr;
             node = it->second.get();
         }
         return node;
     }
 
-    Group* Dataset::navigate(const std::string& path)
+    TreeNode* Dataset::navigate(const std::string& path)
     {
         auto parts = SplitPath(path);
-        Group* node = &root_;
+        TreeNode* node = &root_;
         for (const auto& seg : parts)
         {
-            auto it = node->subgroups.find(seg);
-            if (it == node->subgroups.end()) return nullptr;
+            InternalNode* internal = boost::get<InternalNode>(node);
+            if (!internal) return nullptr;
+            auto it = internal->children.find(seg);
+            if (it == internal->children.end()) return nullptr;
             node = it->second.get();
         }
         return node;
     }
 
-    Group& Dataset::navigate_or_create(const std::string& path)
-    {
-        auto parts = SplitPath(path);
-        if (parts.empty())
-            throw std::invalid_argument("block path must not be empty");
-        Group* node = &root_;
-        for (std::size_t i = 0; i + 1 < parts.size(); ++i)
-        {
-            auto& child = node->subgroups[parts[i]];
-            if (!child) child = std::unique_ptr<Group>(new Group());
-            else if (child->is_leaf())
-                throw std::invalid_argument("path segment '" + parts[i] + "' is already a leaf Block");
-            node = child.get();
-        }
-        const auto& block_name = parts.back();
-        auto& child = node->subgroups[block_name];
-        if (!child) child = std::unique_ptr<Group>(new Group());
-        else if (child->is_leaf())
-            throw std::invalid_argument("duplicate Block at path: " + path);
-        return *child;
-    }
+    // =========================================================================
+    //  collect_block_paths — recursive traversal
+    // =========================================================================
 
-    void Dataset::collect_block_paths(const Group& group, const std::string& prefix, std::vector<std::string>& paths) const
+    void Dataset::collect_block_paths(const TreeNode& node,
+                                      const std::string& prefix,
+                                      std::vector<std::string>& paths) const
     {
-        for (const auto& kv : group.subgroups)
+        const InternalNode* internal = boost::get<InternalNode>(&node);
+        if (!internal) return;  // LeafNode — not recursed by callers, but safe
+
+        for (const auto& kv : internal->children)
         {
             const std::string full = prefix.empty() ? kv.first : prefix + "/" + kv.first;
-            const Group& child = *kv.second;
-            if (child.is_leaf()) paths.push_back(full);
-            collect_block_paths(child, full, paths);
+            if (boost::get<LeafNode>(kv.second.get()))
+                paths.push_back(full);
+            else
+                collect_block_paths(*kv.second, full, paths);
         }
     }
 
-    std::size_t Dataset::collect_block_count(const Group& group) const
+    // =========================================================================
+    //  collect_block_count — recursive count
+    // =========================================================================
+
+    std::size_t Dataset::collect_block_count(const TreeNode& node) const
     {
+        const InternalNode* internal = boost::get<InternalNode>(&node);
+        if (!internal) return 0;
+
         std::size_t count = 0;
-        for (const auto& kv : group.subgroups)
+        for (const auto& kv : internal->children)
         {
-            if (kv.second->is_leaf()) ++count;
-            count += collect_block_count(*kv.second);
+            if (boost::get<LeafNode>(kv.second.get()))
+                ++count;
+            else
+                count += collect_block_count(*kv.second);
         }
         return count;
     }
 
+    // =========================================================================
+    //  AddBlock — three overloads, shared implementation
+    // =========================================================================
+
     Block& Dataset::AddBlock(const std::string& path, const BlockCreateInfo& block_info)
     {
-        Group& leaf = navigate_or_create(path);
-        std::string name = path;
-        for (auto& ch : name)
-            if (ch == '/') ch = '.';
-        leaf.block = std::unique_ptr<Block>(new Block(block_info));
-        leaf.block->set_name(name);
-        return *leaf.block;
+        return AddBlock(path, Block(block_info));
     }
 
     Block& Dataset::AddBlock(const std::string& path, BlockCreateInfo&& block_info)
@@ -108,59 +111,116 @@ namespace xdataset
 
     Block& Dataset::AddBlock(const std::string& path, Block block)
     {
-        Group& leaf = navigate_or_create(path);
-        std::string name = path;
-        for (auto& ch : name)
-            if (ch == '/') ch = '.';
-        leaf.block = std::unique_ptr<Block>(new Block(std::move(block)));
-        leaf.block->set_name(name);
-        return *leaf.block;
+        auto parts = SplitPath(path);
+        if (parts.empty())
+            throw std::invalid_argument("block path must not be empty");
+
+        // Navigate to the parent InternalNode, creating intermediate
+        // nodes as needed.
+        InternalNode* node = boost::get<InternalNode>(&root_);
+        for (std::size_t i = 0; i + 1 < parts.size(); ++i)
+        {
+            auto it = node->children.find(parts[i]);
+            if (it == node->children.end())
+            {
+                it = node->children.emplace(
+                    parts[i],
+                    std::unique_ptr<TreeNode>(new TreeNode(InternalNode{})))
+                    .first;
+            }
+            else if (boost::get<LeafNode>(it->second.get()))
+            {
+                throw std::invalid_argument(
+                    "path segment '" + parts[i] + "' is already a leaf Block");
+            }
+            node = boost::get<InternalNode>(it->second.get());
+        }
+
+        // Insert the Block as a LeafNode.
+        auto& slot = node->children[parts.back()];
+        if (slot && boost::get<LeafNode>(slot.get()))
+            throw std::invalid_argument("duplicate Block at path: " + path);
+
+        std::string dotted = path;
+        for (auto& ch : dotted) if (ch == '/') ch = '.';
+        block.set_name(dotted);
+
+        auto owned = std::unique_ptr<Block>(new Block(std::move(block)));
+        Block& ref = *owned;
+        slot = std::unique_ptr<TreeNode>(new TreeNode(LeafNode{std::move(owned)}));
+        return ref;
     }
+
+    // =========================================================================
+    //  RemoveBlock
+    // =========================================================================
 
     std::size_t Dataset::RemoveBlock(const std::string& path)
     {
         auto parts = SplitPath(path);
         if (parts.empty()) return 0;
-        Group* parent = &root_;
+
+        // Navigate to the parent.
+        InternalNode* parent = boost::get<InternalNode>(&root_);
         for (std::size_t i = 0; i + 1 < parts.size(); ++i)
         {
-            auto it = parent->subgroups.find(parts[i]);
-            if (it == parent->subgroups.end()) return 0;
-            parent = it->second.get();
+            auto it = parent->children.find(parts[i]);
+            if (it == parent->children.end()) return 0;
+            parent = boost::get<InternalNode>(it->second.get());
+            if (!parent) return 0;
         }
-        const auto& block_name = parts.back();
-        auto it = parent->subgroups.find(block_name);
-        if (it == parent->subgroups.end()) return 0;
-        if (!it->second->is_leaf()) return 0;
-        parent->subgroups.erase(it);
+
+        auto it = parent->children.find(parts.back());
+        if (it == parent->children.end()) return 0;
+        if (!boost::get<LeafNode>(it->second.get())) return 0;
+        parent->children.erase(it);
         return 1;
     }
+
+    // =========================================================================
+    //  RemoveGroup
+    // =========================================================================
 
     std::size_t Dataset::RemoveGroup(const std::string& path)
     {
         auto parts = SplitPath(path);
-        if (parts.empty()) { std::size_t n = block_count(); root_.subgroups.clear(); return n; }
-        const Group* target = navigate(path);
+        if (parts.empty())
+        {
+            std::size_t n = block_count();
+            boost::get<InternalNode>(root_).children.clear();
+            return n;
+        }
+
+        const TreeNode* target = navigate(path);
         if (!target) return 0;
         std::size_t count = collect_block_count(*target);
-        Group* parent = &root_;
+
+        InternalNode* parent = boost::get<InternalNode>(&root_);
         for (std::size_t i = 0; i + 1 < parts.size(); ++i)
         {
-            auto it = parent->subgroups.find(parts[i]);
-            if (it == parent->subgroups.end()) return count;
-            parent = it->second.get();
+            auto it = parent->children.find(parts[i]);
+            if (it == parent->children.end()) return count;
+            parent = boost::get<InternalNode>(it->second.get());
+            if (!parent) return count;
         }
-        parent->subgroups.erase(parts.back());
+        parent->children.erase(parts.back());
         return count;
     }
 
-    bool Dataset::HasBlock(const std::string& path) const
+    // =========================================================================
+    //  Query
+    // =========================================================================
+
+    bool Dataset::IsLeaf(const std::string& path) const
     {
-        const Group* g = navigate(path);
-        return g != nullptr && g->is_leaf();
+        const TreeNode* node = navigate(path);
+        return node != nullptr && boost::get<LeafNode>(node) != nullptr;
     }
 
-    bool Dataset::HasGroup(const std::string& path) const { return navigate(path) != nullptr; }
+    bool Dataset::Exists(const std::string& path) const
+    {
+        return navigate(path) != nullptr;
+    }
 
     bool Dataset::HasUniqueDataArray(const std::string& data_array_name) const
     {
@@ -168,9 +228,10 @@ namespace xdataset
         std::vector<std::string> paths = GetAllBlockPaths();
         for (const auto& p : paths)
         {
-            const Group* g = navigate(p);
-            if (!g || !g->is_leaf()) continue;
-            const Block& block = *g->block;
+            const TreeNode* node = navigate(p);
+            const LeafNode* leaf = node ? boost::get<LeafNode>(node) : nullptr;
+            if (!leaf) continue;
+            const Block& block = *leaf->block;
             for (const auto& n : block.independents())
                 if (n == data_array_name && ++count > 1) return false;
             for (const auto& n : block.dependents())
@@ -178,6 +239,10 @@ namespace xdataset
         }
         return count == 1;
     }
+
+    // =========================================================================
+    //  Access
+    // =========================================================================
 
     const DataArray& Dataset::GetDataArray(const std::string& block_path, const std::string& data_array_name)
     {
@@ -193,16 +258,18 @@ namespace xdataset
 
     const Block& Dataset::GetBlock(const std::string& path) const
     {
-        const Group* g = navigate(path);
-        if (!g || !g->is_leaf()) throw std::out_of_range("block not found: " + path);
-        return *g->block;
+        const TreeNode* node = navigate(path);
+        const LeafNode* leaf = node ? boost::get<LeafNode>(node) : nullptr;
+        if (!leaf) throw std::out_of_range("block not found: " + path);
+        return *leaf->block;
     }
 
     Block& Dataset::GetBlock(const std::string& path)
     {
-        Group* g = navigate(path);
-        if (!g || !g->is_leaf()) throw std::out_of_range("block not found: " + path);
-        return *g->block;
+        TreeNode* node = navigate(path);
+        LeafNode* leaf = node ? boost::get<LeafNode>(node) : nullptr;
+        if (!leaf) throw std::out_of_range("block not found: " + path);
+        return *leaf->block;
     }
 
     std::vector<std::string> Dataset::GetDataArrayNames(const std::string& block_path) const
@@ -214,22 +281,33 @@ namespace xdataset
         return names;
     }
 
+    // =========================================================================
+    //  Enumeration
+    // =========================================================================
+
     std::vector<std::string> Dataset::GetBlockNames(const std::string& group_path) const
     {
-        const Group* g = navigate(group_path);
-        if (!g) throw std::out_of_range("group not found: " + group_path);
+        const TreeNode* node = navigate(group_path);
+        const InternalNode* internal = node ? boost::get<InternalNode>(node) : nullptr;
+        if (!internal) throw std::out_of_range("group not found: " + group_path);
+
         std::vector<std::string> names;
-        for (const auto& kv : g->subgroups)
-            if (kv.second->is_leaf()) names.push_back(kv.first);
+        for (const auto& kv : internal->children)
+            if (boost::get<LeafNode>(kv.second.get()))
+                names.push_back(kv.first);
         return names;
     }
 
     std::vector<std::string> Dataset::GetGroupNames(const std::string& group_path) const
     {
-        const Group* g = navigate(group_path);
-        if (!g) throw std::out_of_range("group not found: " + group_path);
+        const TreeNode* node = navigate(group_path);
+        const InternalNode* internal = node ? boost::get<InternalNode>(node) : nullptr;
+        if (!internal) throw std::out_of_range("group not found: " + group_path);
+
         std::vector<std::string> names;
-        for (const auto& kv : g->subgroups) names.push_back(kv.first);
+        for (const auto& kv : internal->children)
+            if (boost::get<InternalNode>(kv.second.get()))
+                names.push_back(kv.first);
         return names;
     }
 
@@ -242,6 +320,10 @@ namespace xdataset
 
     std::size_t Dataset::block_count() const { return collect_block_count(root_); }
 
+    // =========================================================================
+    //  find_unique_data_array
+    // =========================================================================
+
     std::string Dataset::find_unique_data_array(const std::string& data_array_name) const
     {
         std::string found_path;
@@ -249,9 +331,10 @@ namespace xdataset
         std::vector<std::string> paths = GetAllBlockPaths();
         for (const auto& p : paths)
         {
-            const Group* g = navigate(p);
-            if (!g || !g->is_leaf()) continue;
-            const Block& block = *g->block;
+            const TreeNode* node = navigate(p);
+            const LeafNode* leaf = node ? boost::get<LeafNode>(node) : nullptr;
+            if (!leaf) continue;
+            const Block& block = *leaf->block;
             for (const auto& n : block.independents())
                 if (n == data_array_name) { found_path = p; ++count; }
             for (const auto& n : block.dependents())

@@ -237,7 +237,7 @@ namespace xdataset
         std::remove("test_ds_s2p.s2p");
 
         EXPECT_EQ(ds.block_count(), 1u);
-        EXPECT_TRUE(ds.HasBlock("SP"));
+        EXPECT_TRUE(ds.IsLeaf("SP"));
 
         const Block& b = ds.GetBlock("SP");
         EXPECT_EQ(b.independents().size(), 1u);
@@ -260,7 +260,7 @@ namespace xdataset
         Dataset ds = r.Read();
         std::remove("test_ds_s1p.s1p");
 
-        EXPECT_TRUE(ds.HasBlock("SP"));
+        EXPECT_TRUE(ds.IsLeaf("SP"));
         const Block& b = ds.GetBlock("SP");
         EXPECT_EQ(b.independents().size(), 1u);
         EXPECT_EQ(b.dependents().size(), 1u);

@@ -212,6 +212,26 @@ namespace xdataset
                 DependentSpec{"v", MakeVectorSeries(3, 2)});
             return info;
         }
+
+        // =====================================================================
+        // Fixtures: dotted dependent names (e.g. SRC1.i, SRC1.v)
+        // =====================================================================
+
+        inline BlockCreateInfo MakeDottedDependentCreateInfo()
+        {
+            BlockCreateInfo info;
+            info.independent_specs.push_back(
+                IndependentSpec{"freq",
+                    MakeScalarSeriesFrom({10.0, 20.0}),
+                    DimensionSpec::Regular(2)});
+            info.dependent_specs.push_back(
+                DependentSpec{"SRC1.i",
+                    MakeScalarSeriesFrom({1.0, 2.0})});
+            info.dependent_specs.push_back(
+                DependentSpec{"SRC1.v",
+                    MakeScalarSeriesFrom({3.0, 4.0})});
+            return info;
+        }
     } // namespace block_fixtures
 } // namespace xdataset
 

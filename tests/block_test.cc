@@ -397,4 +397,64 @@ namespace xdataset
         EXPECT_EQ(q.data_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(q.multi_dimension_spec().rank(), 3u);
     }
+    TEST(BlockDataFrameTest, AggregatesMatrixTypedVariables)
+    {
+        Block block(MakeMatrixCellCreateInfo());
+        const DataFrame& table = block.GetOrCreateDataFrame();
+
+        ASSERT_EQ(table.headers().size(), 3u);
+        EXPECT_EQ(table.headers()[0], "x");
+        EXPECT_EQ(table.headers()[1], "y");
+        EXPECT_EQ(table.headers()[2], "mats");
+
+        ASSERT_EQ(table.row_count(), 4u);
+    }
+
+    // =========================================================================
+    // Dotted dependent names (e.g. SRC1.i, SRC1.v)
+    // =========================================================================
+
+    TEST(BlockConstructorTest, DottedDependentNames)
+    {
+        Block block(MakeDottedDependentCreateInfo());
+        block.set_name("SP");
+
+        ASSERT_EQ(block.independents().size(), 1u);
+        EXPECT_EQ(block.independents()[0], "freq");
+
+        ASSERT_EQ(block.dependents().size(), 2u);
+        EXPECT_EQ(block.dependents()[0], "SRC1.i");
+        EXPECT_EQ(block.dependents()[1], "SRC1.v");
+    }
+
+    TEST(BlockVariableCacheTest, GetOrCreateDataArrayWithDottedName)
+    {
+        Block block(MakeDottedDependentCreateInfo());
+
+        const DataArray& i_data = block.GetOrCreateDataArray("SRC1.i");
+        EXPECT_EQ(i_data.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(i_data.data().size(), 2u);
+
+        const DataArray& v_data = block.GetOrCreateDataArray("SRC1.v");
+        EXPECT_EQ(v_data.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(v_data.data().size(), 2u);
+
+        // freq is independent
+        const DataArray& freq_data = block.GetOrCreateDataArray("freq");
+        EXPECT_EQ(freq_data.data_kind(), DataArrayKind::kIndependent);
+    }
+
+    TEST(BlockConstructorTest, RejectsDuplicateDottedAndFlatName)
+    {
+        BlockCreateInfo info;
+        info.independent_specs.push_back(
+            IndependentSpec{"freq", MakeScalarSeries(2), DimensionSpec::Regular(2)});
+        info.dependent_specs.push_back(
+            DependentSpec{"src.i", MakeScalarSeries(2)});
+        info.dependent_specs.push_back(
+            DependentSpec{"src.i", MakeScalarSeries(2)});  // duplicate
+
+        EXPECT_THROW({ Block b(info); }, std::invalid_argument);
+    }
+
 } // namespace xdataset

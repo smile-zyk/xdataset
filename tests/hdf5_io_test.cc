@@ -72,7 +72,7 @@ namespace xdataset
 
         EXPECT_EQ(loaded.name(), "test_ds");
         EXPECT_EQ(loaded.block_count(), 1u);
-        EXPECT_TRUE(loaded.HasBlock("group/blk"));
+        EXPECT_TRUE(loaded.IsLeaf("group/blk"));
 
         const Block& b = loaded.GetBlock("group/blk");
         EXPECT_EQ(b.independents().size(), 2u);
@@ -109,13 +109,13 @@ namespace xdataset
 
         EXPECT_EQ(loaded.name(), "nested");
         EXPECT_EQ(loaded.block_count(), 3u);
-        EXPECT_TRUE(loaded.HasBlock("simulation/SP1/SP"));
-        EXPECT_TRUE(loaded.HasBlock("simulation/SP1/HB"));
-        EXPECT_TRUE(loaded.HasBlock("summary/stats"));
+        EXPECT_TRUE(loaded.IsLeaf("simulation/SP1/SP"));
+        EXPECT_TRUE(loaded.IsLeaf("simulation/SP1/HB"));
+        EXPECT_TRUE(loaded.IsLeaf("summary/stats"));
 
         // Group structure is preserved
-        EXPECT_TRUE(loaded.HasGroup("simulation"));
-        EXPECT_TRUE(loaded.HasGroup("simulation/SP1"));
+        EXPECT_TRUE(loaded.Exists("simulation"));
+        EXPECT_TRUE(loaded.Exists("simulation/SP1"));
     }
 
     TEST(Hdf5IoTest, SaveAndLoadVectorDependent)
@@ -186,7 +186,7 @@ namespace xdataset
 
         EXPECT_EQ(loaded.name(), "direct");
         EXPECT_EQ(loaded.block_count(), 1u);
-        EXPECT_TRUE(loaded.HasBlock("a"));
+        EXPECT_TRUE(loaded.IsLeaf("a"));
     }
 
     TEST(Hdf5IoTest, UnsupportedFormatThrows)
@@ -377,13 +377,13 @@ namespace xdataset
         EXPECT_EQ(loaded.name(), "LNA_Design");
         EXPECT_EQ(loaded.block_count(), 4u);
 
-        EXPECT_TRUE(loaded.HasGroup("amplifier"));
-        EXPECT_TRUE(loaded.HasGroup("amplifier/DC"));
-        EXPECT_TRUE(loaded.HasGroup("amplifier/SP1"));
-        EXPECT_TRUE(loaded.HasGroup("amplifier/HB1"));
-        EXPECT_TRUE(loaded.HasGroup("amplifier/noise"));
+        EXPECT_TRUE(loaded.Exists("amplifier"));
+        EXPECT_TRUE(loaded.Exists("amplifier/DC"));
+        EXPECT_TRUE(loaded.Exists("amplifier/SP1"));
+        EXPECT_TRUE(loaded.Exists("amplifier/HB1"));
+        EXPECT_TRUE(loaded.Exists("amplifier/noise"));
 
-        EXPECT_TRUE(loaded.HasBlock("amplifier/DC/bias"));
+        EXPECT_TRUE(loaded.IsLeaf("amplifier/DC/bias"));
         {
             const Block& b = loaded.GetBlock("amplifier/DC/bias");
             EXPECT_EQ(b.independents().size(), 2u);
@@ -398,7 +398,7 @@ namespace xdataset
             EXPECT_NEAR(id_val, expected_id, 1e-9);
         }
 
-        EXPECT_TRUE(loaded.HasBlock("amplifier/SP1/SP"));
+        EXPECT_TRUE(loaded.IsLeaf("amplifier/SP1/SP"));
         {
             const Block& b = loaded.GetBlock("amplifier/SP1/SP");
             const DependentSpec& s_dep = b.dependent_spec("S");
@@ -411,8 +411,8 @@ namespace xdataset
             EXPECT_NEAR(s21_db, 15.0, 0.5);
         }
 
-        EXPECT_TRUE(loaded.HasBlock("amplifier/HB1/HB"));
-        EXPECT_TRUE(loaded.HasBlock("amplifier/noise/nf"));
+        EXPECT_TRUE(loaded.IsLeaf("amplifier/HB1/HB"));
+        EXPECT_TRUE(loaded.IsLeaf("amplifier/noise/nf"));
 
         std::cout << "HDF5 saved to LNA_Design.h5 (4 blocks)\n";
     }

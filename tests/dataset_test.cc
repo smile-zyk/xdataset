@@ -71,7 +71,7 @@ namespace xdataset
         Block& b = ds.AddBlock("SP1/SP", make_block_info());
 
         EXPECT_EQ(b.name(), "SP1.SP");
-        EXPECT_TRUE(ds.HasBlock("SP1/SP"));
+        EXPECT_TRUE(ds.IsLeaf("SP1/SP"));
         EXPECT_EQ(ds.block_count(), 1u);
     }
 
@@ -81,7 +81,7 @@ namespace xdataset
         ds.AddBlock("results", make_block_info());
 
         EXPECT_EQ(ds.GetBlock("results").name(), "results");
-        EXPECT_TRUE(ds.HasBlock("results"));
+        EXPECT_TRUE(ds.IsLeaf("results"));
         EXPECT_EQ(ds.block_count(), 1u);
     }
 
@@ -107,8 +107,8 @@ namespace xdataset
         ds.AddBlock("simulation/SP", make_block_info());
         ds.AddBlock("simulation/HB", make_block_info());
 
-        EXPECT_TRUE(ds.HasBlock("simulation/SP"));
-        EXPECT_TRUE(ds.HasBlock("simulation/HB"));
+        EXPECT_TRUE(ds.IsLeaf("simulation/SP"));
+        EXPECT_TRUE(ds.IsLeaf("simulation/HB"));
         EXPECT_EQ(ds.block_count(), 2u);
     }
 
@@ -117,10 +117,10 @@ namespace xdataset
         Dataset ds("noise");
         ds.AddBlock("a/b/c/d", make_block_info());
 
-        EXPECT_TRUE(ds.HasGroup("a"));
-        EXPECT_TRUE(ds.HasGroup("a/b"));
-        EXPECT_TRUE(ds.HasGroup("a/b/c"));
-        EXPECT_TRUE(ds.HasBlock("a/b/c/d"));
+        EXPECT_TRUE(ds.Exists("a"));
+        EXPECT_TRUE(ds.Exists("a/b"));
+        EXPECT_TRUE(ds.Exists("a/b/c"));
+        EXPECT_TRUE(ds.IsLeaf("a/b/c/d"));
     }
 
     TEST(DatasetTest, AddBlockCollisionWithGroupNameThrows)
@@ -143,8 +143,8 @@ namespace xdataset
 
         std::size_t removed = ds.RemoveBlock("simulation/SP");
         EXPECT_EQ(removed, 1u);
-        EXPECT_FALSE(ds.HasBlock("simulation/SP"));
-        EXPECT_TRUE(ds.HasBlock("simulation/HB"));
+        EXPECT_FALSE(ds.IsLeaf("simulation/SP"));
+        EXPECT_TRUE(ds.IsLeaf("simulation/HB"));
     }
 
     TEST(DatasetTest, RemoveBlockMissingPathReturnsZero)
@@ -169,8 +169,8 @@ namespace xdataset
 
         std::size_t removed = ds.RemoveGroup("simulation/SP1");
         EXPECT_EQ(removed, 2u);
-        EXPECT_FALSE(ds.HasGroup("simulation/SP1"));
-        EXPECT_TRUE(ds.HasBlock("simulation/SP2/SP"));
+        EXPECT_FALSE(ds.Exists("simulation/SP1"));
+        EXPECT_TRUE(ds.IsLeaf("simulation/SP2/SP"));
         EXPECT_EQ(ds.block_count(), 1u);
     }
 
@@ -192,7 +192,7 @@ namespace xdataset
     }
 
     // ========================================================================
-    // HasBlock / HasGroup / HasUniqueDataArray
+    // IsLeaf / Exists / HasUniqueDataArray
     // ========================================================================
 
     TEST(DatasetTest, HasQueriesCorrect)
@@ -200,16 +200,16 @@ namespace xdataset
         Dataset ds("noise");
         ds.AddBlock("simulation/SP", make_block_info());
 
-        EXPECT_TRUE(ds.HasGroup("simulation"));
-        EXPECT_TRUE(ds.HasBlock("simulation/SP"));
-        EXPECT_FALSE(ds.HasBlock("simulation/HB"));
-        EXPECT_FALSE(ds.HasGroup("nonexistent"));
+        EXPECT_TRUE(ds.Exists("simulation"));
+        EXPECT_TRUE(ds.IsLeaf("simulation/SP"));
+        EXPECT_FALSE(ds.IsLeaf("simulation/HB"));
+        EXPECT_FALSE(ds.Exists("nonexistent"));
     }
 
-    TEST(DatasetTest, HasGroupOnRootReturnsTrue)
+    TEST(DatasetTest, ExistsOnRootReturnsTrue)
     {
         Dataset ds("noise");
-        EXPECT_TRUE(ds.HasGroup(""));
+        EXPECT_TRUE(ds.Exists(""));
     }
 
     TEST(DatasetTest, HasUniqueDataArrayTrue)
@@ -412,4 +412,48 @@ namespace xdataset
 
         EXPECT_EQ(ds.block_count(), 3u);
     }
+
+    // ========================================================================
+    // Dotted dependent names (e.g. SRC1.i, SRC1.v)
+    // ========================================================================
+
+    TEST(DatasetTest, GetDataArrayWithDottedDependentName)
+    {
+        Dataset ds("noise");
+        ds.AddBlock("SP", MakeDottedDependentCreateInfo());
+
+        const DataArray& i_data = ds.GetDataArray("SP", "SRC1.i");
+        EXPECT_EQ(i_data.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(i_data.data().size(), 2u);
+
+        const DataArray& v_data = ds.GetDataArray("SP", "SRC1.v");
+        EXPECT_EQ(v_data.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(v_data.data().size(), 2u);
+    }
+
+    TEST(DatasetTest, GetDataArrayNamesWithDottedDependents)
+    {
+        Dataset ds("noise");
+        ds.AddBlock("SP", MakeDottedDependentCreateInfo());
+
+        std::vector<std::string> names = ds.GetDataArrayNames("SP");
+        ASSERT_EQ(names.size(), 3u);
+        EXPECT_EQ(names[0], "freq");
+        EXPECT_EQ(names[1], "SRC1.i");
+        EXPECT_EQ(names[2], "SRC1.v");
+    }
+
+    TEST(DatasetTest, DottedDependentUniqueness)
+    {
+        Dataset ds("noise");
+        ds.AddBlock("SP", MakeDottedDependentCreateInfo());
+
+        EXPECT_TRUE(ds.HasUniqueDataArray("SRC1.i"));
+        EXPECT_TRUE(ds.HasUniqueDataArray("SRC1.v"));
+        EXPECT_TRUE(ds.HasUniqueDataArray("freq"));
+
+        // Not unique because they're different names with same prefix
+        EXPECT_FALSE(ds.HasUniqueDataArray("i"));
+    }
+
 } // namespace xdataset
