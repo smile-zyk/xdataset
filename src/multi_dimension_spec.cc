@@ -23,7 +23,7 @@ namespace xdataset
 
     MultiDimensionSpec& MultiDimensionSpec::add_dimension(const DimensionSpec& dim)
     {
-        if (dim.is_ragged() && !dims_.empty())   // skip first dim �� may be stored in isolation
+        if (dim.is_ragged() && !dims_.empty())   // skip first dim --  may be stored in isolation
         {
             const std::vector<std::size_t>& sizes = dim.as_ragged()->sizes;
             const std::size_t expected = compute_cell_count();

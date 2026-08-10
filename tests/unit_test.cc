@@ -419,7 +419,7 @@ TEST(UnitTest, ToStringCompound)
 
 TEST(UnitTest, ToStringDecomposeAW)
 {
-    // A * W  →  "A*W"  (not bare SI exponents)
+    // A * W  ->  "A*W"  (not bare SI exponents)
     Unit a = Unit::parse("A").canonicalized();
     Unit w = Unit::parse("W").canonicalized();
     Unit aw = a * w;
@@ -428,7 +428,7 @@ TEST(UnitTest, ToStringDecomposeAW)
 
 TEST(UnitTest, ToStringDecomposeMeterPerSec)
 {
-    // meter / sec  →  "meter/sec"
+    // meter / sec  ->  "meter/sec"
     Unit m = Unit::parse("meter").canonicalized();
     Unit s = Unit::parse("sec").canonicalized();
     Unit ms = m / s;
@@ -437,7 +437,7 @@ TEST(UnitTest, ToStringDecomposeMeterPerSec)
 
 TEST(UnitTest, ToStringDecomposeOhmTimesA)
 {
-    // Ohm * A  →  "V"  (reduces to registered unit)
+    // Ohm * A  ->  "V"  (reduces to registered unit)
     Unit ohm = Unit::parse("Ohm").canonicalized();
     Unit a   = Unit::parse("A").canonicalized();
     Unit va  = ohm * a;
@@ -446,7 +446,7 @@ TEST(UnitTest, ToStringDecomposeOhmTimesA)
 
 TEST(UnitTest, ToStringDecomposeVPerA)
 {
-    // V / A  →  "Ohm"
+    // V / A  ->  "Ohm"
     Unit v = Unit::parse("V").canonicalized();
     Unit a = Unit::parse("A").canonicalized();
     Unit r = v / a;
@@ -455,7 +455,7 @@ TEST(UnitTest, ToStringDecomposeVPerA)
 
 TEST(UnitTest, ToStringDecomposeHzSec)
 {
-    // Hz * sec  →  dimensionless (empty string)
+    // Hz * sec  ->  dimensionless (empty string)
     Unit hz  = Unit::parse("Hz").canonicalized();
     Unit sec = Unit::parse("sec").canonicalized();
     Unit dim = hz * sec;
@@ -464,7 +464,7 @@ TEST(UnitTest, ToStringDecomposeHzSec)
 
 TEST(UnitTest, ToStringDecomposeWS)
 {
-    // W * sec  →  "J"  (Joule)
+    // W * sec  ->  "J"  (Joule)
     Unit w = Unit::parse("W").canonicalized();
     Unit s = Unit::parse("sec").canonicalized();
     Unit j = w * s;
@@ -496,7 +496,7 @@ TEST(UnitTest, ToStringDecomposeRoundTrip)
         EXPECT_FALSE(s.empty());
         Unit rt = Unit::parse(s);
         EXPECT_TRUE(rt.canonicalized().same_dimension(c))
-            << a_str << "*" << b_str << " → \"" << s << "\" round-trip failed";
+            << a_str << "*" << b_str << " -> \"" << s << "\" round-trip failed";
     };
     check_roundtrip("A", "W");
     check_roundtrip("V", "sec");
@@ -556,7 +556,7 @@ TEST(UnitTest, ToStringRoundTripBasicUnits)
 }
 
 // =========================================================================
-//  to_string: canonicalized prefixed units �?base REL name
+//  to_string: canonicalized prefixed units --?base REL name
 // =========================================================================
 
 TEST(UnitTest, ToStringCanonicalMHz)
@@ -580,7 +580,7 @@ TEST(UnitTest, ToStringCanonicalkOhm)
 
 TEST(UnitTest, ToStringCanonicalkS)
 {
-    // kS (kilo-Siemens) �?canonicalized �?"S"
+    // kS (kilo-Siemens) --?canonicalized --?"S"
     Unit u = Unit::parse("kS");
     Unit c = u.canonicalized();
     EXPECT_EQ(c.to_string(), "S");
@@ -677,11 +677,11 @@ TEST(UnitTest, BestDisplayHzToGHz)
 }
 
 // When the unit already has a prefix (e.g. "MHz") and the value doesn't
-// trigger further auto-scaling, the scale must be 1.0 �?the display name
+// trigger further auto-scaling, the scale must be 1.0 --?the display name
 // returned by to_string() already includes the prefix.
 TEST(UnitTest, BestDisplayPrefixUnitNoFurtherScale)
 {
-    // 1.23e12 MHz �?stays in MHz, no further auto-scaling possible.
+    // 1.23e12 MHz --?stays in MHz, no further auto-scaling possible.
     UnitScale s = Unit::parse("MHz").best_display(1.23e12);
     EXPECT_DOUBLE_EQ(s.scale, 1.0);
     EXPECT_EQ(s.name, "MHz");

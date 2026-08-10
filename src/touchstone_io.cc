@@ -1,4 +1,4 @@
-﻿#include "touchstone_io.h"
+#include "touchstone_io.h"
 
 #include "block.h"
 #include "data_array.h"

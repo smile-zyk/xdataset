@@ -61,7 +61,7 @@ namespace xdataset
         DataArray(DataArray&&) = default;
         DataArray& operator=(DataArray&&) = default;
 
-        /// Self data — the last entry in datas_ (key = kSelf).
+        /// Self data -- the last entry in datas_ (key = kSelf).
         /// For Independent: raw (un-expanded) dimension data of the last dimension.
         /// For Dependent:   the dependent variable data (already expanded).
         const DataSeries& data() const;

@@ -793,7 +793,7 @@ namespace xdataset
     }
 
     // =========================================================================
-    //  DataArray min / max �� innermost-dimension reduction
+    //  DataArray min / max -- innermost-dimension reduction
     // =========================================================================
 
     TEST(DataArrayReduceTest, DependentReducesInnermostDimToDependent)

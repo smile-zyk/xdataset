@@ -374,7 +374,7 @@ namespace xdataset
 
         if (sel_rows.size() == 1 || sel_cols.size() == 1)
         {
-            // Single row or single column → vector
+            // Single row or single column -> vector
             const bool single_row = (sel_rows.size() == 1);
             const std::vector<Index>& remaining = single_row ? sel_cols : sel_rows;
             const Index width = static_cast<Index>(remaining.size());
@@ -426,7 +426,7 @@ namespace xdataset
             throw std::logic_error("unsupported dtype in Measurement::at");
         }
 
-        // Sub-matrix: extract selected rows × columns
+        // Sub-matrix: extract selected rows x columns
         switch (data_type_)
         {
             case DataType::kReal: {

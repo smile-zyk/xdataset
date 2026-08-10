@@ -12,7 +12,7 @@ namespace xdataset
 class Dataset;
 
 // =========================================================================
-// IDatasetWriter — abstract output for Dataset persistence
+// IDatasetWriter -- abstract output for Dataset persistence
 // =========================================================================
 //
 // Implementations write a Dataset to a file or stream.  The base class
@@ -33,7 +33,7 @@ public:
 };
 
 // =========================================================================
-// IDatasetReader — abstract input for Dataset loading
+// IDatasetReader -- abstract input for Dataset loading
 // =========================================================================
 
 class XDATASET_API IDatasetReader
@@ -46,7 +46,7 @@ public:
 };
 
 // =========================================================================
-// DatasetIO — factory + convenience Save / Load
+// DatasetIO -- factory + convenience Save / Load
 // =========================================================================
 
 class XDATASET_API DatasetIO

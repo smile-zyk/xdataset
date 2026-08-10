@@ -307,13 +307,13 @@ int main()
         }
 
         // =====================================================================
-        // 12 . LNA simulation Dataset → LNA_Design.h5
+        // 12 . LNA simulation Dataset -> LNA_Design.h5
         // =====================================================================
         section("12. LNA simulation Dataset -> LNA_Design.h5");
         {
             Dataset ds("LNA_Design");
 
-            // --- DC bias sweep: Vgs(11) x Vds(9) → Id, gm, Vth ---
+            // --- DC bias sweep: Vgs(11) x Vds(9) -> Id, gm, Vth ---
             {
                 const std::size_t nVgs = 11, nVds = 9, total = nVgs * nVds;
                 std::vector<double> vgs_raw(nVgs), vds_raw(nVds);
@@ -381,7 +381,7 @@ int main()
                 ds.AddBlock("amplifier/SP1/SP", std::move(info));
             }
 
-            // --- Harmonic balance: Pin(7) → Pout, Gain, PAE ---
+            // --- Harmonic balance: Pin(7) -> Pout, Gain, PAE ---
             {
                 const std::size_t Np = 7;
                 std::vector<double> pin_vals(Np);
@@ -410,7 +410,7 @@ int main()
                 ds.AddBlock("amplifier/HB1/HB", std::move(info));
             }
 
-            // --- Noise: freq(10) → NFmin, Rn ---
+            // --- Noise: freq(10) -> NFmin, Rn ---
             {
                 const std::size_t Nf = 10;
                 std::vector<double> freqs(Nf);

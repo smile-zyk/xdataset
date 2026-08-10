@@ -407,7 +407,7 @@ namespace xdataset
 
         const std::string out = table.to_string(10);
 
-        // 2Ã—3 = 6 rows, all should fit
+        // 2x3 = 6 rows, all should fit
         EXPECT_EQ(out.find("..."), std::string::npos);
         EXPECT_EQ(out.find("omitted"), std::string::npos);
         // Header
@@ -422,7 +422,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, FromBlockTruncated)
     {
-        // 2Ã—3Ã—4 = 24 rows, max_display_rows=8 â†?truncation
+        // 2x3x4 = 24 rows, max_display_rows=8 â†?truncation
         Block block(MakeThreeDimMultiDepCreateInfo());
         const DataFrame& table = block.GetOrCreateDataFrame();
 

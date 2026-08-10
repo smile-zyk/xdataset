@@ -28,7 +28,7 @@ namespace xdataset
 
         BlockCreateInfo make_simple_info()
         {
-            // R(2) × freq(3): 6 rows
+            // R(2) x freq(3): 6 rows
             BlockCreateInfo info;
             info.independent_specs.push_back(
                 IndependentSpec{"R", MakeScalarSeries(2),

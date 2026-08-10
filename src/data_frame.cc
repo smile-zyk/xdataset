@@ -204,7 +204,7 @@ namespace xdataset
         headers_    = std::move(headers);
         total_rows_ = rows.size();
         rows_       = std::move(rows);
-        // No generator, no chunk loading �?rows are fully materialised.
+        // No generator, no chunk loading -- rows are fully materialised.
         // Mark all rows as already loaded so base GetRow / EnsureChunkLoaded
         // works without a generator.
         loaded_chunks_.assign(

@@ -205,7 +205,7 @@ namespace xdataset
         DataArrayCreateInfo info;
         info.kind = DataArrayKind::kIndependent;
 
-        // Copy first (target+1) entries from datas_ �?raw dimension data, no
+        // Copy first (target+1) entries from datas_ -- raw dimension data, no
         // expansion needed.  The last copied entry becomes kSelf.  When the
         // source is Independent and the last entry is the self-dimension,
         // generate an index series (0, 1, ...) instead of copying the data.
@@ -338,7 +338,7 @@ namespace xdataset
         }
 
         // Independent DataArray: the last dimension (self) must never be eliminated,
-        // even when the selector is Equal �?otherwise the result has no data.
+        // even when the selector is Equal -- otherwise the result has no data.
         if (data_kind_ == DataArrayKind::kIndependent && rank > 0)
             is_dim_retain[rank - 1] = true;
 

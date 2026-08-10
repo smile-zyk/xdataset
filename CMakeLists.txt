@@ -43,7 +43,7 @@ set(XDATASET_SOURCES
 	src/data_array_io.cc
 )
 
-# ── xdataset shared lib ─────────────────────────────────────────────────
+# -- xdataset shared lib ---------------------------------------------------
 
 add_library(xdataset SHARED ${XDATASET_SOURCES})
 target_compile_definitions(xdataset PRIVATE XDATASET_BUILD_DLL)
@@ -56,7 +56,7 @@ if(BUILD_XDATASET_TEST)
     include(GoogleTest)
     enable_testing()
 
-    # ── units test ─────────────────────────────────────────────────
+    # -- units test ---------------------------------------------------
 
     add_executable(xdataset_units_test
         tests/unit_test.cc
@@ -64,7 +64,7 @@ if(BUILD_XDATASET_TEST)
     target_link_libraries(xdataset_units_test PRIVATE xdataset GTest::gtest_main)
     gtest_discover_tests(xdataset_units_test)
 
-    # ── full xdataset test ─────────────────────────────────────────
+    # -- full xdataset test -------------------------------------------------
 
     add_executable(xdataset_test
         tests/data_series_test.cc
@@ -141,7 +141,7 @@ if(BUILD_XDATASET_PYTHON)
         list(PREPEND CMAKE_PREFIX_PATH "${PYBIND11_CMAKE_DIR}")
         find_package(pybind11 CONFIG REQUIRED)
 
-        # NumPy include dir — required by pybind11/numpy.h and pybind11/eigen.h.
+        # NumPy include dir -- required by pybind11/numpy.h and pybind11/eigen.h.
         execute_process(
             COMMAND "${Python3_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
             OUTPUT_VARIABLE NUMPY_INCLUDE_DIR

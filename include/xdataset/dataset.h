@@ -13,7 +13,7 @@ namespace xdataset
 {
 
 // =========================================================================
-// Group — internal node in the Dataset tree
+// Group -- internal node in the Dataset tree
 // =========================================================================
 //
 // When `block` is non-null, the Group is a leaf (holds a Block).
@@ -36,7 +36,7 @@ struct XDATASET_API Group
     // ========================================================================
     //
     // A Dataset is a tree-structured container.  Internal nodes are Groups
-    // (no data, just name → child mappings).  Leaf nodes are Blocks which
+    // (no data, just name -> child mappings).  Leaf nodes are Blocks which
     // hold the actual simulation data (independents + dependents).
     //
     // C++ API uses '/' as path separator; REL uses '.' for the tree and
@@ -81,7 +81,7 @@ struct XDATASET_API Group
         /// Add a Block at `path`.  Intermediate Groups are created implicitly.
         /// Block::name() is the path with `/` replaced by `.`.
         ///
-        /// Example:  AddBlock("simulation/SP1/SP", info) → Block "simulation.SP1.SP"
+        /// Example:  AddBlock("simulation/SP1/SP", info) -> Block "simulation.SP1.SP"
         Block& AddBlock(const std::string& path,
                         const BlockCreateInfo& block_info);
 
@@ -162,7 +162,7 @@ struct XDATASET_API Group
         // Utilities
         // --------------------------------------------------------------------
 
-        /// Split a '/' path into segments.  "a/b/c" → ["a", "b", "c"].
+        /// Split a '/' path into segments.  "a/b/c" -> ["a", "b", "c"].
         static std::vector<std::string> SplitPath(const std::string& path);
 
     private:

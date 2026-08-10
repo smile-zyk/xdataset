@@ -44,7 +44,7 @@ static bool better_candidate(const std::string& cand,
     int cs = count_sep(cand);
     int bs = count_sep(best);
     if (cs != bs) return cs < bs;
-    // Both have same number of separators — prefer '/' form.
+    // Both have same number of separators -- prefer '/' form.
     bool chas_div = (cand.find('/') != std::string::npos);
     bool bhas_div = (best.find('/') != std::string::npos);
     if (chas_div != bhas_div) return chas_div;
@@ -61,7 +61,7 @@ std::string UnitRegistry::decompose(const UnitData& dim) const
     const std::string* exact = reverse_lookup(dim);
     if (exact) return *exact;
 
-    // Dimensionless → nothing to decompose.
+    // Dimensionless -> nothing to decompose.
     if (dim.empty()) return std::string();
 
     std::string best;
@@ -71,20 +71,47 @@ std::string UnitRegistry::decompose(const UnitData& dim) const
         const std::string& probe_name = it->first;
         const UnitData&    probe_dim  = it->second;
 
-        // ---- probe * remainder = target ? ----
-        UnitData rem_mul = dim / probe_dim;
-        if (divides(probe_dim, dim) && !rem_mul.empty()) {
-            // a) probe * decompose(remainder)
-            std::string dec = decompose(rem_mul);
+        if (!divides(probe_dim, dim)) continue;
+
+        // Find the maximum power n such that probe^n still divides dim.
+        int n = 1;
+        UnitData probe_pow = probe_dim;
+        while (true) {
+            UnitData next = probe_pow * probe_dim;
+            if (!divides(next, dim)) break;
+            probe_pow = next;
+            ++n;
+        }
+
+        // Try powers from n down to 1.
+        // higher powers -> fewer separators -> preferred by better_candidate.
+        for (int k = n; k >= 1; --k) {
+            UnitData pow_dim = probe_dim.pow(k);
+            UnitData rem     = dim / pow_dim;
+
+            // Build prefix:  "A" for k=1, "A^2" for k=2, etc.
+            std::string prefix = probe_name;
+            if (k > 1) prefix += "^" + std::to_string(k);
+
+            if (rem.empty()) {
+                // probe_name^k exactly matches dim.
+                if (better_candidate(prefix, best))
+                    best = prefix;
+                continue;
+            }
+
+            // a) prefix * decompose(remainder)
+            std::string dec = decompose(rem);
             if (!dec.empty()) {
-                std::string cand = probe_name + "*" + dec;
+                std::string cand = prefix + "*" + dec;
                 if (better_candidate(cand, best))
                     best = cand;
             }
-            // b) probe / decompose(remainder.inv())
-            std::string dec_inv = decompose(rem_mul.inv());
+
+            // b) prefix / decompose(remainder.inv())
+            std::string dec_inv = decompose(rem.inv());
             if (!dec_inv.empty()) {
-                std::string cand = probe_name + "/" + dec_inv;
+                std::string cand = prefix + "/" + dec_inv;
                 if (better_candidate(cand, best))
                     best = cand;
             }
@@ -100,7 +127,7 @@ std::string UnitRegistry::decompose(const UnitData& dim) const
 
 UnitRegistry::UnitRegistry()
 {
-    // Populate the scale-prefix table (name → factor).
+    // Populate the scale-prefix table (name -> factor).
     scale_map_["T"] = 1e12;
     scale_map_["G"] = 1e9;
     scale_map_["M"] = 1e6;
@@ -125,21 +152,21 @@ UnitRegistry::UnitRegistry()
 
     register_base("sec", UnitData(0,0,1,0,0,0,0));             // second
 
-    register_base("Hz",  UnitData(0,0,-1,0,0,0,0));            // Hertz = s⁻¹
-    register_base("Ohm", UnitData(2,1,-3,-2,0,0,0));           // Ohm = kg·m²·s⁻³·A⁻²
+    register_base("Hz",  UnitData(0,0,-1,0,0,0,0));            // Hertz = s^-1
+    register_base("Ohm", UnitData(2,1,-3,-2,0,0,0));           // Ohm = kg*m^2*s^-3*A^-2
     register_alias("Ohms", "Ohm");
-    register_base("S",   UnitData(-2,-1,3,2,0,0,0));           // Siemens = kg⁻¹·m⁻²·s³·A²
-    register_base("F",   UnitData(-2,-1,4,2,0,0,0));           // Farad = kg⁻¹·m⁻²·s⁴·A²
-    register_base("H",   UnitData(2,1,-2,-2,0,0,0));           // Henry = kg·m²·s⁻²·A⁻²
-    register_base("V",   UnitData(2,1,-3,-1,0,0,0));           // Volt = kg·m²·s⁻³·A⁻¹
+    register_base("S",   UnitData(-2,-1,3,2,0,0,0));           // Siemens = kg^-1*m^-2*s^3*A^2
+    register_base("F",   UnitData(-2,-1,4,2,0,0,0));           // Farad = kg^-1*m^-2*s^4*A^2
+    register_base("H",   UnitData(2,1,-2,-2,0,0,0));           // Henry = kg*m^2*s^-2*A^-2
+    register_base("V",   UnitData(2,1,-3,-1,0,0,0));           // Volt = kg*m^2*s^-3*A^-1
     register_base("A",   UnitData(0,0,0,1,0,0,0));             // Ampere
-    register_base("W",   UnitData(2,1,-3,0,0,0,0));            // Watt = kg·m²·s⁻³
+    register_base("W",   UnitData(2,1,-3,0,0,0,0));            // Watt = kg*m^2*s^-3
 
-    register_base("C",   UnitData(0,0,1,1,0,0,0));             // Coulomb = A·s
-    register_base("J",   UnitData(2,1,-2,0,0,0,0));            // Joule = kg·m²·s⁻²
-    register_base("N",   UnitData(1,1,-2,0,0,0,0));            // Newton = kg·m·s⁻²
-    register_base("Wb",  UnitData(2,1,-2,-1,0,0,0));           // Weber = kg·m²·s⁻²·A⁻¹
-    register_base("Pa",  UnitData(-1,1,-2,0,0,0,0));           // Pascal = kg·m⁻¹·s⁻²
+    register_base("C",   UnitData(0,0,1,1,0,0,0));             // Coulomb = A*s
+    register_base("J",   UnitData(2,1,-2,0,0,0,0));            // Joule = kg*m^2*s^-2
+    register_base("N",   UnitData(1,1,-2,0,0,0,0));            // Newton = kg*m*s^-2
+    register_base("Wb",  UnitData(2,1,-2,-1,0,0,0));           // Weber = kg*m^2*s^-2*A^-1
+    register_base("Pa",  UnitData(-1,1,-2,0,0,0,0));           // Pascal = kg*m^-1*s^-2
 
     // ===============================================================
     //  Type B: pre-defined (non-scalable)

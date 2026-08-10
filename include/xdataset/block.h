@@ -33,16 +33,16 @@ namespace xdataset
     };
 
     // ========================================================================
-    // Block — leaf node in the Dataset tree
+    // Block -- leaf node in the Dataset tree
     // ========================================================================
     //
     // A Block holds the independent variables (coordinate axes) and dependent
     // variables (measurements) for one simulation result.  It is always a
-    // LEAF in the Dataset tree — Blocks do not contain other Blocks.
+    // LEAF in the Dataset tree -- Blocks do not contain other Blocks.
     //
     // Block.name() returns the short (leaf) name.
     // The full path within the Dataset is determined by the tree structure,
-    // e.g. AddBlock("simulation/SP1/SP", info) → Block::name() == "SP",
+    // e.g. AddBlock("simulation/SP1/SP", info) -> Block::name() == "SP",
     // full path == "simulation/SP1/SP".
     //
     // ========================================================================
