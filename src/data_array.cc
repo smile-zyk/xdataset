@@ -716,6 +716,10 @@ void DataArray::set_indep_data(Index indep_index, DataSeries new_series)
     if (static_cast<std::size_t>(indep_index) > rank)
         throw std::out_of_range("indep_index out of range");
 
+    if (indep_index == 1 && data_kind_ == DataArrayKind::kIndependent)
+        throw std::invalid_argument(
+            "set_indep_data: indep_index=1 targets kSelf for Independent DataArray; use set_data() instead");
+
     const std::size_t target = rank - static_cast<std::size_t>(indep_index);
     auto it = datas_.begin();
     std::advance(it, static_cast<std::ptrdiff_t>(target));
@@ -734,8 +738,9 @@ void DataArray::set_indep_data(Index indep_index, DataSeries new_series)
 
 void DataArray::set_indep_data(const std::string& indep_name, DataSeries new_series)
 {
-    if (indep_name.empty())
-        throw std::invalid_argument("indep_name must not be empty");
+    if (indep_name == kSelf)
+        throw std::invalid_argument(
+            "set_indep_data: cannot modify kSelf; use set_data() instead");
 
     auto it = datas_.find(indep_name);
     if (it == datas_.end())
@@ -761,6 +766,10 @@ void DataArray::set_indep_data(Index indep_index, Index row, Measurement value)
     const std::size_t rank = multi_dimension_spec_.rank();
     if (static_cast<std::size_t>(indep_index) > rank)
         throw std::out_of_range("indep_index out of range");
+
+    if (indep_index == 1 && data_kind_ == DataArrayKind::kIndependent)
+        throw std::invalid_argument(
+            "set_indep_data: indep_index=1 targets kSelf for Independent DataArray; use set_data() instead");
 
     const std::size_t target = rank - static_cast<std::size_t>(indep_index);
     auto it = datas_.begin();
@@ -825,8 +834,9 @@ void DataArray::set_indep_data(Index indep_index, Index row, Measurement value)
 
 void DataArray::set_indep_data(const std::string& indep_name, Index row, Measurement value)
 {
-    if (indep_name.empty())
-        throw std::invalid_argument("indep_name must not be empty");
+    if (indep_name == kSelf)
+        throw std::invalid_argument(
+            "set_indep_data: cannot modify kSelf; use set_data() instead");
 
     auto it = datas_.find(indep_name);
     if (it == datas_.end())
