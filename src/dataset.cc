@@ -301,8 +301,10 @@ namespace xdataset
     std::vector<std::string> Dataset::GetGroupNames(const std::string& group_path) const
     {
         const TreeNode* node = navigate(group_path);
-        const InternalNode* internal = node ? boost::get<InternalNode>(node) : nullptr;
-        if (!internal) throw std::out_of_range("group not found: " + group_path);
+        if (!node) throw std::out_of_range("group not found: " + group_path);
+
+        const InternalNode* internal = boost::get<InternalNode>(node);
+        if (!internal) return {};  // leaf (block), not a group
 
         std::vector<std::string> names;
         for (const auto& kv : internal->children)

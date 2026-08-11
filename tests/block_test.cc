@@ -402,10 +402,14 @@ namespace xdataset
         Block block(MakeMatrixCellCreateInfo());
         const DataFrame& table = block.GetOrCreateDataFrame();
 
-        ASSERT_EQ(table.headers().size(), 3u);
+        // 2 scalars (x, y) + 1 matrix (mats) expanded to 2x2=4 columns = 6
+        ASSERT_EQ(table.headers().size(), 6u);
         EXPECT_EQ(table.headers()[0], "x");
         EXPECT_EQ(table.headers()[1], "y");
-        EXPECT_EQ(table.headers()[2], "mats");
+        EXPECT_EQ(table.headers()[2], "mats(1,1)");
+        EXPECT_EQ(table.headers()[3], "mats(1,2)");
+        EXPECT_EQ(table.headers()[4], "mats(2,1)");
+        EXPECT_EQ(table.headers()[5], "mats(2,2)");
 
         ASSERT_EQ(table.row_count(), 4u);
     }

@@ -506,153 +506,38 @@ namespace xdataset
         return DataArray(std::move(info));
     }
 
-    // =========================================================================
-    //  Innermost-dimension reduction (min / max)
-    // =========================================================================
-
-    namespace
+    void DataArray::for_each_indep_group(
+        Index                                          indep_index,
+        const MultiDimensionSpec::DimGroupVisitor&     visitor) const
     {
-        /// Three-way comparison used by min/max. Numeric values compare
-        /// numerically, complex by magnitude (std::abs), booleans as
-        /// false < true, and strings lexicographically.
-        int compare_values(const Measurement& a, const Measurement& b)
-        {
-            switch (a.data_type())
-            {
-                case DataType::kReal:
-                {
-                    const double x = boost::get<double>(a.storage());
-                    const double y = boost::get<double>(b.storage());
-                    return x < y ? -1 : (x > y ? 1 : 0);
-                }
-                case DataType::kInteger:
-                {
-                    const int x = boost::get<int>(a.storage());
-                    const int y = boost::get<int>(b.storage());
-                    return x < y ? -1 : (x > y ? 1 : 0);
-                }
-                case DataType::kComplex:
-                {
-                    const double x = std::abs(boost::get<std::complex<double>>(a.storage()));
-                    const double y = std::abs(boost::get<std::complex<double>>(b.storage()));
-                    return x < y ? -1 : (x > y ? 1 : 0);
-                }
-                case DataType::kBoolean:
-                {
-                    const bool x = boost::get<bool>(a.storage());
-                    const bool y = boost::get<bool>(b.storage());
-                    return x == y ? 0 : (x ? 1 : -1);
-                }
-                case DataType::kString:
-                {
-                    const std::string& x = boost::get<std::string>(a.storage());
-                    const std::string& y = boost::get<std::string>(b.storage());
-                    return x < y ? -1 : (x > y ? 1 : 0);
-                }
-            }
-            return 0;
-        }
+        if (indep_index <= 0)
+            throw std::invalid_argument("for_each_indep_group: indep_index must be 1-based and greater than 0");
 
-        /// Reduce along the innermost dimension by taking the element-wise
-        /// minimum (want_max=false) or maximum (want_max=true) of each group.
-        /// See DataArray::min() / DataArray::max() for the full semantics.
-        DataArray reduce_innermost(const DataArray& da, bool want_max)
-        {
-            if (da.data().data_kind() != DataKind::kScalar)
-            {
-                throw std::logic_error(
-                    want_max ? "max is only supported for scalar data"
-                             : "min is only supported for scalar data");
-            }
+        const std::size_t rank = multi_dimension_spec_.rank();
+        if (rank == 0)
+            throw std::logic_error("for_each_indep_group: DataArray has no dimensions");
 
-            const std::size_t rank = da.multi_dimension_spec().rank();
-            if (rank == 0)
-            {
-                throw std::logic_error("min/max requires at least one dimension");
-            }
+        if (static_cast<std::size_t>(indep_index) > rank)
+            throw std::out_of_range("for_each_indep_group: indep_index out of range");
 
-            const auto better = [want_max](const Measurement& a, const Measurement& b) -> bool
-            {
-                const int cmp = compare_values(a, b);
-                return want_max ? (cmp > 0) : (cmp < 0);
-            };
+        // Convert: indep_index=1 (innermost) -> spec dim rank-1;
+        //          indep_index=rank (outermost) -> spec dim 0.
+        const Index spec_dim = static_cast<Index>(rank) - indep_index;
+        multi_dimension_spec_.for_each_group_at_dim(spec_dim, visitor);
+    }
 
-            struct GroupAcc
-            {
-                Measurement best;
-                bool        have = false;
-            };
+    void DataArray::for_each_leaf_row(
+        const MultiDimensionSpec::LeafRowVisitor& visitor) const
+    {
+        multi_dimension_spec_.for_each_leaf_row(visitor);
+    }
 
-            std::vector<GroupAcc> groups;
-
-            if (rank >= 2)
-            {
-                da.multi_dimension_spec().for_each_group_at_dim(
-                    static_cast<Index>(rank - 2),
-                    [&](const MultiDimensionSpec::DimGroup& g)
-                    {
-                        GroupAcc acc;
-                        da.multi_dimension_spec().for_each_leaf_row(
-                            [&](const MultiDimensionSpec::LeafRow& leaf)
-                            {
-                                const Measurement val =
-                                    (da.data_kind() == DataArrayKind::kIndependent)
-                                        ? da.data().measurement_at(
-                                              leaf.dimension_row_indices[rank - 1])
-                                        : da.data().measurement_at(leaf.row_flat);
-                                if (!acc.have) { acc.best = val; acc.have = true; }
-                                else if (better(val, acc.best)) { acc.best = val; }
-                            },
-                            g.flat_start, g.flat_end);
-                        groups.push_back(std::move(acc));
-                    });
-            }
-            else
-            {
-                GroupAcc acc;
-                const Index total =
-                    static_cast<Index>(da.multi_dimension_spec().compute_cell_count());
-                for (Index f = 0; f < total; ++f)
-                {
-                    const Measurement val = da.data().measurement_at(f);
-                    if (!acc.have) { acc.best = val; acc.have = true; }
-                    else if (better(val, acc.best)) { acc.best = val; }
-                }
-                groups.push_back(std::move(acc));
-            }
-
-            DataSeries out(da.data().data_type(), da.data().data_shape());
-            for (const GroupAcc& acc : groups)
-                out.append(acc.best);
-
-            DataArrayCreateInfo info;
-
-            if (rank >= 2)
-            {
-                info.kind = DataArrayKind::kDependent;
-                const auto& indep_names = da.indep_names();
-                for (std::size_t i = 0; i < rank - 1; ++i)
-                    info.datas[indep_names[i]] = da.indep_data(indep_names[i]);
-                info.datas[DataArray::kSelf] = std::move(out);
-
-                MultiDimensionSpec spec;
-                for (std::size_t i = 0; i < rank - 1; ++i)
-                    spec.add_dimension(da.multi_dimension_spec().dim(static_cast<Index>(i)));
-                info.multi_dimension_spec = std::move(spec);
-            }
-            else
-            {
-                info.kind = DataArrayKind::kIndependent;
-                info.datas[DataArray::kSelf] = std::move(out);
-                info.multi_dimension_spec = MultiDimensionSpec().add_regular(1);
-            }
-
-            return DataArray(std::move(info));
-        }
-    } // anonymous namespace
-
-    DataArray DataArray::min() const { return reduce_innermost(*this, false); }
-    DataArray DataArray::max() const { return reduce_innermost(*this, true); }
+    void DataArray::for_each_leaf_row(
+        const MultiDimensionSpec::LeafRowVisitor& visitor,
+        Index start_flat_row, Index end_flat_row) const
+    {
+        multi_dimension_spec_.for_each_leaf_row(visitor, start_flat_row, end_flat_row);
+    }
 
     // Static factory methods
 

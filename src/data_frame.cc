@@ -551,13 +551,14 @@ namespace xdataset
         const std::size_t total_rows   = spec.compute_cell_count();
         const std::size_t total_headers = all_headers.size();
 
+        const DataArray* da = data_array_;
         ConfigureDynamic(std::move(all_headers), total_rows,
-            [spec, indep_columns, total_headers, dep_series](
+            [da, indep_columns, total_headers, dep_series](
                 Index start, Index end) -> std::vector<DataFrameRow>
             {
                 std::vector<DataFrameRow> result;
                 result.reserve(static_cast<std::size_t>(end - start));
-                spec.for_each_leaf_row(
+                da->for_each_leaf_row(
                     [&](const MultiDimensionSpec::LeafRow& leaf_row)
                     {
                         DataFrameRow row;
