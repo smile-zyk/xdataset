@@ -119,7 +119,7 @@ namespace xdataset
         switch (type)
         {
             case DataType::kInteger: return "Integer";
-            case DataType::kReal:    return "Double";
+            case DataType::kReal:    return "Real";
             case DataType::kComplex: return "Complex";
             case DataType::kString:  return "String";
             case DataType::kBoolean: return "Boolean";
