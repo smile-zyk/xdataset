@@ -146,7 +146,7 @@ namespace xdataset
         return *data_frame_cache_;
     }
 
-    const DataSeries& DataArray::indep_data(Index index) const
+    DataSeries DataArray::indep_data(Index index) const
     {
         if (index <= 0)
             throw std::invalid_argument("indep_data index must be 1-based and greater than 0");
@@ -155,14 +155,27 @@ namespace xdataset
         if (static_cast<std::size_t>(index) > rank)
             throw std::out_of_range("indep_data index out of range");
 
-        // index=1 -> last indep entry, index=rank -> first indep entry
+        // index=1 -> last indep entry (innermost), index=rank -> first indep entry (outermost)
         const std::size_t target = rank - static_cast<std::size_t>(index);
         auto it = datas_.begin();
         std::advance(it, static_cast<std::ptrdiff_t>(target));
+
+        // For Independent DataArrays, the innermost entry (index==1) is the
+        // self/dimension data.  Return an index series [0, 1, 2, ...) instead
+        // of the raw dimension values.
+        if (data_kind_ == DataArrayKind::kIndependent && index == 1)
+        {
+            const DataSeries& raw = it->second;
+            DataSeries idx = DataSeries::CreateScalar<int>(raw.size(), Unit(), 0);
+            for (Index i = 0; i < raw.size(); ++i)
+                idx.scalar_at<int>(i) = static_cast<int>(i);
+            return idx;
+        }
+
         return it->second;
     }
 
-    const DataSeries& DataArray::indep_data(const std::string& name) const
+    DataSeries DataArray::indep_data(const std::string& name) const
     {
         if (data_kind_ == DataArrayKind::kDependent && name == kSelf)
             throw std::invalid_argument(
@@ -205,35 +218,19 @@ namespace xdataset
         DataArrayCreateInfo info;
         info.kind = DataArrayKind::kIndependent;
 
-        // Copy first (target+1) entries from datas_ -- raw dimension data, no
-        // expansion needed.  The last copied entry becomes kSelf.  When the
-        // source is Independent and the last entry is the self-dimension,
-        // generate an index series (0, 1, ...) instead of copying the data.
-        std::size_t pos = 0;
-        for (const auto& item : datas_)
+        // Copy outer independent entries.  indep_data(i) with i>1 never
+        // triggers index generation, so it just copies the raw data.
+        for (Index i = static_cast<Index>(rank); i > index; --i)
         {
-            if (pos > target)
-                break;
-
-            const bool is_self_entry = (pos == target);
-            const bool generate_index =
-                is_self_entry && (data_kind_ == DataArrayKind::kIndependent);
-
-            if (generate_index)
-            {
-                const DataSeries& raw = item.second;
-                DataSeries idx =
-                    DataSeries::CreateScalar<int>(raw.size(), Unit(), 0);
-                for (Index i = 0; i < raw.size(); ++i)
-                    idx.scalar_at<int>(i) = static_cast<int>(i);
-                info.datas.emplace(kSelf, std::move(idx));
-            }
-            else if (is_self_entry)
-                info.datas.emplace(kSelf, item.second);
-            else
-                info.datas.emplace(item.first, item.second);
-            ++pos;
+            DataSeries ds = indep_data(i);
+            auto it = datas_.begin();
+            std::advance(it, static_cast<std::ptrdiff_t>(rank - static_cast<std::size_t>(i)));
+            info.datas.emplace(it->first, std::move(ds));
         }
+
+        // Self entry: innermost dimension.  indep_data() handles index
+        // generation for Independent data automatically.
+        info.datas.emplace(kSelf, indep_data(index));
 
         // Build result multi_dimension_spec from prefix dimensions.
         MultiDimensionSpec result_spec;
