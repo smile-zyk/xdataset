@@ -87,6 +87,7 @@ public:
 
     Unit operator*(const Unit& other) const;
     Unit operator/(const Unit& other) const;
+    Unit pow(int n) const;
 
     // ---- comparison ----------------------------------------------------
 

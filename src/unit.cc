@@ -210,6 +210,11 @@ Unit Unit::operator/(const Unit& other) const
     return Unit(1.0, dim_ / other.dim_);
 }
 
+Unit Unit::pow(int n) const
+{
+    return Unit(1.0, dim_.pow(n));
+}
+
 // =========================================================================
 //  Comparison
 // =========================================================================
