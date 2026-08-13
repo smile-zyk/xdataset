@@ -120,8 +120,8 @@ DataSeries DataSeries::promoted_data_type(DataType target) const {
     };
     if (!can_promote(data_type_, target))
         throw std::invalid_argument("promoted_data_type: cannot promote from " +
-            std::to_string(static_cast<int>(data_type_)) + " to " +
-            std::to_string(static_cast<int>(target)));
+            std::string(DataTypeToString(data_type_)) + " to " +
+            std::string(DataTypeToString(target)));
 
     // Build a new DataSeries with target dtype, copy rows with promotion
     DataSeries out(target, shape_);
