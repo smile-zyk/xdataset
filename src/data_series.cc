@@ -61,6 +61,38 @@ void DataSeries::set_unit(const std::string& s) {
     unit_ = Unit::parse(s);
 }
 
+/// In-place scale every element of \p ds by \p mult.  \p T must match the
+/// series' stored dtype exactly (kReal -> double, kComplex -> complex<double>).
+template <typename T>
+void scale_by_multiplier(DataSeries& ds, double mult)
+{
+    const Index n = static_cast<Index>(ds.size());
+    switch (ds.data_shape().kind())
+    {
+        case DataKind::kScalar:
+            for (Index i = 0; i < n; ++i)
+                ds.scalar_at<T>(i) = static_cast<T>(ds.scalar_at<T>(i) * mult);
+            break;
+        case DataKind::kVector:
+            for (Index i = 0; i < n; ++i)
+            {
+                auto v = ds.vector_at<T>(i);
+                for (Index j = 0; j < v.size(); ++j)
+                    v(j) = static_cast<T>(v(j) * mult);
+            }
+            break;
+        case DataKind::kMatrix:
+            for (Index i = 0; i < n; ++i)
+            {
+                auto m = ds.matrix_at<T>(i);
+                for (Index r = 0; r < m.rows(); ++r)
+                    for (Index c = 0; c < m.cols(); ++c)
+                        m(r, c) = static_cast<T>(m(r, c) * mult);
+            }
+            break;
+    }
+}
+
 void DataSeries::canonicalize() {
     // Strings are not numeric -- only update the unit tag, no value conversion.
     if (data_type_ == DataType::kString) {
@@ -76,25 +108,20 @@ void DataSeries::canonicalize() {
         return;
     }
 
-    for (std::size_t i = 0; i < size(); ++i) {
-        Index idx = static_cast<Index>(i);
-        if (shape_.kind() == DataKind::kScalar) {
-            double& v = scalar_at<double>(idx);
-            v *= mult;
-        } else if (shape_.kind() == DataKind::kVector) {
-            typename NumericVectorTypes<double>::MapType v = vector_at<double>(idx);
-            for (Index j = 0; j < v.size(); ++j) {
-                v(j) *= mult;
-            }
-        } else {
-            typename NumericMatrixTypes<double>::MapType m = matrix_at<double>(idx);
-            for (Index r = 0; r < m.rows(); ++r) {
-                for (Index c = 0; c < m.cols(); ++c) {
-                    m(r, c) *= mult;
-                }
-            }
-        }
+    // Integer storage cannot hold scaled values (int * 1e9 would truncate);
+    // promote to real first -- same semantics as Measurement::canonicalized().
+    if (data_type_ == DataType::kInteger) {
+        DataSeries real = promoted_data_type(DataType::kReal);
+        real.canonicalize();             // now kReal -- scales in place above
+        *this = std::move(real);
+        return;
     }
+
+    if (data_type_ == DataType::kReal)
+        scale_by_multiplier<double>(*this, mult);
+    else  // kComplex
+        scale_by_multiplier<std::complex<double>>(*this, mult);
+
     unit_ = target;
 }
 
