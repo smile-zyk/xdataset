@@ -425,32 +425,6 @@ namespace xdataset
     };
 
     // =========================================================================
-    // MeasurementTypeVisitor -- extracts DataKind / DataType from a variant.
-    // =========================================================================
-
-    struct MeasurementTypeVisitor : public boost::static_visitor<void>
-    {
-        DataKind kind   = DataKind::kScalar;
-        DataType dtype  = DataType::kReal;
-
-        void operator()(double)                    { kind = DataKind::kScalar;  dtype = DataType::kReal;    }
-        void operator()(int)                       { kind = DataKind::kScalar;  dtype = DataType::kInteger; }
-        void operator()(const std::complex<double>&){ kind = DataKind::kScalar;  dtype = DataType::kComplex; }
-        void operator()(const std::string&)         { kind = DataKind::kScalar;  dtype = DataType::kString;  }
-        void operator()(bool)                       { kind = DataKind::kScalar;  dtype = DataType::kBoolean; }
-
-        void operator()(const VecXd&)           { kind = DataKind::kVector; dtype = DataType::kReal;    }
-        void operator()(const VecXi&)           { kind = DataKind::kVector; dtype = DataType::kInteger; }
-        void operator()(const VecXcd&)          { kind = DataKind::kVector; dtype = DataType::kComplex; }
-        void operator()(const VecXs&)           { kind = DataKind::kVector; dtype = DataType::kString;  }
-
-        void operator()(const MatXd&)           { kind = DataKind::kMatrix; dtype = DataType::kReal;    }
-        void operator()(const MatXi&)           { kind = DataKind::kMatrix; dtype = DataType::kInteger; }
-        void operator()(const MatXcd&)          { kind = DataKind::kMatrix; dtype = DataType::kComplex; }
-        void operator()(const MatXs&)           { kind = DataKind::kMatrix; dtype = DataType::kString;  }
-    };
-
-    // =========================================================================
     // Template implementation
     // =========================================================================
 
