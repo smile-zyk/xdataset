@@ -7,6 +7,7 @@
 #include <boost/variant.hpp>
 
 #include <complex>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -19,7 +20,7 @@
 namespace xdataset
 {
 
-    class MeasurementDataFrame;
+    class DataFrame;
 
     // =========================================================================
     // Measurement -- a single named value with units (scalar | vector | matrix)
@@ -256,9 +257,11 @@ namespace xdataset
 
         // ======== DataFrame conversion ======================================
 
-        /// Create a MeasurementDataFrame with this measurement as the single
+        /// Create a single-row DataFrame with this measurement as the only
         /// row, using \p name as the column header prefix.
-        MeasurementDataFrame to_dataframe(const std::string& name) const;
+        /// The concrete frame type is internal to the library, hence the
+        /// opaque unique_ptr<DataFrame> return.
+        std::unique_ptr<DataFrame> to_dataframe(const std::string& name) const;
 
         // ======== canonicalisation ======================================
 

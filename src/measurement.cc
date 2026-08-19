@@ -1,6 +1,6 @@
 #include "measurement.h"
-#include "data_frame.h"
 #include "unit.h"
+#include "data_frame.h"
 
 #include <cmath>
 #include <sstream>
@@ -808,9 +808,10 @@ bool Measurement::is_canonicalized() const {
 // Measurement::to_dataframe
 // =========================================================================
 
-MeasurementDataFrame Measurement::to_dataframe(const std::string& name) const
+std::unique_ptr<DataFrame> Measurement::to_dataframe(
+    const std::string& name) const
 {
-    return MeasurementDataFrame(*this, name);
+    return DataFrame::FromMeasurement(*this, name);
 }
 
 } // namespace xdataset
