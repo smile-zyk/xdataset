@@ -254,8 +254,10 @@ namespace xdataset
         chunks_.clear();
         if (total_rows_ > 0)
         {
-            chunks_.push_back(
-                std::make_unique<std::vector<DataFrameRow>>(std::move(rows)));
+            // C++11: std::make_unique is C++14; construct the unique_ptr
+            // explicitly.
+            chunks_.push_back(std::unique_ptr<std::vector<DataFrameRow>>(
+                new std::vector<DataFrameRow>(std::move(rows))));
         }
     }
 
@@ -284,8 +286,8 @@ namespace xdataset
         chunk_rows.resize(static_cast<std::size_t>(end - start));
 
         // One contiguous allocation per chunk; rows are never moved again.
-        chunks_[ci] =
-            std::make_unique<std::vector<DataFrameRow>>(std::move(chunk_rows));
+        chunks_[ci] = std::unique_ptr<std::vector<DataFrameRow>>(
+            new std::vector<DataFrameRow>(std::move(chunk_rows)));
     }
 
     // =========================================================================
