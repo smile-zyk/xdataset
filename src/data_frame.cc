@@ -425,6 +425,10 @@ namespace xdataset
         // ---- build output ----
         std::ostringstream oss;
 
+        // Leading newline so the table never glues onto preceding output
+        // (e.g. a REPL prompt or an inline message printed just before it).
+        oss << '\n';
+
         oss << make_border('+', '+', '+', '-');
         oss << make_row(columns);
         oss << make_border('+', '+', '+', '-');
