@@ -199,6 +199,11 @@ namespace xdataset
 
         MultiDimensionSpec multi_dimension_spec_;
         DataArrayKind       data_kind_;
+
+        /// DataFrame cache -- a single lazily-created frame.  The dependent-
+        /// variable header is set at creation time and refreshed (headers only,
+        /// row data preserved) by GetOrCreateDataFrame() when the caller
+        /// requests a different name via SetVariableName on the frame.
         mutable std::unique_ptr<DataFrame> data_frame_cache_;
     };
 } // namespace xdataset

@@ -78,9 +78,11 @@ namespace xdataset
 
         virtual const DataFrameRow& GetRow(Index row) const;
 
-        /// Update the dependent column header without rebuilding rows.
-        /// No-op for frames without a dependent column (Block, Measurement).
-        virtual void UpdateVariableName(std::string variable_name);
+        /// Set the dependent column header.  Only the header is refreshed
+        /// (via rebuild_headers); row data is independent of the header name
+        /// and is preserved.  No-op when the name is unchanged.
+        /// Base implementation: no dependent column (Block, Measurement).
+        virtual void SetVariableName(std::string variable_name);
 
         std::string ToCsv() const;
         void        WriteToCsv(const std::string& file_path) const;

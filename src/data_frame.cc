@@ -64,7 +64,7 @@ namespace xdataset
         explicit DataArrayDataFrame(const DataArray& variable,
                                     std::string variable_name = "UnNamed");
 
-        void UpdateVariableName(std::string variable_name) override;
+        void SetVariableName(std::string variable_name) override;
 
     private:
         void rebuild_headers();
@@ -643,7 +643,7 @@ namespace xdataset
             });
     }
 
-    void DataArrayDataFrame::UpdateVariableName(std::string variable_name)
+    void DataArrayDataFrame::SetVariableName(std::string variable_name)
     {
         if (variable_name_ == variable_name)
             return;
@@ -794,7 +794,7 @@ namespace xdataset
     // DataFrame: header-rename hook
     // =========================================================================
 
-    void DataFrame::UpdateVariableName(std::string /*variable_name*/)
+    void DataFrame::SetVariableName(std::string /*variable_name*/)
     {
         // No-op: only DataArray-backed frames have a renameable dependent
         // column.  DataArrayDataFrame overrides this.

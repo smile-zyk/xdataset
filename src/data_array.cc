@@ -139,7 +139,11 @@ namespace xdataset
         }
         else
         {
-            data_frame_cache_->UpdateVariableName(variable_name);
+            // Reuse the cached frame: refresh the dependent-column header
+            // only (row data is independent of the header name, so the
+            // chunk cache is preserved).  SetVariableName is a no-op when
+            // the name is unchanged.
+            data_frame_cache_->SetVariableName(variable_name);
         }
         return *data_frame_cache_;
     }
