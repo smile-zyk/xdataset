@@ -145,13 +145,27 @@ namespace xdataset
         std::vector<std::string> indep_names() const;
 
         /// Independent data by index (1-based, innermost-first).
-        /// Returns a copy of the data series.  For Independent DataArrays
-        /// with index=1 (innermost / self), returns an index series
-        /// [0, 1, 2, ...) instead of the raw data.
-        DataSeries indep_data(Index index) const;
+        /// Returns the stored data series by reference (no copy).  The
+        /// reference is valid as long as this DataArray lives and the
+        /// entry is not replaced via set_data / set_indep_data.
+        /// For Independent DataArrays, index=1 (innermost / self) returns
+        /// the raw dimension data -- use self_index_series() for the
+        /// leaf-position index series.
+        const DataSeries& indep_data(Index index) const;
 
-        /// Independent data by name.
-        DataSeries indep_data(const std::string& name) const;
+        /// Independent data by name.  Returns the stored data series by
+        /// reference (no copy); valid as long as this DataArray lives.
+        const DataSeries& indep_data(const std::string& name) const;
+
+        /// Compute the index (leaf-position) series of the innermost (kSelf)
+        /// dimension -- one entry per raw element of the self-dimension data.
+        ///   - Regular dimension:  the position 0, 1, ..., N-1.
+        ///   - Ragged dimension:   within-parent offsets concatenated,
+        ///     e.g. sizes {3,2} -> 0,1,2,0,1 (each parent restarts at 0).
+        /// Applies to both Independent and Dependent DataArrays (kSelf is
+        /// always the innermost dimension).  This is a derived (computed)
+        /// series, hence returned by value.
+        DataSeries self_index_series() const;
 
 
         DataArray indep(Index index = 1) const;

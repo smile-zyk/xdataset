@@ -148,7 +148,7 @@ namespace xdataset
         return *data_frame_cache_;
     }
 
-    DataSeries DataArray::indep_data(Index index) const
+    const DataSeries& DataArray::indep_data(Index index) const
     {
         if (index <= 0)
             throw std::invalid_argument("indep_data index must be 1-based and greater than 0");
@@ -161,23 +161,10 @@ namespace xdataset
         const std::size_t target = rank - static_cast<std::size_t>(index);
         auto it = datas_.begin();
         std::advance(it, static_cast<std::ptrdiff_t>(target));
-
-        // For Independent DataArrays, the innermost entry (index==1) is the
-        // self/dimension data.  Return an index series [0, 1, 2, ...) instead
-        // of the raw dimension values.
-        if (data_kind_ == DataArrayKind::kIndependent && index == 1)
-        {
-            const DataSeries& raw = it->second;
-            DataSeries idx = DataSeries::CreateScalar<int>(raw.size(), Unit(), 0);
-            for (Index i = 0; i < raw.size(); ++i)
-                idx.scalar_at<int>(i) = static_cast<int>(i);
-            return idx;
-        }
-
         return it->second;
     }
 
-    DataSeries DataArray::indep_data(const std::string& name) const
+    const DataSeries& DataArray::indep_data(const std::string& name) const
     {
         if (data_kind_ == DataArrayKind::kDependent && name == kSelf)
             throw std::invalid_argument(
@@ -205,6 +192,45 @@ namespace xdataset
         return it->second;
     }
 
+    DataSeries DataArray::self_index_series() const
+    {
+        if (multi_dimension_spec_.empty())
+            throw std::logic_error("self_index_series requires non-empty dimensions");
+
+        // Always the innermost dimension: it is the kSelf entry for both
+        // Independent and Dependent DataArrays (spec index rank-1).
+        const DimensionSpec& dim = multi_dimension_spec_.dims().back();
+
+        // Regular dimension: the index series is simply 0, 1, ..., N-1 --
+        // one entry per raw element (the position within the dimension).
+        if (dim.is_regular())
+        {
+            const std::size_t n = dim.as_regular()->size;
+            DataSeries idx = DataSeries::CreateScalar<int>(n, Unit(), 0);
+            for (std::size_t i = 0; i < n; ++i)
+                idx.scalar_at<int>(static_cast<Index>(i)) = static_cast<int>(i);
+            return idx;
+        }
+
+        // Ragged dimension: each parent p contributes 0..sizes[p]-1 (the
+        // within-parent offsets), concatenated; one entry per raw element.
+        // e.g. sizes {3,2} -> 0,1,2,0,1.
+        const RaggedDim* ragged = dim.as_ragged();
+        DataSeries idx = DataSeries::CreateScalar<int>(0, Unit(), 0);
+        std::size_t total = 0;
+        for (std::size_t p = 0; p < ragged->sizes.size(); ++p)
+            total += ragged->sizes[p];
+        idx.resize(total);
+        std::size_t pos = 0;
+        for (std::size_t p = 0; p < ragged->sizes.size(); ++p)
+        {
+            const std::size_t w = ragged->sizes[p];
+            for (std::size_t k = 0; k < w; ++k)
+                idx.scalar_at<int>(static_cast<Index>(pos++)) = static_cast<int>(k);
+        }
+        return idx;
+    }
+
     DataArray DataArray::indep(Index index) const
     {
         if (index <= 0)
@@ -230,9 +256,20 @@ namespace xdataset
             info.datas.emplace(it->first, std::move(ds));
         }
 
-        // Self entry: innermost dimension.  indep_data() handles index
-        // generation for Independent data automatically.
-        info.datas.emplace(kSelf, indep_data(index));
+        // Self entry: innermost dimension.  For Dependent DataArrays this
+        // is the (expanded) dependent data of the target dimension; for
+        // Independent DataArrays it is the raw dimension data when index>1,
+        // or a computed leaf-position index series when index==1.
+        if (data_kind_ == DataArrayKind::kIndependent && index == 1)
+        {
+            // Leaf-position index series of the innermost (self) dimension:
+            // Regular -> 0..N-1; Ragged -> within-group 0..sizes[p]-1.
+            info.datas.emplace(kSelf, self_index_series());
+        }
+        else
+        {
+            info.datas.emplace(kSelf, indep_data(index));
+        }
 
         // Build result multi_dimension_spec from prefix dimensions.
         MultiDimensionSpec result_spec;
