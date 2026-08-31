@@ -67,7 +67,7 @@ namespace xdataset
         Dataset ds("noise");
         Block& b = ds.AddBlock("SP1/SP", make_block_info());
 
-        EXPECT_EQ(b.name(), "SP1.SP");
+        EXPECT_EQ(b.name(), "SP1/SP");
         EXPECT_TRUE(ds.IsLeaf("SP1/SP"));
         EXPECT_EQ(ds.block_count(), 1u);
     }
@@ -87,7 +87,7 @@ namespace xdataset
         Dataset ds("noise");
         BlockCreateInfo info = make_block_info();
         Block& b = ds.AddBlock("sim/SP", std::move(info));
-        EXPECT_EQ(b.name(), "sim.SP");
+        EXPECT_EQ(b.name(), "sim/SP");
     }
 
     TEST(DatasetTest, AddBlockDuplicatePathThrows)
@@ -292,7 +292,7 @@ namespace xdataset
 
         const Dataset& cds = ds;
         const Block& b = cds.GetBlock("simulation/SP");
-        EXPECT_EQ(b.name(), "simulation.SP");
+        EXPECT_EQ(b.name(), "simulation/SP");
     }
 
     TEST(DatasetTest, GetBlockThrowsOnMissing)

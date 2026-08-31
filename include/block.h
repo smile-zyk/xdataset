@@ -14,9 +14,9 @@
 namespace xdataset
 {
     /// True when `name` is a valid REL identifier: [A-Za-z_][A-Za-z0-9_]*.
-    /// Dataset names, Block names, and DataArray names must all satisfy this
-    /// so that REL references (dataset.block.array) and the global
-    /// source_path ("<dataset>/<block path>") remain unambiguous.
+    /// Dataset names and Block path segments must all satisfy this so that
+    /// REL references (dataset.block.array) and the global source_path
+    /// ("<dataset>/<block path>") remain unambiguous.
     inline bool IsValidIdentifier(const std::string& name)
     {
         if (name.empty()) return false;
@@ -31,6 +31,30 @@ namespace xdataset
                 (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
                 (c >= '0' && c <= '9') || c == '_';
             if (!ok) return false;
+        }
+        return true;
+    }
+
+    /// True when `name` is a valid Block name: one or more identifiers
+    /// joined by '/', e.g. "amplifier/DC/bias" -- the Block's full path
+    /// within the Dataset tree.  A Block name equals its path; the
+    /// source_path prefixes the Dataset name.  No empty segments and no
+    /// leading/trailing '/' are allowed.
+    inline bool IsValidBlockName(const std::string& name)
+    {
+        if (name.empty()) return false;
+        if (name.front() == '/' || name.back() == '/') return false;
+        std::size_t pos = 0;
+        while (pos < name.size())
+        {
+            const std::size_t slash = name.find('/', pos);
+            const std::string seg =
+                name.substr(pos, slash == std::string::npos
+                                     ? std::string::npos
+                                     : slash - pos);
+            if (!IsValidIdentifier(seg)) return false;
+            if (slash == std::string::npos) break;
+            pos = slash + 1;
         }
         return true;
     }
@@ -62,10 +86,10 @@ namespace xdataset
     // variables (measurements) for one simulation result.  It is always a
     // LEAF in the Dataset tree -- Blocks do not contain other Blocks.
     //
-    // Block.name() returns the short (leaf) name.
-    // The full path within the Dataset is determined by the tree structure,
-    // e.g. AddBlock("simulation/SP1/SP", info) -> Block::name() == "SP",
-    // full path == "simulation/SP1/SP".
+    // Block.name() returns the Block's full path within the Dataset, using
+    // '/' separators, e.g. AddBlock("simulation/SP1/SP", info) ->
+    // Block::name() == "simulation/SP1/SP".  The source_path() prefixes the
+    // Dataset name ("<datasetName>/<block path>").
     //
     // The name is fixed at construction: it is assigned by Dataset::AddBlock
     // (from the path) and never changes afterwards.  External code cannot
@@ -85,7 +109,7 @@ namespace xdataset
         Block(std::string name, const BlockCreateInfo& info);
         Block(std::string name, BlockCreateInfo&& info);
 
-        /// Short (leaf) name, e.g. "SP" for path "simulation/SP1/SP".
+        /// Full path within the Dataset, e.g. "simulation/SP1/SP".
         const std::string& name() const;
 
         /// Globally-unique source path of this Block:

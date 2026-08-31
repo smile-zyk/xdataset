@@ -129,7 +129,7 @@ namespace xdataset
             throw std::invalid_argument("block path must not be empty");
 
         // Every path segment must be a valid identifier: the segments form
-        // the Block name (dotted) and the source_path, both of which appear
+        // the Block name (path) and the source_path, both of which appear
         // in REL references and global lookups.
         for (const auto& seg : parts)
         {
@@ -164,9 +164,7 @@ namespace xdataset
         if (slot && slot->leaf())
             throw std::invalid_argument("duplicate Block at path: " + path);
 
-        std::string dotted = path;
-        for (auto& ch : dotted) if (ch == '/') ch = '.';
-        block.set_name(dotted);
+        block.set_name(path);
         block.set_source_path(name() + "/" + path);
 
         auto owned = std::unique_ptr<Block>(new Block(std::move(block)));

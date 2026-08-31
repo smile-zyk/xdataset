@@ -531,7 +531,7 @@ Block
 
 通过 `Block::GetOrCreateDataArray(name)` 可将 Spec 中的 DataSeries 组合为 `DataArray`（详见 [DataArray Generate](#generate)）。
 
-`Block` 本身不含路径信息——其在 Dataset 树中的位置由外部决定。例如 `AddBlock("simulation/SP1/SP", info)` 创建了一个以 `"SP"` 命名的 Block，其完整标识为路径 `"simulation/SP1/SP"`。Block 内部的 `name()` 为短名 `"SP"`。
+Block 的名称即其在 Dataset 树中的完整路径（`/` 分隔）。例如 `AddBlock("simulation/SP1/SP", info)` 创建的 Block，其 `name()` 为 `"simulation/SP1/SP"`，`source_path()` 为 `"<dataset名>/simulation/SP1/SP"`。
 
 ### Dataset
 | 属性 | 类型 | 说明 |

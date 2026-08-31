@@ -71,18 +71,18 @@ namespace xdataset
     Block::Block(std::string name, const BlockCreateInfo& info)
         : Block(info)
     {
-        if (!IsValidIdentifier(name))
+        if (!IsValidBlockName(name))
             throw std::invalid_argument(
-                "Block name must be a valid identifier: " + name);
+                "Block name must be a valid path: " + name);
         name_ = std::move(name);
     }
 
     Block::Block(std::string name, BlockCreateInfo&& info)
         : Block(std::move(info))
     {
-        if (!IsValidIdentifier(name))
+        if (!IsValidBlockName(name))
             throw std::invalid_argument(
-                "Block name must be a valid identifier: " + name);
+                "Block name must be a valid path: " + name);
         name_ = std::move(name);
     }
 
@@ -93,9 +93,9 @@ namespace xdataset
 
     void Block::set_name(std::string name)
     {
-        if (!IsValidIdentifier(name))
+        if (!IsValidBlockName(name))
             throw std::invalid_argument(
-                "Block name must be a valid identifier: " + name);
+                "Block name must be a valid path: " + name);
         name_ = std::move(name);
     }
 

@@ -220,7 +220,7 @@ namespace xdataset
         dep_values.scalar_at<int>(0) = 10;
         dep_values.scalar_at<int>(1) = 20;
 
-        ordered_map<std::string, const DataArray*> indep_vars;
+        tsl::ordered_map<std::string, const DataArray*> indep_vars;
         indep_vars["x"] = &indep;
         DataArray dep = DataArray::CreateDependent(std::move(dep_values), indep_vars);
 
@@ -869,7 +869,7 @@ namespace xdataset
         dep_values.scalar_at<int>(0) = 10;
         dep_values.scalar_at<int>(1) = 20;
 
-        ordered_map<std::string, const DataArray*> indep_vars;
+        tsl::ordered_map<std::string, const DataArray*> indep_vars;
         indep_vars["x"] = &indep;
         DataArray dep = DataArray::CreateDependent(std::move(dep_values), indep_vars);
 
@@ -890,7 +890,7 @@ namespace xdataset
         dep_values.scalar_at<int>(0) = 10;
         dep_values.scalar_at<int>(1) = 20;
 
-        ordered_map<std::string, const DataArray*> indep_vars;
+        tsl::ordered_map<std::string, const DataArray*> indep_vars;
         indep_vars["x"] = &indep;
         DataArray dep = DataArray::CreateDependent(std::move(dep_values), indep_vars);
 
@@ -1096,9 +1096,11 @@ namespace xdataset
 
     TEST(DataArrayPermuteTest, RejectsRaggedDimensions)
     {
+        // MakeRaggedCreateInfo: x(Regular 2) x y(Ragged{1,2}), dependent z.
+        // The Ragged dimension cannot be reordered.
         Block block(MakeRaggedCreateInfo());
-        DataArray w_data = block.GetOrCreateDataArray("w");
-        EXPECT_THROW({ w_data.permute({2, 1}); }, std::invalid_argument);
+        DataArray z_data = block.GetOrCreateDataArray("z");
+        EXPECT_THROW({ z_data.permute({2, 1}); }, std::invalid_argument);
     }
 
     TEST(DataArrayPermuteTest, IndependentRejected)
