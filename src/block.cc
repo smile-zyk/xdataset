@@ -8,6 +8,12 @@ namespace xdataset
     {
         if (name.empty())
             throw std::invalid_argument("DataArray name must not be empty");
+        // DataArray names may be dotted (e.g. "SRC1.i" -- the REL reference
+        // syntax supports two-segment dependent names), but must not contain
+        // '/' which would collide with the source_path separator.
+        if (name.find('/') != std::string::npos)
+            throw std::invalid_argument(
+                "DataArray name must not contain '/': " + name);
         if (independent_spec_map_.find(name) != independent_spec_map_.end())
             throw std::invalid_argument("duplicate DataArray name in block: " + name);
         if (dependent_spec_map_.find(name) != dependent_spec_map_.end())
@@ -62,6 +68,24 @@ namespace xdataset
     {
     }
 
+    Block::Block(std::string name, const BlockCreateInfo& info)
+        : Block(info)
+    {
+        if (!IsValidIdentifier(name))
+            throw std::invalid_argument(
+                "Block name must be a valid identifier: " + name);
+        name_ = std::move(name);
+    }
+
+    Block::Block(std::string name, BlockCreateInfo&& info)
+        : Block(std::move(info))
+    {
+        if (!IsValidIdentifier(name))
+            throw std::invalid_argument(
+                "Block name must be a valid identifier: " + name);
+        name_ = std::move(name);
+    }
+
     const std::string& Block::name() const
     {
         return name_;
@@ -69,7 +93,15 @@ namespace xdataset
 
     void Block::set_name(std::string name)
     {
+        if (!IsValidIdentifier(name))
+            throw std::invalid_argument(
+                "Block name must be a valid identifier: " + name);
         name_ = std::move(name);
+    }
+
+    void Block::set_source_path(std::string path)
+    {
+        source_path_ = std::move(path);
     }
 
     std::vector<std::string> Block::dependents() const
@@ -148,6 +180,7 @@ namespace xdataset
         if (it != independent_spec_map_.end())
         {
             std::unique_ptr<DataArray> var(new DataArray(CreateDataArray(it->second)));
+            var->set_source(source_path_, name);
             auto& ref = *var;
             data_array_cache_[name] = std::move(var);
             return ref;
@@ -171,6 +204,7 @@ namespace xdataset
             vinfo.multi_dimension_spec = multi_dim;
 
             std::unique_ptr<DataArray> var(new DataArray(std::move(vinfo)));
+            var->set_source(source_path_, name);
             auto& ref = *var;
             data_array_cache_[name] = std::move(var);
             return ref;

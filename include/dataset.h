@@ -154,9 +154,15 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
         Dataset() = default;
         explicit Dataset(std::string name);
 
+        /// Move the contents of an existing (e.g. freshly loaded) Dataset
+        /// into a new Dataset under a fixed name.  The name is immutable
+        /// after construction and must be a valid identifier; src's stored
+        /// name is discarded.
+        Dataset(std::string name, Dataset&& src);
+
         /// Human-readable name, e.g. "noise".
+        /// Fixed at construction: a Dataset's name is immutable.
         const std::string& name() const { return name_; }
-        void               set_name(std::string name) { name_ = std::move(name); }
 
         // --------------------------------------------------------------------
         // Mutation

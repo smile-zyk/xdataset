@@ -18,8 +18,7 @@ namespace xdataset
         info.independent_specs.push_back(y);
         info.dependent_specs.push_back(z);
 
-        Block block(info);
-        block.set_name("demo");
+        Block block("demo", info);
 
         ASSERT_EQ(block.name(), "demo");
         ASSERT_EQ(block.independents().size(), 2u);
@@ -420,8 +419,7 @@ namespace xdataset
 
     TEST(BlockConstructorTest, DottedDependentNames)
     {
-        Block block(MakeDottedDependentCreateInfo());
-        block.set_name("SP");
+        Block block("SP", MakeDottedDependentCreateInfo());
 
         ASSERT_EQ(block.independents().size(), 1u);
         EXPECT_EQ(block.independents()[0], "freq");

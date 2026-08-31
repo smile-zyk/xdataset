@@ -97,6 +97,47 @@ namespace xdataset
         /// Return a deep copy of this DataArray.
         DataArray clone() const;
 
+        // --------------------------------------------------------------------
+        //  Source provenance (origin)
+        // --------------------------------------------------------------------
+        //
+        //  DataArrays created by Block::GetOrCreateDataArray() carry the
+        //  identity of their canonical source: the Block's full path and the
+        //  variable name within that Block.  Any computed array (transform /
+        //  select / indep / arithmetic -- anything that goes through
+        //  set_data / set_indep_data or a DataArrayCreateInfo) is detached
+        //  from the source (empty origin), so callers can distinguish
+        //  "this array still represents block X's variable Y" from
+        //  "this is a derived value".
+
+        /// Attach the canonical source identity.  Called by Block only.
+        void set_source(std::string block_path, std::string name)
+        {
+            source_block_path_ = std::move(block_path);
+            source_name_       = std::move(name);
+        }
+
+        /// Clear any source provenance (computed arrays).
+        void clear_source()
+        {
+            source_block_path_.clear();
+            source_name_.clear();
+        }
+
+        /// Globally-unique source Block path, "<datasetName>/<block path>"
+        /// with '/' separators (e.g. "noise/simulation/SP1/SP"), or empty
+        /// when this is a computed array.
+        const std::string& source_block_path() const { return source_block_path_; }
+
+        /// Variable name within the source Block, or empty.
+        const std::string& source_name() const { return source_name_; }
+
+        /// True when this array carries canonical source provenance.
+        bool has_source() const
+        {
+            return !source_block_path_.empty() && !source_name_.empty();
+        }
+
         /// Apply a transformation callback to the self DataSeries and return a
         /// new DataArray with the same independent dimensions / multi_dimension_spec
         /// but the transformed self data.  Delegates to DataSeries::transform.
@@ -114,8 +155,29 @@ namespace xdataset
             DataSeries new_self = data().transform(std::forward<Func>(callback));
             DataArray result(*this);
             result.set_data(std::move(new_self));
+            // set_data clears source provenance: a transformed array is a
+            // computed value, not the canonical Block variable.
             return result;
         }
+
+        /// Reorder the independent dimensions of this Dependent DataArray.
+        ///
+        /// @param perm  a permutation of the 1-based dimension positions,
+        ///              listed in the desired result order (innermost-first).
+        ///              Numbering follows indep(): 1 = innermost dimension,
+        ///              rank = outermost dimension.  {1, 2, ..., rank} is the
+        ///              identity; {rank, ..., 2, 1} reverses the axes.
+        ///              An empty perm (default) is equivalent to the full
+        ///              reversal {rank, ..., 1}.
+        ///
+        /// Only Dependent DataArrays can be permuted: an Independent is a
+        /// single coordinate column and has no dimension order to reorder.
+        /// Only regular dimensions are supported (ragged dimensions depend
+        /// on their parent and cannot be freely rearranged).
+        ///
+        /// The returned array is a computed value and carries no source
+        /// provenance.
+        DataArray permute(const std::vector<Index>& perm = {}) const;
 
         const MultiDimensionSpec& multi_dimension_spec() const
         {
@@ -213,6 +275,10 @@ namespace xdataset
 
         MultiDimensionSpec multi_dimension_spec_;
         DataArrayKind       data_kind_;
+
+        /// Source provenance -- set only by Block::GetOrCreateDataArray().
+        std::string source_block_path_;
+        std::string source_name_;
 
         /// DataFrame cache -- a single lazily-created frame.  The dependent-
         /// variable header is set at creation time and refreshed (headers only,

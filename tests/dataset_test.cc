@@ -47,9 +47,6 @@ namespace xdataset
 
         Dataset named("noise");
         EXPECT_EQ(named.name(), "noise");
-
-        named.set_name("other");
-        EXPECT_EQ(named.name(), "other");
     }
 
     TEST(DatasetTest, EmptyDatasetHasNoBlocks)

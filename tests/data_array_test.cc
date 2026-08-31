@@ -1,4 +1,5 @@
 #include "block_fixtures.h"
+#include "dataset.h"
 
 #include <gtest/gtest.h>
 #include <complex>
@@ -955,5 +956,184 @@ namespace xdataset
         EXPECT_EQ(labels.data().scalar_at<std::string>(0), "val_1");
         EXPECT_EQ(labels.data().scalar_at<std::string>(1), "val_2");
         EXPECT_EQ(labels.data().scalar_at<std::string>(2), "val_3");
+    }
+
+    // =========================================================================
+    //  DataArray::permute
+    // =========================================================================
+    //
+    // Fixture: MakeValueRichCreateInfo() -> x(2) x y(3), z dependent, raw z =
+    //   {100,101,102,103,104,105} in row-major (x-major, then y):
+    //   old multi-index (x=0,y=0)->100, (0,1)->101, (0,2)->102,
+    //                    (1,0)->103, (1,1)->104, (1,2)->105.
+    // Numbering is indep()-style: 1 = innermost (y), 2 = outermost (x).
+
+    TEST(DataArrayPermuteTest, ReordersDimensionsAndData)
+    {
+        Block block(MakeValueRichCreateInfo());
+        DataArray z_data = block.GetOrCreateDataArray("z");
+        ASSERT_EQ(z_data.multi_dimension_spec().rank(), 2u);
+        ASSERT_EQ(z_data.indep_names().size(), 2u);
+        EXPECT_EQ(z_data.indep_names()[0], "x");
+        EXPECT_EQ(z_data.indep_names()[1], "y");
+
+        // perm = {2, 1} (innermost-first): result innermost = src #2 (x),
+        // result outermost = src #1 (y).
+        DataArray p = z_data.permute({2, 1});
+        EXPECT_EQ(p.data_kind(), DataArrayKind::kDependent);
+        ASSERT_EQ(p.multi_dimension_spec().rank(), 2u);
+        EXPECT_EQ(p.indep_names()[0], "y");
+        EXPECT_EQ(p.indep_names()[1], "x");
+
+        // New row-major order is y-major: new flat 0 = (y=0, x=0) = old (0,0)=100;
+        // new flat 1 = (y=0, x=1) = old (1,0)=103; etc.
+        ASSERT_EQ(p.data().size(), 6u);
+        EXPECT_DOUBLE_EQ(p.data().scalar_at<double>(0), 100.0);
+        EXPECT_DOUBLE_EQ(p.data().scalar_at<double>(1), 103.0);
+        EXPECT_DOUBLE_EQ(p.data().scalar_at<double>(2), 101.0);
+        EXPECT_DOUBLE_EQ(p.data().scalar_at<double>(3), 104.0);
+        EXPECT_DOUBLE_EQ(p.data().scalar_at<double>(4), 102.0);
+        EXPECT_DOUBLE_EQ(p.data().scalar_at<double>(5), 105.0);
+    }
+
+    TEST(DataArrayPermuteTest, IdentityPreservesData)
+    {
+        Block block(MakeValueRichCreateInfo());
+        DataArray z_data = block.GetOrCreateDataArray("z");
+
+        DataArray p = z_data.permute({1, 2});
+        EXPECT_EQ(p.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(p.indep_names()[0], "x");
+        EXPECT_EQ(p.indep_names()[1], "y");
+        ASSERT_EQ(p.data().size(), 6u);
+        for (Index i = 0; i < p.data().size(); ++i)
+            EXPECT_DOUBLE_EQ(p.data().scalar_at<double>(static_cast<std::size_t>(i)),
+                             100.0 + static_cast<double>(static_cast<std::size_t>(i)));
+    }
+
+    TEST(DataArrayPermuteTest, ThreeDimReverse)
+    {
+        // Build a 3-dim block with explicitly filled data 0..23
+        // (MakeScalarSeries fills with 0.0, which would not verify reordering).
+        BlockCreateInfo info;
+        info.independent_specs.push_back(
+            IndependentSpec{"a", MakeScalarSeriesFrom({1.0, 2.0}), DimensionSpec::Regular(2)});
+        info.independent_specs.push_back(
+            IndependentSpec{"b", MakeScalarSeriesFrom({10.0, 20.0, 30.0}), DimensionSpec::Regular(3)});
+        info.independent_specs.push_back(
+            IndependentSpec{"c", MakeScalarSeriesFrom({100.0, 200.0, 300.0, 400.0}), DimensionSpec::Regular(4)});
+        std::vector<double> vals(24u);
+        for (std::size_t i = 0; i < 24u; ++i)
+            vals[i] = static_cast<double>(i);
+        info.dependent_specs.push_back(
+            DependentSpec{"p", MakeScalarSeriesFrom(vals)});
+
+        Block block(info);
+        DataArray p_data = block.GetOrCreateDataArray("p");
+        ASSERT_EQ(p_data.multi_dimension_spec().rank(), 3u);
+        EXPECT_EQ(p_data.indep_names()[0], "a");
+        EXPECT_EQ(p_data.indep_names()[1], "b");
+        EXPECT_EQ(p_data.indep_names()[2], "c");
+
+        // Full reversal: {3, 2, 1} (innermost-first) -> result innermost =
+        // src #3 (a), mid = src #2 (b), outermost = src #1 (c).
+        DataArray p = p_data.permute({3, 2, 1});
+        ASSERT_EQ(p.multi_dimension_spec().rank(), 3u);
+        EXPECT_EQ(p.indep_names()[0], "c");
+        EXPECT_EQ(p.indep_names()[1], "b");
+        EXPECT_EQ(p.indep_names()[2], "a");
+        EXPECT_EQ(p.multi_dimension_spec().dims()[0].as_regular()->size, 4u);
+        EXPECT_EQ(p.multi_dimension_spec().dims()[1].as_regular()->size, 3u);
+        EXPECT_EQ(p.multi_dimension_spec().dims()[2].as_regular()->size, 2u);
+
+        // Old row-major (a-major, b, c): flat = ((a*3)+b)*4+c.
+        // New row-major (c-major, b, a): flat = ((c*3)+b)*2+a.
+        // The value at new flat i equals old flat f where
+        //   a = f/12, b = (f/4)%3, c = f%4, i = ((c*3)+b)*2+a.
+        // Expected new order computed from the old 0..23 sequence:
+        double expected[24] = {
+             0, 12,  4, 16,  8, 20,
+             1, 13,  5, 17,  9, 21,
+             2, 14,  6, 18, 10, 22,
+             3, 15,  7, 19, 11, 23};
+        ASSERT_EQ(p.data().size(), 24u);
+        for (Index i = 0; i < 24; ++i)
+            EXPECT_DOUBLE_EQ(p.data().scalar_at<double>(static_cast<std::size_t>(i)),
+                             expected[static_cast<std::size_t>(i)]);
+    }
+
+    TEST(DataArrayPermuteTest, RejectsInvalidPermutation)
+    {
+        Block block(MakeValueRichCreateInfo());
+        DataArray z_data = block.GetOrCreateDataArray("z");
+
+        EXPECT_THROW({ z_data.permute({1, 1}); }, std::invalid_argument);  // dup
+        EXPECT_THROW({ z_data.permute({1}); }, std::invalid_argument);      // short (rank 2)
+        EXPECT_THROW({ z_data.permute({3, 1}); }, std::invalid_argument);   // out of range
+        EXPECT_THROW({ z_data.permute({0, 1}); }, std::invalid_argument);   // 0-based not accepted
+    }
+
+    TEST(DataArrayPermuteTest, EmptyPermuteReversesDimensions)
+    {
+        // Empty perm -> full reversal {rank, ..., 1}.
+        Block block(MakeValueRichCreateInfo());   // x(2) x y(3), z = {100..105}
+        DataArray z_data = block.GetOrCreateDataArray("z");
+
+        DataArray p = z_data.permute();
+        EXPECT_EQ(p.data_kind(), DataArrayKind::kDependent);
+        ASSERT_EQ(p.multi_dimension_spec().rank(), 2u);
+        EXPECT_EQ(p.indep_names()[0], "y");
+        EXPECT_EQ(p.indep_names()[1], "x");
+        // Same reordering as permute({2, 1}) for rank 2: y-major.
+        ASSERT_EQ(p.data().size(), 6u);
+        EXPECT_DOUBLE_EQ(p.data().scalar_at<double>(0), 100.0);
+        EXPECT_DOUBLE_EQ(p.data().scalar_at<double>(1), 103.0);
+        EXPECT_DOUBLE_EQ(p.data().scalar_at<double>(2), 101.0);
+        EXPECT_DOUBLE_EQ(p.data().scalar_at<double>(3), 104.0);
+        EXPECT_DOUBLE_EQ(p.data().scalar_at<double>(4), 102.0);
+        EXPECT_DOUBLE_EQ(p.data().scalar_at<double>(5), 105.0);
+    }
+
+    TEST(DataArrayPermuteTest, RejectsRaggedDimensions)
+    {
+        Block block(MakeRaggedCreateInfo());
+        DataArray w_data = block.GetOrCreateDataArray("w");
+        EXPECT_THROW({ w_data.permute({2, 1}); }, std::invalid_argument);
+    }
+
+    TEST(DataArrayPermuteTest, IndependentRejected)
+    {
+        // An Independent DataArray is a single coordinate column: it has no
+        // dimension order to reorder, so permute is rejected.
+        DataSeries orig = MakeScalarSeriesFrom({1.0, 2.0, 3.0});
+        DataArray da = DataArray::CreateIndependent(orig);
+        EXPECT_EQ(da.multi_dimension_spec().rank(), 1u);
+        EXPECT_FALSE(da.has_source());
+
+        EXPECT_THROW({ da.permute(); }, std::invalid_argument);
+        EXPECT_THROW({ da.permute({1}); }, std::invalid_argument);
+    }
+
+    TEST(DataArrayPermuteTest, IndependentWithSourceAlsoRejected)
+    {
+        // Source provenance does not change the rule: Independent arrays
+        // cannot be permuted either way.
+        Dataset ds("sim");
+        Block& block = ds.AddBlock("SP", MakeSingleIndependentCreateInfo());  // x(3), z dependent
+        DataArray x_data = block.GetOrCreateDataArray("x");
+        EXPECT_EQ(x_data.data_kind(), DataArrayKind::kIndependent);
+        EXPECT_TRUE(x_data.has_source());
+        EXPECT_EQ(x_data.source_name(), "x");
+
+        EXPECT_THROW({ x_data.permute({1}); }, std::invalid_argument);
+    }
+
+    TEST(DataArrayPermuteTest, ResultHasNoSourceProvenance)
+    {
+        Block block(MakeValueRichCreateInfo());
+        DataArray z_data = block.GetOrCreateDataArray("z");
+        // A permuted result is a computed value: it must never carry source.
+        DataArray p = z_data.permute({2, 1});
+        EXPECT_FALSE(p.has_source());
     }
 } // namespace xdataset

@@ -100,7 +100,9 @@ namespace xdataset
     DataArray::DataArray(const DataArray& other)
         : datas_(other.datas_),
           multi_dimension_spec_(other.multi_dimension_spec_),
-          data_kind_(other.data_kind_)
+          data_kind_(other.data_kind_),
+          source_block_path_(other.source_block_path_),
+          source_name_(other.source_name_)
     {
         // data_frame_cache_ intentionally left as nullptr.
     }
@@ -112,6 +114,8 @@ namespace xdataset
             datas_ = other.datas_;
             multi_dimension_spec_ = other.multi_dimension_spec_;
             data_kind_ = other.data_kind_;
+            source_block_path_ = other.source_block_path_;
+            source_name_ = other.source_name_;
             data_frame_cache_.reset();
         }
         return *this;
@@ -542,6 +546,124 @@ namespace xdataset
         return DataArray(std::move(info));
     }
 
+    DataArray DataArray::permute(const std::vector<Index>& perm) const
+    {
+        // Only Dependent DataArrays carry multiple named coordinate columns
+        // that can be reordered.  An Independent is a single coordinate
+        // column (its own data); permuting it is not meaningful.
+        if (data_kind_ != DataArrayKind::kDependent)
+            throw std::invalid_argument(
+                "permute: only dependent DataArrays can be permuted");
+
+        const std::size_t rank = multi_dimension_spec_.rank();
+        if (rank == 0)
+            throw std::invalid_argument("permute: DataArray has no dimensions");
+
+        // Empty permutation -> complete reversal {rank, ..., 1}.
+        std::vector<Index> p = perm;
+        if (p.empty())
+        {
+            for (std::size_t i = 0; i < rank; ++i)
+                p.push_back(static_cast<Index>(rank - i));
+        }
+
+        if (p.size() != rank)
+            throw std::invalid_argument(
+                "permute: permutation size " + std::to_string(p.size()) +
+                " does not match rank " + std::to_string(rank));
+
+        // Validate: p is a complete permutation of 1..rank.  Numbering
+        // follows indep(): 1 = innermost dimension, rank = outermost.  The
+        // vector lists the desired result order innermost-first.
+        std::vector<bool> seen(rank, false);
+        for (Index v : p)
+        {
+            if (v < 1 || static_cast<std::size_t>(v) > rank ||
+                seen[static_cast<std::size_t>(v - 1)])
+                throw std::invalid_argument("permute: invalid permutation");
+            seen[static_cast<std::size_t>(v - 1)] = true;
+        }
+
+        // Convert to source spec indices in result-spec order (outermost-first,
+        // 0-based).  Result position i (0-based, outermost-first) is result
+        // indep-index (rank - i); it takes source dimension number
+        // p[rank - i - 1], whose source spec index is rank - p[rank - i - 1].
+        std::vector<Index> spec_perm(rank);
+        for (std::size_t i = 0; i < rank; ++i)
+            spec_perm[i] = static_cast<Index>(rank) - p[rank - i - 1];
+
+        // Only regular dimensions can be freely reordered.
+        for (std::size_t i = 0; i < rank; ++i)
+        {
+            if (!multi_dimension_spec_.dims()[i].is_regular())
+                throw std::invalid_argument(
+                    "permute: ragged dimensions cannot be reordered");
+        }
+
+        // Build the result spec: result dim i = source dim spec_perm[i].
+        const std::vector<DimensionSpec>& dims = multi_dimension_spec_.dims();
+        MultiDimensionSpec out_spec;
+        for (Index si : spec_perm)
+            out_spec.add_dimension(dims[static_cast<std::size_t>(si)]);
+
+        // Gather source coordinate columns in source spec order.
+        //   Dependent: first `rank` datas_ entries (excluding kSelf).
+        std::vector<std::pair<std::string, DataSeries>> coords;
+        coords.reserve(rank);
+        for (auto it = datas_.begin(); it != datas_.end(); ++it)
+        {
+            if (it->first == kSelf)
+                break;   // kSelf is the value column.
+            coords.emplace_back(it->first, it->second);
+        }
+        if (coords.size() != rank)
+            throw std::logic_error("permute: coordinate column count mismatch");
+
+        // Gather the value column as a `cell_count` row series.
+        // Dependent: self data is already expanded to cell_count rows.
+        const Index cell_count = static_cast<Index>(out_spec.compute_cell_count());
+        DataSeries value_col = data();
+        if (static_cast<Index>(value_col.size()) != cell_count)
+        {
+            throw std::logic_error("permute: dependent value size mismatch");
+        }
+
+        // Reorder the value column into the new axis order:
+        //   out flat f -> out multi-index (spec order)
+        //   in multi-index[d] = out multi-index[ out_of_src[d] ]
+        //   in flat = in flat_index(in multi-index)
+        // where out_of_src[d] is the result dim that holds source dim d.
+        const MultiDimensionSpec& in = multi_dimension_spec_;
+        const MultiDimensionSpec& out = out_spec;
+        std::vector<Index> out_of_src(rank);
+        for (std::size_t d = 0; d < rank; ++d)
+            out_of_src[static_cast<std::size_t>(spec_perm[d])] = static_cast<Index>(d);
+
+        DataSeries reordered(value_col.data_type(), value_col.data_shape());
+        reordered.set_unit(value_col.unit());
+        for (Index f = 0; f < cell_count; ++f)
+        {
+            const std::vector<Index> omi = out.multi_index(f);
+            std::vector<Index> imi(rank);
+            for (std::size_t d = 0; d < rank; ++d)
+                imi[d] = omi[static_cast<std::size_t>(out_of_src[d])];
+            reordered.append_from(value_col, in.flat_index(imi));
+        }
+
+        // Assemble the result: ALWAYS a Dependent DataArray -- the value
+        // column is the dependent, the (reordered) coordinate columns are
+        // its independents.
+        DataArrayCreateInfo info;
+        info.kind = DataArrayKind::kDependent;
+        for (Index si : spec_perm)
+            info.datas.emplace(coords[static_cast<std::size_t>(si)].first,
+                               std::move(coords[static_cast<std::size_t>(si)].second));
+        info.datas.emplace(kSelf, std::move(reordered));
+        info.multi_dimension_spec = std::move(out_spec);
+
+        return DataArray(std::move(info));   // DataArrayCreateInfo -> no source
+    }
+
     void DataArray::for_each_indep_group(
         Index                                          indep_index,
         const MultiDimensionSpec::DimGroupVisitor&     visitor) const
@@ -663,6 +785,9 @@ void DataArray::set_data(DataSeries new_self)
     // Replace the last entry (kSelf) in the ordered map.
     datas_[kSelf] = std::move(new_self);
 
+    // The data has changed: the array is no longer the canonical source.
+    clear_source();
+
     // Invalidate cached DataFrame.
     data_frame_cache_.reset();
 }
@@ -723,6 +848,8 @@ void DataArray::set_data(Index row, Measurement value)
             throw std::invalid_argument("set_data: unsupported matrix dtype");
     }
 
+    // The data has changed: the array is no longer the canonical source.
+    clear_source();
     data_frame_cache_.reset();
 }
 
@@ -743,6 +870,9 @@ void DataArray::set_indep_data(DataSeries new_series)
 
     new_series.canonicalize();
     it.value() = std::move(new_series);
+
+    // The data has changed: the array is no longer the canonical source.
+    clear_source();
     data_frame_cache_.reset();
 }
 
@@ -772,6 +902,9 @@ void DataArray::set_indep_data(Index indep_index, DataSeries new_series)
 
     new_series.canonicalize();
     it.value() = std::move(new_series);
+
+    // The data has changed: the array is no longer the canonical source.
+    clear_source();
     data_frame_cache_.reset();
 }
 
@@ -794,6 +927,9 @@ void DataArray::set_indep_data(const std::string& indep_name, DataSeries new_ser
 
     new_series.canonicalize();
     it.value() = std::move(new_series);
+
+    // The data has changed: the array is no longer the canonical source.
+    clear_source();
     data_frame_cache_.reset();
 }
 
@@ -868,6 +1004,8 @@ void DataArray::set_indep_data(Index indep_index, Index row, Measurement value)
             throw std::invalid_argument("set_indep_data: unsupported matrix dtype");
     }
 
+    // The data has changed: the array is no longer the canonical source.
+    clear_source();
     data_frame_cache_.reset();
 }
 
@@ -935,6 +1073,8 @@ void DataArray::set_indep_data(const std::string& indep_name, Index row, Measure
             throw std::invalid_argument("set_indep_data: unsupported matrix dtype");
     }
 
+    // The data has changed: the array is no longer the canonical source.
+    clear_source();
     data_frame_cache_.reset();
 }
 

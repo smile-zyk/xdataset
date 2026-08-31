@@ -7,7 +7,20 @@ namespace xdataset
 {
     Dataset::Dataset(std::string name)
         : name_(std::move(name))
-    {}
+    {
+        if (!IsValidIdentifier(name_))
+            throw std::invalid_argument(
+                "Dataset name must be a valid identifier: " + name_);
+    }
+
+    Dataset::Dataset(std::string name, Dataset&& src)
+        : name_(std::move(name))
+        , root_(std::move(src.root_))
+    {
+        if (!IsValidIdentifier(name_))
+            throw std::invalid_argument(
+                "Dataset name must be a valid identifier: " + name_);
+    }
 
     std::vector<std::string> Dataset::SplitPath(const std::string& path)
     {
@@ -115,6 +128,16 @@ namespace xdataset
         if (parts.empty())
             throw std::invalid_argument("block path must not be empty");
 
+        // Every path segment must be a valid identifier: the segments form
+        // the Block name (dotted) and the source_path, both of which appear
+        // in REL references and global lookups.
+        for (const auto& seg : parts)
+        {
+            if (!IsValidIdentifier(seg))
+                throw std::invalid_argument(
+                    "block path segment must be a valid identifier: " + seg);
+        }
+
         // Navigate to the parent InternalNode, creating intermediate
         // nodes as needed.
         InternalNode* node = root_.internal();
@@ -144,6 +167,7 @@ namespace xdataset
         std::string dotted = path;
         for (auto& ch : dotted) if (ch == '/') ch = '.';
         block.set_name(dotted);
+        block.set_source_path(name() + "/" + path);
 
         auto owned = std::unique_ptr<Block>(new Block(std::move(block)));
         Block& ref = *owned;
