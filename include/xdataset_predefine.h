@@ -126,6 +126,52 @@ namespace xdataset
         }
         return "Unknown";
     }
+
+    /// True when `name` is a valid REL identifier: [A-Za-z_][A-Za-z0-9_]*.
+    /// Dataset names and Block path segments must all satisfy this so that
+    /// REL references (dataset.block.array) and the global source_path
+    /// ("<dataset>/<block path>") remain unambiguous.
+    inline bool IsValidIdentifier(const std::string& name)
+    {
+        if (name.empty()) return false;
+        const char c0 = name[0];
+        const bool start_ok =
+            (c0 >= 'a' && c0 <= 'z') || (c0 >= 'A' && c0 <= 'Z') || c0 == '_';
+        if (!start_ok) return false;
+        for (std::size_t i = 1; i < name.size(); ++i)
+        {
+            const char c = name[i];
+            const bool ok =
+                (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                (c >= '0' && c <= '9') || c == '_';
+            if (!ok) return false;
+        }
+        return true;
+    }
+
+    /// True when `name` is a valid Block name: one or more identifiers
+    /// joined by '/', e.g. "amplifier/DC/bias" -- the Block's full path
+    /// within the Dataset tree.  A Block name equals its path; the
+    /// source_path prefixes the Dataset name.  No empty segments and no
+    /// leading/trailing '/' are allowed.
+    inline bool IsValidBlockName(const std::string& name)
+    {
+        if (name.empty()) return false;
+        if (name.front() == '/' || name.back() == '/') return false;
+        std::size_t pos = 0;
+        while (pos < name.size())
+        {
+            const std::size_t slash = name.find('/', pos);
+            const std::string seg =
+                name.substr(pos, slash == std::string::npos
+                                     ? std::string::npos
+                                     : slash - pos);
+            if (!IsValidIdentifier(seg)) return false;
+            if (slash == std::string::npos) break;
+            pos = slash + 1;
+        }
+        return true;
+    }
 }
 
 #endif // XDATASET_PREDEFINE_H
