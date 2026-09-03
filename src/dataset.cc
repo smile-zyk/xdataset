@@ -166,6 +166,7 @@ namespace xdataset
 
         block.set_name(path);
         block.set_source_path(name() + "." + path);
+        block.set_dataset_name(name());
 
         auto owned = std::unique_ptr<Block>(new Block(std::move(block)));
         Block& ref = *owned;

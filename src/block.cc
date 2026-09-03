@@ -131,6 +131,11 @@ namespace xdataset
         source_path_ = std::move(path);
     }
 
+    void Block::set_dataset_name(std::string name)
+    {
+        dataset_name_ = std::move(name);
+    }
+
     std::vector<std::string> Block::dependents() const
     {
         std::vector<std::string> names;

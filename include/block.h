@@ -72,6 +72,11 @@ namespace xdataset
         /// DataArray source_block_path for arrays created here.
         const std::string& source_path() const { return source_path_; }
 
+        /// Name of the Dataset that owns this Block, e.g. "noise".
+        /// Fixed at AddBlock time.  Empty for Blocks constructed in-memory
+        /// but not yet added to a Dataset.
+        const std::string& dataset_name() const { return dataset_name_; }
+
         std::vector<std::string> dependents() const;
 
         std::vector<std::string> independents() const;
@@ -86,12 +91,14 @@ namespace xdataset
     private:
         void set_name(std::string name);        // Dataset (friend) only, at AddBlock time.
         void set_source_path(std::string path); // Dataset (friend) only, at AddBlock time.
+        void set_dataset_name(std::string name);// Dataset (friend) only, at AddBlock time.
 
         DataArray CreateDataArray(const IndependentSpec& info) const;
         void ensure_unique_name(const std::string& name) const;
 
         std::string                                        name_;
         std::string                                        source_path_;
+        std::string                                        dataset_name_;
         tsl::ordered_map<std::string, IndependentSpec> independent_spec_map_;
         tsl::ordered_map<std::string, DependentSpec>   dependent_spec_map_;
         mutable tsl::ordered_map<std::string, std::unique_ptr<DataArray>> data_array_cache_;
