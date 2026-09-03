@@ -37,6 +37,10 @@ namespace xdataset
 
         MultiDimensionSpec multi_dimension_spec;
         DataArrayKind kind = DataArrayKind::kDependent;
+
+        /// Free-form string hint for downstream consumers (e.g. plotting).
+        /// Retained verbatim; no semantics are imposed by the library.
+        std::string hint;
     };
 
     class XDATASET_API DataArray
@@ -189,6 +193,20 @@ namespace xdataset
             return data_kind_;
         }
 
+        /// Free-form string hint for downstream consumers (e.g. plotting).
+        /// Returned by reference; valid as long as this DataArray lives.
+        const std::string& hint() const
+        {
+            return hint_;
+        }
+
+        /// Replace the free-form hint string.  The hint is metadata only and
+        /// does not invalidate the data_frame cache or clear source provenance.
+        void set_hint(std::string hint)
+        {
+            hint_ = std::move(hint);
+        }
+
         /// Number of elements per cell: delegates to data().element_count()
         Index element_count() const
         {
@@ -275,6 +293,9 @@ namespace xdataset
 
         MultiDimensionSpec multi_dimension_spec_;
         DataArrayKind       data_kind_;
+
+        /// Free-form string hint for downstream consumers (e.g. plotting).
+        std::string hint_;
 
         /// Source provenance -- set only by Block::GetOrCreateDataArray().
         std::string source_block_path_;

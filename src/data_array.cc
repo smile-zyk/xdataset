@@ -77,7 +77,8 @@ namespace xdataset
     DataArray::DataArray(const DataArrayCreateInfo& info)
         : datas_(info.datas),
           multi_dimension_spec_(info.multi_dimension_spec),
-          data_kind_(info.kind)
+          data_kind_(info.kind),
+          hint_(info.hint)
     {
         // Canonicalize then validate.  validate() canonicalizes its own copy
         // of the datas, so the member is handled independently.
@@ -89,7 +90,8 @@ namespace xdataset
     DataArray::DataArray(DataArrayCreateInfo&& info)
         : datas_(std::move(info.datas)),
           multi_dimension_spec_(std::move(info.multi_dimension_spec)),
-          data_kind_(info.kind)
+          data_kind_(info.kind),
+          hint_(std::move(info.hint))
     {
         // info.datas has been moved; canonicalize and validate datas_ directly.
         for (auto it = datas_.begin(); it != datas_.end(); ++it)
@@ -101,6 +103,7 @@ namespace xdataset
         : datas_(other.datas_),
           multi_dimension_spec_(other.multi_dimension_spec_),
           data_kind_(other.data_kind_),
+          hint_(other.hint_),
           source_block_path_(other.source_block_path_),
           source_name_(other.source_name_)
     {
@@ -114,6 +117,7 @@ namespace xdataset
             datas_ = other.datas_;
             multi_dimension_spec_ = other.multi_dimension_spec_;
             data_kind_ = other.data_kind_;
+            hint_ = other.hint_;
             source_block_path_ = other.source_block_path_;
             source_name_ = other.source_name_;
             data_frame_cache_.reset();
