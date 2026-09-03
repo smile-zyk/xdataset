@@ -124,8 +124,8 @@ namespace xdataset
             source_name_.clear();
         }
 
-        /// Globally-unique source Block path, "<datasetName>/<block path>"
-        /// with '/' separators (e.g. "noise/simulation/SP1/SP"), or empty
+        /// Globally-unique source Block path, "<datasetName>.<block path>"
+        /// with '.' separators (e.g. "noise.simulation.SP1.SP"), or empty
         /// when this is a computed array.
         const std::string& source_block_path() const { return source_block_path_; }
 

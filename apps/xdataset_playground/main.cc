@@ -347,7 +347,7 @@ int main()
                 info.dependent_specs.push_back(DependentSpec{"Id.i", std::move(id_ds)});
                 info.dependent_specs.push_back(DependentSpec{"gm", std::move(gm_ds)});
                 info.dependent_specs.push_back(DependentSpec{"Vth", std::move(vth_ds)});
-                ds.AddBlock("amplifier/DC/bias", std::move(info));
+                ds.AddBlock("amplifier.DC.bias", std::move(info));
             }
 
             // --- S-parameters: freq(10) x 2x2 complex matrix ---
@@ -378,7 +378,7 @@ int main()
                 BlockCreateInfo info;
                 info.independent_specs.push_back(IndependentSpec{"freq", std::move(freq_series), DimensionSpec::Regular(Nf)});
                 info.dependent_specs.push_back(DependentSpec{"S", DataSeries::CreateMatrixFromMemory<std::complex<double>>(2,2,s_flat.data(),s_flat.size())});
-                ds.AddBlock("amplifier/SP1/SP", std::move(info));
+                ds.AddBlock("amplifier.SP1.SP", std::move(info));
             }
 
             // --- Harmonic balance: Pin(7) -> Pout, Gain, PAE ---
@@ -407,7 +407,7 @@ int main()
                 info.dependent_specs.push_back(DependentSpec{"Pout", std::move(pout_ds)});
                 info.dependent_specs.push_back(DependentSpec{"Gain", std::move(gain_ds)});
                 info.dependent_specs.push_back(DependentSpec{"PAE", std::move(pae_ds)});
-                ds.AddBlock("amplifier/HB1/HB", std::move(info));
+                ds.AddBlock("amplifier.HB1.HB", std::move(info));
             }
 
             // --- Noise: freq(10) -> NFmin, Rn ---
@@ -427,7 +427,7 @@ int main()
                 auto rn_ds = DataSeries::CreateScalarFromMemory<double>(rn.data(), Nf); rn_ds.set_unit("Ohm");
                 info.dependent_specs.push_back(DependentSpec{"NFmin", std::move(nf_ds)});
                 info.dependent_specs.push_back(DependentSpec{"Rn", std::move(rn_ds)});
-                ds.AddBlock("amplifier/noise/nf", std::move(info));
+                ds.AddBlock("amplifier.noise.nf", std::move(info));
             }
 
             DatasetIO::Save(ds, "hdf5", "LNA_Design.h5");
@@ -435,8 +435,8 @@ int main()
 
             // Quick CSV exports
             Dataset loaded = DatasetIO::Load("hdf5", "LNA_Design.h5");
-            loaded.GetBlock("amplifier/DC/bias").GetOrCreateDataFrame().WriteToCsv("output/LNA_DC_bias.csv");
-            loaded.GetBlock("amplifier/HB1/HB").GetOrCreateDataFrame().WriteToCsv("output/LNA_HB1_HB.csv");
+            loaded.GetBlock("amplifier.DC.bias").GetOrCreateDataFrame().WriteToCsv("output/LNA_DC_bias.csv");
+            loaded.GetBlock("amplifier.HB1.HB").GetOrCreateDataFrame().WriteToCsv("output/LNA_HB1_HB.csv");
             std::cout << "-> CSV exports: output/LNA_DC_bias.csv, output/LNA_HB1_HB.csv" << std::endl;
         }
 

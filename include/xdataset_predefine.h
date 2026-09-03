@@ -149,29 +149,17 @@ namespace xdataset
         return true;
     }
 
-    /// True when `name` is a valid Block name: one or more identifiers
-    /// joined by '/', e.g. "amplifier/DC/bias" -- the Block's full path
-    /// within the Dataset tree.  A Block name equals its path; the
-    /// source_path prefixes the Dataset name.  No empty segments and no
-    /// leading/trailing '/' are allowed.
-    inline bool IsValidBlockName(const std::string& name)
-    {
-        if (name.empty()) return false;
-        if (name.front() == '/' || name.back() == '/') return false;
-        std::size_t pos = 0;
-        while (pos < name.size())
-        {
-            const std::size_t slash = name.find('/', pos);
-            const std::string seg =
-                name.substr(pos, slash == std::string::npos
-                                     ? std::string::npos
-                                     : slash - pos);
-            if (!IsValidIdentifier(seg)) return false;
-            if (slash == std::string::npos) break;
-            pos = slash + 1;
-        }
-        return true;
-    }
+    /// Block paths use '.' as the separator between segments, and between the
+    /// Dataset name and a Block path in the source_path (e.g.
+    /// "noise.simulation.SP1.SP"), so they are REL-compatible.
+    ///
+    /// On-disk formats are NOT affected by this choice:
+    ///   - HDF5 stores the hierarchy as nested groups (HDF5 uses its own '/'
+    ///     separator at the file level); both the writer (SplitPath) and the
+    ///     reader (path join) derive the in-memory path from a single
+    ///     consistent separator, so round-trips are preserved.
+    ///   - Touchstone uses a single-segment block ("SP"), so it never splits
+    ///     a multi-segment path.
 }
 
 #endif // XDATASET_PREDEFINE_H

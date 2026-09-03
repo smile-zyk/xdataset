@@ -28,7 +28,7 @@ namespace xdataset
         if (path.empty()) return parts;
         std::istringstream stream(path);
         std::string segment;
-        while (std::getline(stream, segment, '/'))
+        while (std::getline(stream, segment, '.'))
             if (!segment.empty()) parts.push_back(segment);
         return parts;
     }
@@ -80,7 +80,7 @@ namespace xdataset
 
         for (const auto& kv : internal->children)
         {
-            const std::string full = prefix.empty() ? kv.first : prefix + "/" + kv.first;
+            const std::string full = prefix.empty() ? kv.first : prefix + "." + kv.first;
             if (kv.second->leaf())
                 paths.push_back(full);
             else
@@ -165,7 +165,7 @@ namespace xdataset
             throw std::invalid_argument("duplicate Block at path: " + path);
 
         block.set_name(path);
-        block.set_source_path(name() + "/" + path);
+        block.set_source_path(name() + "." + path);
 
         auto owned = std::unique_ptr<Block>(new Block(std::move(block)));
         Block& ref = *owned;

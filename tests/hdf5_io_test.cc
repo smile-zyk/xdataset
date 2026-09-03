@@ -61,7 +61,7 @@ namespace xdataset
     TEST(Hdf5IoTest, SaveAndLoadSimpleRoundtrip)
     {
         Dataset ds("test_ds");
-        ds.AddBlock("group/blk", make_simple_info());
+        ds.AddBlock("group.blk", make_simple_info());
 
         // Save
         DatasetIO::Save(ds, "hdf5", "test_roundtrip.h5");
@@ -71,9 +71,9 @@ namespace xdataset
 
         EXPECT_EQ(loaded.name(), "test_ds");
         EXPECT_EQ(loaded.block_count(), 1u);
-        EXPECT_TRUE(loaded.IsLeaf("group/blk"));
+        EXPECT_TRUE(loaded.IsLeaf("group.blk"));
 
-        const Block& b = loaded.GetBlock("group/blk");
+        const Block& b = loaded.GetBlock("group.blk");
         EXPECT_EQ(b.independents().size(), 2u);
         EXPECT_EQ(b.dependents().size(), 1u);
 
@@ -99,22 +99,22 @@ namespace xdataset
     TEST(Hdf5IoTest, SaveAndLoadNestedBlocks)
     {
         Dataset ds("nested");
-        ds.AddBlock("simulation/SP1/SP", make_simple_info());
-        ds.AddBlock("simulation/SP1/HB", make_simple_info());
-        ds.AddBlock("summary/stats", make_vector_info());
+        ds.AddBlock("simulation.SP1.SP", make_simple_info());
+        ds.AddBlock("simulation.SP1.HB", make_simple_info());
+        ds.AddBlock("summary.stats", make_vector_info());
 
         DatasetIO::Save(ds, "hdf5", "test_nested.h5");
         Dataset loaded = DatasetIO::Load("hdf5", "test_nested.h5");
 
         EXPECT_EQ(loaded.name(), "nested");
         EXPECT_EQ(loaded.block_count(), 3u);
-        EXPECT_TRUE(loaded.IsLeaf("simulation/SP1/SP"));
-        EXPECT_TRUE(loaded.IsLeaf("simulation/SP1/HB"));
-        EXPECT_TRUE(loaded.IsLeaf("summary/stats"));
+        EXPECT_TRUE(loaded.IsLeaf("simulation.SP1.SP"));
+        EXPECT_TRUE(loaded.IsLeaf("simulation.SP1.HB"));
+        EXPECT_TRUE(loaded.IsLeaf("summary.stats"));
 
         // Group structure is preserved
         EXPECT_TRUE(loaded.Exists("simulation"));
-        EXPECT_TRUE(loaded.Exists("simulation/SP1"));
+        EXPECT_TRUE(loaded.Exists("simulation.SP1"));
     }
 
     TEST(Hdf5IoTest, SaveAndLoadVectorDependent)
@@ -247,7 +247,7 @@ namespace xdataset
             info.dependent_specs.push_back(DependentSpec{"gm",  std::move(gm_ds)});
             info.dependent_specs.push_back(DependentSpec{"Vth", std::move(vth_ds)});
 
-            ds.AddBlock("amplifier/DC/bias", std::move(info));
+            ds.AddBlock("amplifier.DC.bias", std::move(info));
         }
 
         // =====================================================================
@@ -290,7 +290,7 @@ namespace xdataset
             BlockCreateInfo info;
             info.independent_specs.push_back(IndependentSpec{"freq", std::move(freq_series), DimensionSpec::Regular(Nf)});
             info.dependent_specs.push_back(DependentSpec{"S", DataSeries::CreateMatrixFromMemory<std::complex<double>>(2, 2, s_flat.data(), s_flat.size())});
-            ds.AddBlock("amplifier/SP1/SP", std::move(info));
+            ds.AddBlock("amplifier.SP1.SP", std::move(info));
         }
 
         // =====================================================================
@@ -328,7 +328,7 @@ namespace xdataset
             info.dependent_specs.push_back(DependentSpec{"Pout", std::move(pout_ds)});
             info.dependent_specs.push_back(DependentSpec{"Gain", std::move(gain_ds)});
             info.dependent_specs.push_back(DependentSpec{"PAE",  std::move(pae_ds)});
-            ds.AddBlock("amplifier/HB1/HB", std::move(info));
+            ds.AddBlock("amplifier.HB1.HB", std::move(info));
         }
 
         // =====================================================================
@@ -360,7 +360,7 @@ namespace xdataset
 
             info.dependent_specs.push_back(DependentSpec{"NFmin", std::move(nf_ds)});
             info.dependent_specs.push_back(DependentSpec{"Rn",    std::move(rn_ds)});
-            ds.AddBlock("amplifier/noise/nf", std::move(info));
+            ds.AddBlock("amplifier.noise.nf", std::move(info));
         }
 
         // --- Save as HDF5 ---
@@ -372,14 +372,14 @@ namespace xdataset
         EXPECT_EQ(loaded.block_count(), 4u);
 
         EXPECT_TRUE(loaded.Exists("amplifier"));
-        EXPECT_TRUE(loaded.Exists("amplifier/DC"));
-        EXPECT_TRUE(loaded.Exists("amplifier/SP1"));
-        EXPECT_TRUE(loaded.Exists("amplifier/HB1"));
-        EXPECT_TRUE(loaded.Exists("amplifier/noise"));
+        EXPECT_TRUE(loaded.Exists("amplifier.DC"));
+        EXPECT_TRUE(loaded.Exists("amplifier.SP1"));
+        EXPECT_TRUE(loaded.Exists("amplifier.HB1"));
+        EXPECT_TRUE(loaded.Exists("amplifier.noise"));
 
-        EXPECT_TRUE(loaded.IsLeaf("amplifier/DC/bias"));
+        EXPECT_TRUE(loaded.IsLeaf("amplifier.DC.bias"));
         {
-            const Block& b = loaded.GetBlock("amplifier/DC/bias");
+            const Block& b = loaded.GetBlock("amplifier.DC.bias");
             EXPECT_EQ(b.independents().size(), 2u);
             EXPECT_EQ(b.dependents().size(), 3u);
             EXPECT_EQ(b.dependent_spec("Id").data.size(), 99u);
@@ -392,9 +392,9 @@ namespace xdataset
             EXPECT_NEAR(id_val, expected_id, 1e-9);
         }
 
-        EXPECT_TRUE(loaded.IsLeaf("amplifier/SP1/SP"));
+        EXPECT_TRUE(loaded.IsLeaf("amplifier.SP1.SP"));
         {
-            const Block& b = loaded.GetBlock("amplifier/SP1/SP");
+            const Block& b = loaded.GetBlock("amplifier.SP1.SP");
             const DependentSpec& s_dep = b.dependent_spec("S");
             EXPECT_EQ(s_dep.data.data_shape()[0], 2);
             EXPECT_EQ(s_dep.data.data_shape()[1], 2);
@@ -405,8 +405,8 @@ namespace xdataset
             EXPECT_NEAR(s21_db, 15.0, 0.5);
         }
 
-        EXPECT_TRUE(loaded.IsLeaf("amplifier/HB1/HB"));
-        EXPECT_TRUE(loaded.IsLeaf("amplifier/noise/nf"));
+        EXPECT_TRUE(loaded.IsLeaf("amplifier.HB1.HB"));
+        EXPECT_TRUE(loaded.IsLeaf("amplifier.noise.nf"));
 
         std::cout << "HDF5 saved to LNA_Design.h5 (4 blocks)\n";
     }

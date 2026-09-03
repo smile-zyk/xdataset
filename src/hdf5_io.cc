@@ -572,7 +572,7 @@ void load_groups(Dataset& ds, hid_t group, const std::string& prefix)
                 }
             }
 
-            std::string path = prefix.empty() ? oname : prefix + "/" + oname;
+            std::string path = prefix.empty() ? oname : prefix + "." + oname;
 
             if (has_datasets)
             {

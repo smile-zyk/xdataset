@@ -1,16 +1,43 @@
 #include "block.h"
 
+#include <cstddef>
 #include <stdexcept>
 
 namespace xdataset
 {
+    namespace
+    {
+        // File-local validator for Block names (paths).  Kept out of the
+        // public header: not part of the API surface.
+        bool IsValidBlockName(const std::string& name)
+        {
+            constexpr char sep = '.';
+            if (name.empty()) return false;
+            if (name.front() == sep || name.back() == sep) return false;
+            std::size_t pos = 0;
+            while (pos < name.size())
+            {
+                const std::size_t sep_pos = name.find(sep, pos);
+                const std::string seg =
+                    name.substr(pos, sep_pos == std::string::npos
+                                         ? std::string::npos
+                                         : sep_pos - pos);
+                if (!IsValidIdentifier(seg)) return false;
+                if (sep_pos == std::string::npos) break;
+                pos = sep_pos + 1;
+            }
+            return true;
+        }
+    } // namespace
+
     void Block::ensure_unique_name(const std::string& name) const
     {
         if (name.empty())
             throw std::invalid_argument("DataArray name must not be empty");
         // DataArray names may be dotted (e.g. "SRC1.i" -- the REL reference
-        // syntax supports two-segment dependent names), but must not contain
-        // '/' which would collide with the source_path separator.
+        // syntax supports two-segment dependent names).  They must not
+        // contain '/' because HDF5 uses '/' as its own hierarchy separator
+        // and a dataset name containing '/' is invalid in HDF5.
         if (name.find('/') != std::string::npos)
             throw std::invalid_argument(
                 "DataArray name must not contain '/': " + name);

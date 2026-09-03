@@ -41,9 +41,9 @@ namespace xdataset
     // LEAF in the Dataset tree -- Blocks do not contain other Blocks.
     //
     // Block.name() returns the Block's full path within the Dataset, using
-    // '/' separators, e.g. AddBlock("simulation/SP1/SP", info) ->
-    // Block::name() == "simulation/SP1/SP".  The source_path() prefixes the
-    // Dataset name ("<datasetName>/<block path>").
+    // '.' separators, e.g. AddBlock("simulation.SP1.SP", info) ->
+    // Block::name() == "simulation.SP1.SP".  The source_path() prefixes the
+    // Dataset name ("<datasetName>.<block path>").
     //
     // The name is fixed at construction: it is assigned by Dataset::AddBlock
     // (from the path) and never changes afterwards.  External code cannot
@@ -63,12 +63,12 @@ namespace xdataset
         Block(std::string name, const BlockCreateInfo& info);
         Block(std::string name, BlockCreateInfo&& info);
 
-        /// Full path within the Dataset, e.g. "simulation/SP1/SP".
+        /// Full path within the Dataset, e.g. "simulation.SP1.SP".
         const std::string& name() const;
 
         /// Globally-unique source path of this Block:
-        /// "<datasetName>/<block path>" with '/' separators, e.g.
-        /// "noise/simulation/SP1/SP".  Fixed at AddBlock time; used as the
+        /// "<datasetName>.<block path>" with '.' separators, e.g.
+        /// "noise.simulation.SP1.SP".  Fixed at AddBlock time; used as the
         /// DataArray source_block_path for arrays created here.
         const std::string& source_path() const { return source_path_; }
 

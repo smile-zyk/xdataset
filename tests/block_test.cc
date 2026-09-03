@@ -69,29 +69,29 @@ namespace xdataset
         EXPECT_THROW({ Block b(info); }, std::invalid_argument);
     }
 
-    // Block names equal the Block's path within the Dataset tree, using '/'
-    // separators (e.g. the block at path "amplifier/DC/bias" is named
-    // "amplifier/DC/bias"); '/' is the separator, while empty segments are
+    // Block names equal the Block's path within the Dataset tree, using '.'
+    // separators (e.g. the block at path "amplifier.DC.bias" is named
+    // "amplifier.DC.bias"); '.' is the separator, while empty segments are
     // not allowed.
     TEST(BlockConstructorTest, AcceptsPathBlockName)
     {
-        Block block("amplifier/DC/bias", MakeBaseCreateInfo());
-        EXPECT_EQ(block.name(), "amplifier/DC/bias");
+        Block block("amplifier.DC.bias", MakeBaseCreateInfo());
+        EXPECT_EQ(block.name(), "amplifier.DC.bias");
     }
 
-    TEST(BlockConstructorTest, RejectsDotInBlockName)
+    TEST(BlockConstructorTest, RejectsSlashInBlockName)
     {
-        EXPECT_THROW({ Block b("amplifier.DC.bias", MakeBaseCreateInfo()); },
+        EXPECT_THROW({ Block b("amplifier/DC/bias", MakeBaseCreateInfo()); },
                      std::invalid_argument);
     }
 
     TEST(BlockConstructorTest, RejectsEmptyBlockNameSegment)
     {
-        EXPECT_THROW({ Block b("amplifier//bias", MakeBaseCreateInfo()); },
+        EXPECT_THROW({ Block b("amplifier..bias", MakeBaseCreateInfo()); },
                      std::invalid_argument);
-        EXPECT_THROW({ Block b("/bias", MakeBaseCreateInfo()); },
+        EXPECT_THROW({ Block b(".bias", MakeBaseCreateInfo()); },
                      std::invalid_argument);
-        EXPECT_THROW({ Block b("amplifier/", MakeBaseCreateInfo()); },
+        EXPECT_THROW({ Block b("amplifier.", MakeBaseCreateInfo()); },
                      std::invalid_argument);
     }
 

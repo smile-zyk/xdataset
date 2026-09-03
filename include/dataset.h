@@ -123,16 +123,16 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
     // children (name -> child mappings).  Leaf nodes are Blocks which
     // hold the actual simulation data (independents + dependents).
     //
-    // C++ API uses '/' as path separator; REL uses '.' for the tree and
-    // a final '.' to separate block name from data_array name:
+    // The C++ API and REL now share the same '.' path separator for the
+    // tree; a final '.' separates block name from data_array name:
     //
-    //    C++:  GetDataArray("simulation/SP1/SP", "Vout")
+    //    C++:  GetDataArray("simulation.SP1.SP", "Vout")
     //    REL:  noise.simulation.SP1.SP.Vout
     //
-    //    noise            -- Dataset name
-    //    simulation/SP1   -- nested InternalNodes (created implicitly by AddBlock)
-    //    SP               -- Block (leaf node, holds independents + dependents)
-    //    Vout             -- DataArray within the Block
+    //    noise             -- Dataset name
+    //    simulation.SP1    -- nested InternalNodes (created implicitly by AddBlock)
+    //    SP                -- Block (leaf node, holds independents + dependents)
+    //    Vout              -- DataArray within the Block
     //
     // Intermediate InternalNodes are created on demand when AddBlock is called.
     //
@@ -141,6 +141,12 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
     //
     //    C++:  GetDataArray("Vout")
     //    REL:  noise..Vout   -- matches *.*. ... .Vout (any block)
+    //
+    // On-disk formats are unrelated to this separator:
+    //   - HDF5 stores the hierarchy as nested groups (its own '/' separator),
+    //     reconstructed from the in-memory path by SplitPath on write and the
+    //     reverse join on read, so round-trips are preserved.
+    //   - Touchstone uses a single-segment block ("SP") and is unaffected.
     //
     // ========================================================================
 
@@ -178,9 +184,9 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
         // --------------------------------------------------------------------
 
         /// Add a Block at `path`.  Intermediate nodes are created implicitly.
-        /// Block::name() is the path with `/` replaced by `.`.
+        /// The path uses '.' separators; Block::name() equals the path.
         ///
-        /// Example:  AddBlock("simulation/SP1/SP", info) -> Block "simulation.SP1.SP"
+        /// Example:  AddBlock("simulation.SP1.SP", info) -> Block "simulation.SP1.SP"
         Block& AddBlock(const std::string& path,
                         const BlockCreateInfo& block_info);
 
@@ -218,7 +224,7 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
 
         /// Full hierarchical access.
         ///
-        /// Example:  GetDataArray("simulation/SP1/SP", "freq")
+        /// Example:  GetDataArray("simulation.SP1.SP", "freq")
         const DataArray& GetDataArray(const std::string& block_path,
                                       const std::string& data_array_name);
 
@@ -261,7 +267,7 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
         // Utilities
         // --------------------------------------------------------------------
 
-        /// Split a '/' path into segments.  "a/b/c" -> ["a", "b", "c"].
+        /// Split a '.' path into segments.  "a.b.c" -> ["a", "b", "c"].
         static std::vector<std::string> SplitPath(const std::string& path);
 
     private:
