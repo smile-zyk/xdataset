@@ -4,7 +4,6 @@
 #include <hdf5.h>
 
 #include "block.h"
-#include "data_array.h"
 #include "data_series.h"
 #include "dataset.h"
 #include "dimension_spec.h"
@@ -599,6 +598,7 @@ class Hdf5Reader::Impl
 {
 public:
     explicit Impl(const std::string& path)
+        : file_path_(path)
     {
         disable_hdf5_errors();
         file_ = H5Fopen(path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -627,11 +627,13 @@ public:
         hid_t root = H5Gopen2(file_, root_name, H5P_DEFAULT);
         load_groups(ds, root, "");
         H5Gclose(root);
+        ds.set_source_path(file_path_);
         return ds;
     }
 
 private:
     hid_t file_;
+    std::string file_path_;
 };
 
 Hdf5Reader::Hdf5Reader(const std::string& file_path)
@@ -684,6 +686,8 @@ void DatasetIO::Save(const Dataset& dataset,
 Dataset DatasetIO::Load(const std::string& format,
                         const std::string& path)
 {
+    // The concrete readers record the source path on the returned Dataset
+    // themselves (see Hdf5Reader::Read / TouchstoneReader::Read).
     auto reader = CreateReader(format, path);
     return reader->Read();
 }

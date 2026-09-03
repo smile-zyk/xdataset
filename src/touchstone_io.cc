@@ -7,7 +7,6 @@
 #include "dimension_spec.h"
 #include "unit.h"
 
-#include <algorithm>
 #include <cmath>
 #include <complex>
 #include <cstdio>
@@ -456,6 +455,9 @@ public:
         }
 
         ds.AddBlock("SP", std::move(info));
+        // Record the source file so hosts can show where the Dataset came
+        // from without tracking it themselves.
+        ds.set_source_path(file_path_);
         return ds;
     }
 

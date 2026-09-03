@@ -164,6 +164,15 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
         /// Fixed at construction: a Dataset's name is immutable.
         const std::string& name() const { return name_; }
 
+        /// File path this Dataset was loaded from, recorded by the format
+        /// readers themselves (DatasetIO::Load / CreateReader()->Read()).
+        /// Empty when the Dataset was constructed in memory.  A relative
+        /// path is kept exactly as given -- callers that need an absolute
+        /// path resolve it before loading (e.g.
+        /// rel::Environment::LoadFromConfig).
+        const std::string& source_path() const { return source_path_; }
+        void set_source_path(std::string path) { source_path_ = std::move(path); }
+
         // --------------------------------------------------------------------
         // Mutation
         // --------------------------------------------------------------------
@@ -276,6 +285,9 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
             const std::string& data_array_name) const;
 
         std::string name_;
+        /// Path of the file this Dataset was loaded from / saved to; empty
+        /// for in-memory Datasets.  Moved with the Dataset (std::string).
+        std::string source_path_;
         TreeNode    root_;
     };
 }
