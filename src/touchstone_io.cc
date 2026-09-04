@@ -410,8 +410,9 @@ void TouchstoneDataArrayWriter::Write(const DataArray& array)
 class TouchstoneReader::Impl
 {
 public:
-    explicit Impl(const std::string& path)
+    Impl(const std::string& path, const std::string& name)
         : file_path_(path)
+        , name_(name)
     {}
 
     Dataset read()
@@ -419,9 +420,12 @@ public:
         TouchstoneDataArrayReader da_reader(file_path_);
         DataArray da = da_reader.Read();
 
-        // Build Dataset name from file name
-        std::string ds_name = file_path_;
+        // Build Dataset name from the file name, unless the caller supplied
+        // an authoritative name.
+        std::string ds_name = name_;
+        if (ds_name.empty())
         {
+            ds_name = file_path_;
             auto pos = ds_name.find_last_of("/\\");
             if (pos != std::string::npos)
                 ds_name = ds_name.substr(pos + 1);
@@ -463,10 +467,15 @@ public:
 
 private:
     std::string file_path_;
+    std::string name_;
 };
 
 TouchstoneReader::TouchstoneReader(const std::string& file_path)
-    : impl_(new Impl(file_path))
+    : impl_(new Impl(file_path, std::string()))
+{}
+
+TouchstoneReader::TouchstoneReader(const std::string& file_path, const std::string& name)
+    : impl_(new Impl(file_path, name))
 {}
 
 TouchstoneReader::~TouchstoneReader() = default;

@@ -42,6 +42,7 @@ class Hdf5Reader : public IDatasetReader
 {
 public:
     explicit Hdf5Reader(const std::string& file_path);
+    Hdf5Reader(const std::string& file_path, const std::string& name);
     ~Hdf5Reader() override;
 
     Dataset Read() override;

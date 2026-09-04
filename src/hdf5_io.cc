@@ -597,8 +597,9 @@ void load_groups(Dataset& ds, hid_t group, const std::string& prefix)
 class Hdf5Reader::Impl
 {
 public:
-    explicit Impl(const std::string& path)
+    Impl(const std::string& path, const std::string& name)
         : file_path_(path)
+        , name_(name)
     {
         disable_hdf5_errors();
         file_ = H5Fopen(path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -613,7 +614,8 @@ public:
 
     Dataset read()
     {
-        // Get the first (and only) root group = the Dataset name.
+        // Get the first (and only) root group (used only if no explicit
+        // name was supplied).
         hsize_t num_objs = 0;
         H5Gget_num_objs(file_, &num_objs);
 
@@ -623,7 +625,12 @@ public:
         char root_name[256];
         H5Gget_objname_by_idx(file_, 0, root_name, sizeof(root_name));
 
-        Dataset ds(root_name);
+        // When the caller supplied an authoritative name, use it as the
+        // Dataset name from the start so AddBlock stamps every Block with
+        // the correct dataset_name / source_path.  Otherwise fall back to
+        // the root group name.
+        const std::string ds_name = name_.empty() ? root_name : name_;
+        Dataset ds(ds_name);
         hid_t root = H5Gopen2(file_, root_name, H5P_DEFAULT);
         load_groups(ds, root, "");
         H5Gclose(root);
@@ -634,10 +641,15 @@ public:
 private:
     hid_t file_;
     std::string file_path_;
+    std::string name_;
 };
 
 Hdf5Reader::Hdf5Reader(const std::string& file_path)
-    : impl_(new Impl(file_path))
+    : impl_(new Impl(file_path, std::string()))
+{}
+
+Hdf5Reader::Hdf5Reader(const std::string& file_path, const std::string& name)
+    : impl_(new Impl(file_path, name))
 {}
 
 Hdf5Reader::~Hdf5Reader() = default;
@@ -664,12 +676,13 @@ std::unique_ptr<IDatasetWriter> DatasetIO::CreateWriter(
 /* static */
 std::unique_ptr<IDatasetReader> DatasetIO::CreateReader(
     const std::string& format,
-    const std::string& path)
+    const std::string& path,
+    const std::string& name)
 {
     if (format == "hdf5")
-        return std::unique_ptr<IDatasetReader>(new Hdf5Reader(path));
+        return std::unique_ptr<IDatasetReader>(new Hdf5Reader(path, name));
     if (format == "touchstone" || format == "snp")
-        return std::unique_ptr<IDatasetReader>(new TouchstoneReader(path));
+        return std::unique_ptr<IDatasetReader>(new TouchstoneReader(path, name));
     throw std::invalid_argument("unsupported format: " + format);
 }
 
@@ -684,11 +697,13 @@ void DatasetIO::Save(const Dataset& dataset,
 
 /* static */
 Dataset DatasetIO::Load(const std::string& format,
-                        const std::string& path)
+                        const std::string& path,
+                        const std::string& name)
 {
-    // The concrete readers record the source path on the returned Dataset
-    // themselves (see Hdf5Reader::Read / TouchstoneReader::Read).
-    auto reader = CreateReader(format, path);
+    // Pass the authoritative name through to the reader so the Dataset is
+    // constructed under it from the start (Blocks get the correct
+    // dataset_name / source_path).  The reader still records source_path.
+    auto reader = CreateReader(format, path, name);
     return reader->Read();
 }
 

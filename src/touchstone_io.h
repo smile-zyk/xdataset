@@ -65,6 +65,7 @@ class TouchstoneReader : public IDatasetReader
 {
 public:
     explicit TouchstoneReader(const std::string& file_path);
+    TouchstoneReader(const std::string& file_path, const std::string& name);
     ~TouchstoneReader() override;
 
     Dataset Read() override;

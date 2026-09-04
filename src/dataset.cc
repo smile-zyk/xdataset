@@ -16,6 +16,7 @@ namespace xdataset
     Dataset::Dataset(std::string name, Dataset&& src)
         : name_(std::move(name))
         , root_(std::move(src.root_))
+        , source_path_(std::move(src.source_path_))
     {
         if (!IsValidIdentifier(name_))
             throw std::invalid_argument(

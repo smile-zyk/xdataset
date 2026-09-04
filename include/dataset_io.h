@@ -62,9 +62,13 @@ public:
     /// Create a reader for the given format.
     /// @param format  "hdf5" (extensible)
     /// @param path    input file path
+    /// @param name    optional authoritative Dataset name; when non-empty the
+    ///                reader constructs the Dataset under this name from the
+    ///                start, so every Block is stamped with it.
     static std::unique_ptr<IDatasetReader> CreateReader(
         const std::string& format,
-        const std::string& path);
+        const std::string& path,
+        const std::string& name = std::string());
 
     /// Convenience: save a Dataset using the writer for `format`.
     static void Save(const Dataset& dataset,
@@ -72,8 +76,13 @@ public:
                      const std::string& path);
 
     /// Convenience: load a Dataset using the reader for `format`.
+    /// When `name` is non-empty, the Dataset is constructed under that name
+    /// (overriding the on-disk name such as the HDF5 root group), so Blocks
+    /// carry the authoritative name too.  The reader still records the real
+    /// source_path.
     static Dataset Load(const std::string& format,
-                        const std::string& path);
+                        const std::string& path,
+                        const std::string& name = std::string());
 };
 
 } // namespace xdataset
