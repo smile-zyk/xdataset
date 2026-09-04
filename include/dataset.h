@@ -9,6 +9,7 @@
 
 #include "block.h"
 #include "data_array.h"
+#include "data_array_set.h"
 
 namespace xdataset
 {
@@ -75,9 +76,24 @@ struct InternalNode
     tsl::ordered_map<std::string, std::unique_ptr<TreeNode>> children;
 };
 
+/// Discriminates the two kinds of leaf node in the Dataset tree.
+enum class LeafKind
+{
+    kBlock,        ///< Leaf holds a Block.
+    kDataSet       ///< Leaf holds a DataArraySet.
+};
+
 struct LeafNode
 {
-    std::unique_ptr<Block> block;
+    LeafKind kind_ = LeafKind::kBlock;
+    std::unique_ptr<Block>         block;
+    std::unique_ptr<DataArraySet>  data_array_set;
+
+    LeafNode() = default;
+    explicit LeafNode(std::unique_ptr<Block> b)
+        : kind_(LeafKind::kBlock), block(std::move(b)) {}
+    explicit LeafNode(std::unique_ptr<DataArraySet> s)
+        : kind_(LeafKind::kDataSet), data_array_set(std::move(s)) {}
 };
 
 // ---- TreeNode out-of-line definitions (require complete node types) ------
@@ -196,9 +212,16 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
         /// Add a pre-built Block.  Used by deserialization (HDF5 reader etc.).
         Block& AddBlock(const std::string& path, Block block);
 
+        /// Add a DataArraySet at `path`.  Intermediate nodes are created
+        /// implicitly; the path uses '.' separators.
+        DataArraySet& AddDataArraySet(const std::string& path, DataArraySet set);
+
         /// Remove a Block and return 1, or 0 if not found.  Empty parent
         /// nodes are NOT automatically cleaned up.
         std::size_t RemoveBlock(const std::string& path);
+
+        /// Remove a DataArraySet and return 1, or 0 if not found.
+        std::size_t RemoveDataArraySet(const std::string& path);
 
         /// Remove a node and all its descendants.  Returns the number
         /// of Blocks removed.
@@ -208,8 +231,12 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
         // Query
         // --------------------------------------------------------------------
 
-        /// True if a Block exists at `path` (node is a LeafNode).
+        /// True if a leaf (Block or DataArraySet) exists at `path`.
         bool IsLeaf(const std::string& path) const;
+
+        /// True when the leaf at `path` is a DataArraySet (false when it is
+        /// a Block or does not exist).
+        bool IsDataArraySet(const std::string& path) const;
 
         /// True if any node (InternalNode or LeafNode) exists at `path`.
         bool Exists(const std::string& path) const;
@@ -222,9 +249,12 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
         // Access
         // --------------------------------------------------------------------
 
-        /// Full hierarchical access.
+        /// Full hierarchical access.  `block_path` names a leaf node: a
+        /// Block (data_array_name resolved via GetOrCreateDataArray) or a
+        /// DataArraySet (data_array_name resolved via DataArraySet::Get).
         ///
         /// Example:  GetDataArray("simulation.SP1.SP", "freq")
+        ///           GetDataArray("my_set", "foo")
         const DataArray& GetDataArray(const std::string& block_path,
                                       const std::string& data_array_name);
 
@@ -232,9 +262,15 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
         /// Equivalent to `//data_array_name`.
         const DataArray& GetDataArray(const std::string& data_array_name);
 
-        /// Const / mutable Block access by path.
+        /// Const / mutable Block access by path.  Throws std::out_of_range
+        /// when the leaf is not a Block.
         const Block& GetBlock(const std::string& path) const;
         Block&       GetBlock(const std::string& path);
+
+        /// Const / mutable DataArraySet access by path.  Throws
+        /// std::out_of_range when the leaf is not a DataArraySet.
+        const DataArraySet& GetDataArraySet(const std::string& path) const;
+        DataArraySet&       GetDataArraySet(const std::string& path);
 
         /// Ordered DataArray names within a specific Block
         /// (independents first, then dependents, insertion order).
@@ -249,6 +285,15 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
         std::vector<std::string> GetBlockNames(
             const std::string& group_path = "") const;
 
+        /// Direct child DataArraySet names under `group_path` (root = "").
+        std::vector<std::string> GetDataArraySetNames(
+            const std::string& group_path = "") const;
+
+        /// Direct child leaf names (Blocks + DataArraySets) under
+        /// `group_path` (root = ""), insertion order.
+        std::vector<std::string> GetLeafNames(
+            const std::string& group_path = "") const;
+
         /// Direct child InternalNode names under `group_path` (root = "").
         std::vector<std::string> GetGroupNames(
             const std::string& group_path = "") const;
@@ -256,12 +301,25 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
         /// All Block paths (recursive), insertion order.
         std::vector<std::string> GetAllBlockPaths() const;
 
+        /// All DataArraySet paths (recursive), insertion order.
+        std::vector<std::string> GetAllDataArraySetPaths() const;
+
+        /// All leaf paths -- Blocks and DataArraySets -- (recursive),
+        /// insertion order.
+        std::vector<std::string> GetAllLeafPaths() const;
+
         // --------------------------------------------------------------------
         // Capacity
         // --------------------------------------------------------------------
 
         /// Total number of Blocks in the Dataset.
         std::size_t block_count() const;
+
+        /// Total number of DataArraySets in the Dataset.
+        std::size_t data_array_set_count() const;
+
+        /// Total number of leaf nodes (Blocks + DataArraySets) in the Dataset.
+        std::size_t leaf_count() const;
 
         // --------------------------------------------------------------------
         // Utilities
@@ -282,8 +340,28 @@ inline TreeNode& TreeNode::operator=(TreeNode&& other) noexcept
                                  const std::string& prefix,
                                  std::vector<std::string>& paths) const;
 
+        /// Recursively collect DataArraySet paths.
+        void collect_data_array_set_paths(const TreeNode& node,
+                                          const std::string& prefix,
+                                          std::vector<std::string>& paths) const;
+
+        /// Recursively collect ALL leaf paths (Blocks and DataArraySets).
+        void collect_leaf_paths(const TreeNode& node,
+                                const std::string& prefix,
+                                std::vector<std::string>& paths) const;
+
+        /// Ordered DataArray names held by a leaf (Block: independents then
+        /// dependents; DataArraySet: member names).
+        std::vector<std::string> leaf_data_array_names(const LeafNode* leaf) const;
+
         /// Recursively count Blocks.
         std::size_t collect_block_count(const TreeNode& node) const;
+
+        /// Recursively count DataArraySets.
+        std::size_t collect_data_array_set_count(const TreeNode& node) const;
+
+        /// Recursively count leaf nodes (Blocks + DataArraySets).
+        std::size_t collect_leaf_count(const TreeNode& node) const;
 
         /// Walk the tree looking for `data_array_name`.
         /// Returns the block path of the unique match.

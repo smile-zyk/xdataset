@@ -4,9 +4,12 @@
 #include <hdf5.h>
 
 #include "block.h"
+#include "data_array.h"
+#include "data_array_set.h"
 #include "data_series.h"
 #include "dataset.h"
 #include "dimension_spec.h"
+#include "multi_dimension_spec.h"
 #include "touchstone_io.h"
 
 #include <complex>
@@ -220,6 +223,86 @@ void write_data_series(hid_t group, const std::string& name, const DataSeries& s
 }
 
 // -----------------------------------------------------------------------
+// MultiDimensionSpec <-> attributes on a group
+// -----------------------------------------------------------------------
+void write_multi_dimension_spec(hid_t loc, const MultiDimensionSpec& spec)
+{
+    const auto& dims = spec.dims();
+    write_size_attr(loc, "ndim", dims.size());
+    for (std::size_t i = 0; i < dims.size(); ++i)
+    {
+        const DimensionSpec& d = dims[i];
+        std::string base = "dim" + std::to_string(i);
+        if (d.is_regular())
+        {
+            write_str_attr(loc, (base + "_type").c_str(), "regular");
+            write_size_attr(loc, (base + "_size").c_str(), d.regular_size());
+        }
+        else
+        {
+            write_str_attr(loc, (base + "_type").c_str(), "ragged");
+            write_sizes_attr(loc, (base + "_sizes").c_str(), d.ragged_sizes());
+        }
+    }
+}
+
+// -----------------------------------------------------------------------
+// Write a full DataArray as a sub-group under `parent_group`.
+// -----------------------------------------------------------------------
+void write_data_array(hid_t parent_group, const std::string& name, const DataArray& array)
+{
+    hid_t g = H5Gcreate2(parent_group, name.c_str(),
+                         H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+    write_str_attr(g, "data_array_kind",
+                   array.data_kind() == DataArrayKind::kDependent ? "dependent" : "independent");
+    if (!array.hint().empty())
+        write_str_attr(g, "hint", array.hint());
+    write_multi_dimension_spec(g, array.multi_dimension_spec());
+
+    const DataSeriesMap& datas = array.datas();
+    write_size_attr(g, "datas_count", datas.size());
+
+    std::size_t i = 0;
+    for (const auto& kv : datas)
+    {
+        std::string dname = "series_" + std::to_string(i);
+        write_data_series(g, dname, kv.second);
+        hid_t dset = H5Dopen2(g, dname.c_str(), H5P_DEFAULT);
+        write_str_attr(dset, "key", kv.first);  // "" for the self entry
+        H5Dclose(dset);
+        ++i;
+    }
+
+    H5Gclose(g);
+}
+
+// -----------------------------------------------------------------------
+// Write a DataArraySet (leaf marker + one sub-group per DataArray).
+// -----------------------------------------------------------------------
+void write_data_array_set(hid_t root_group, const std::string& set_path,
+                          const DataArraySet& set)
+{
+    hid_t current = root_group;
+    auto parts = Dataset::SplitPath(set_path);
+    for (const auto& seg : parts)
+    {
+        hid_t next = H5Gopen2(current, seg.c_str(), H5P_DEFAULT);
+        if (next < 0)
+            next = H5Gcreate2(current, seg.c_str(), H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        if (current != root_group)
+            H5Gclose(current);
+        current = next;
+    }
+
+    write_str_attr(current, "xdataset_leaf", "data_array_set");
+    for (const auto& name : set.names())
+        write_data_array(current, name, set.Get(name));
+
+    H5Gclose(current);
+}
+
+// -----------------------------------------------------------------------
 // Write a Block (as nested HDF5 Groups matching the path, with datasets)
 // -----------------------------------------------------------------------
 void write_block(hid_t root_group, const std::string& block_path, const Block& block)
@@ -237,6 +320,7 @@ void write_block(hid_t root_group, const std::string& block_path, const Block& b
         current = next;
     }
     // current is the leaf HDF5 group = the Block's home.
+    write_str_attr(current, "xdataset_leaf", "block");
 
     // Independent DataSeries -- Datasets with dimension attributes
     for (const auto& name : block.independents())
@@ -292,6 +376,14 @@ public:
         {
             const Block& block = dataset.GetBlock(p);
             write_block(root, p, block);
+        }
+
+        // Write each DataArraySet
+        std::vector<std::string> set_paths = dataset.GetAllDataArraySetPaths();
+        for (const auto& p : set_paths)
+        {
+            const DataArraySet& set = dataset.GetDataArraySet(p);
+            write_data_array_set(root, p, set);
         }
 
         H5Gclose(root);
@@ -484,6 +576,87 @@ DataSeries read_data_series(hid_t loc, const std::string& name)
 }
 
 // -----------------------------------------------------------------------
+// MultiDimensionSpec <-> attributes on a group
+// -----------------------------------------------------------------------
+MultiDimensionSpec read_multi_dimension_spec(hid_t loc)
+{
+    MultiDimensionSpec spec;
+    std::size_t ndim = read_size_attr(loc, "ndim", 0);
+    for (std::size_t i = 0; i < ndim; ++i)
+    {
+        std::string base = "dim" + std::to_string(i);
+        std::string t = read_str_attr(loc, (base + "_type").c_str());
+        if (t == "regular")
+            spec.add_regular(read_size_attr(loc, (base + "_size").c_str()));
+        else if (t == "ragged")
+            spec.add_ragged(read_sizes_attr(loc, (base + "_sizes").c_str()));
+        else
+            throw std::runtime_error("unknown dimension type: " + t);
+    }
+    return spec;
+}
+
+// -----------------------------------------------------------------------
+// Read a full DataArray from a sub-group.
+// -----------------------------------------------------------------------
+DataArray read_data_array(hid_t parent_group, const std::string& name)
+{
+    hid_t g = H5Gopen2(parent_group, name.c_str(), H5P_DEFAULT);
+
+    std::string kind_str = read_str_attr(g, "data_array_kind");
+    DataArrayKind kind = (kind_str == "independent")
+                             ? DataArrayKind::kIndependent
+                             : DataArrayKind::kDependent;
+    std::string hint = read_str_attr(g, "hint");
+    MultiDimensionSpec spec = read_multi_dimension_spec(g);
+
+    std::size_t count = read_size_attr(g, "datas_count", 0);
+    DataArrayCreateInfo info;
+    info.kind = kind;
+    info.hint = hint;
+    info.multi_dimension_spec = spec;
+
+    for (std::size_t i = 0; i < count; ++i)
+    {
+        std::string dname = "series_" + std::to_string(i);
+        hid_t dset = H5Dopen2(g, dname.c_str(), H5P_DEFAULT);
+        std::string key = read_str_attr(dset, "key");
+        H5Dclose(dset);
+        info.datas.emplace(key, read_data_series(g, dname));
+    }
+
+    H5Gclose(g);
+    return DataArray(std::move(info));
+}
+
+// -----------------------------------------------------------------------
+// Read a DataArraySet from an HDF5 Group (one sub-group per DataArray).
+// -----------------------------------------------------------------------
+DataArraySet read_data_array_set(hid_t group, const std::string& set_name)
+{
+    hid_t sg = H5Gopen2(group, set_name.c_str(), H5P_DEFAULT);
+    DataArraySet set;
+
+    hsize_t num_objs = 0;
+    H5Gget_num_objs(sg, &num_objs);
+    for (hsize_t i = 0; i < num_objs; ++i)
+    {
+        char obj_name[256];
+        H5Gget_objname_by_idx(sg, i, obj_name, sizeof(obj_name));
+        std::string oname(obj_name);
+
+        int otype = H5Gget_objtype_by_idx(sg, i);
+        if (otype != H5G_GROUP) continue;
+
+        DataArray da = read_data_array(sg, oname);
+        set.Add(oname, std::move(da));
+    }
+
+    H5Gclose(sg);
+    return set;
+}
+
+// -----------------------------------------------------------------------
 // Read a Block from an HDF5 Group.
 // -----------------------------------------------------------------------
 Block read_block(hid_t group, const std::string& block_name)
@@ -542,7 +715,8 @@ Block read_block(hid_t group, const std::string& block_name)
     return Block(info);
 }
 
-/// Walk an HDF5 group and recursively load Blocks into the Dataset.
+/// Walk an HDF5 group and recursively load Blocks / DataArraySets into the
+/// Dataset, dispatching on the leaf marker attribute.
 void load_groups(Dataset& ds, hid_t group, const std::string& prefix)
 {
     hsize_t num_objs = 0;
@@ -555,13 +729,27 @@ void load_groups(Dataset& ds, hid_t group, const std::string& prefix)
         std::string oname(obj_name);
 
         int otype = H5Gget_objtype_by_idx(group, i);
-        if (otype == H5G_GROUP)
+        if (otype != H5G_GROUP) continue;
+
+        hid_t child = H5Gopen2(group, oname.c_str(), H5P_DEFAULT);
+        std::string path = prefix.empty() ? oname : prefix + "." + oname;
+
+        std::string leaf_kind = read_str_attr(child, "xdataset_leaf");
+        if (leaf_kind == "data_array_set")
         {
-            hid_t child = H5Gopen2(group, oname.c_str(), H5P_DEFAULT);
+            ds.AddDataArraySet(path, read_data_array_set(group, oname));
+        }
+        else if (leaf_kind == "block")
+        {
+            ds.AddBlock(path, read_block(group, oname));
+        }
+        else
+        {
+            // Legacy file (no leaf marker): a group with datasets is a Block,
+            // otherwise it is an intermediate group to recurse into.
             hsize_t child_objs = 0;
             H5Gget_num_objs(child, &child_objs);
 
-            // Check if this group contains datasets (is a Block) or only subgroups.
             bool has_datasets = false;
             for (hsize_t j = 0; j < child_objs; ++j)
             {
@@ -572,19 +760,13 @@ void load_groups(Dataset& ds, hid_t group, const std::string& prefix)
                 }
             }
 
-            std::string path = prefix.empty() ? oname : prefix + "." + oname;
-
             if (has_datasets)
-            {
-                // This group is a Block.
                 ds.AddBlock(path, read_block(group, oname));
-            }
-
-            // Recurse into subgroups.
-            load_groups(ds, child, path);
-
-            H5Gclose(child);
+            else
+                load_groups(ds, child, path);
         }
+
+        H5Gclose(child);
     }
 }
 

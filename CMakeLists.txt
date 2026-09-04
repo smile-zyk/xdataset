@@ -33,6 +33,7 @@ set(XDATASET_SOURCES
 	src/multi_index_selector.cc
 	src/data_array.cc
 	src/block.cc
+	src/data_array_set.cc
 	src/data_frame.cc
 	src/data_series.cc
 	src/measurement.cc
