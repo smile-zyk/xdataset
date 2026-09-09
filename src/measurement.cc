@@ -37,6 +37,108 @@ namespace xdataset
     };
 
     // =========================================================================
+    // MeasurementEqualityVisitor -- element-wise comparison
+    // =========================================================================
+    //
+    // Eigen matrices and Eigen::Tensor<std::string> do not support operator==,
+    // so each variant alternative is compared element by element.
+
+    struct MeasurementEqualityVisitor : public boost::static_visitor<bool>
+    {
+        const Measurement::Storage* rhs;
+
+        explicit MeasurementEqualityVisitor(const Measurement::Storage* other)
+            : rhs(other)
+        {
+        }
+
+        // --- scalars (compiler-provided ==) ---
+        bool operator()(double lhs) const
+        {
+            const double* rp = boost::get<double>(rhs);
+            return rp != nullptr && lhs == *rp;
+        }
+        bool operator()(int lhs) const
+        {
+            const int* rp = boost::get<int>(rhs);
+            return rp != nullptr && lhs == *rp;
+        }
+        bool operator()(const std::complex<double>& lhs) const
+        {
+            const std::complex<double>* rp = boost::get<std::complex<double>>(rhs);
+            return rp != nullptr && lhs == *rp;
+        }
+        bool operator()(const std::string& lhs) const
+        {
+            const std::string* rp = boost::get<std::string>(rhs);
+            return rp != nullptr && lhs == *rp;
+        }
+        bool operator()(bool lhs) const
+        {
+            const bool* rp = boost::get<bool>(rhs);
+            return rp != nullptr && lhs == *rp;
+        }
+
+        // --- vectors ---
+        bool operator()(const VecXd& lhs)   const { return compare_vector<double>(lhs); }
+        bool operator()(const VecXi& lhs)   const { return compare_vector<int>(lhs); }
+        bool operator()(const VecXcd& lhs)  const { return compare_vector<std::complex<double>>(lhs); }
+        bool operator()(const VecXs& lhs)   const { return compare_string_vector(lhs); }
+
+        // --- matrices ---
+        bool operator()(const MatXd& lhs)   const { return compare_matrix<double>(lhs); }
+        bool operator()(const MatXi& lhs)   const { return compare_matrix<int>(lhs); }
+        bool operator()(const MatXcd& lhs)  const { return compare_matrix<std::complex<double>>(lhs); }
+        bool operator()(const MatXs& lhs)   const { return compare_string_matrix(lhs); }
+
+    private:
+        // Helpers: the rhs alternative must be the same type; otherwise false.
+        template <typename T>
+        bool compare_vector(const Eigen::Matrix<T, 1, Eigen::Dynamic, Eigen::RowMajor>& lhs) const
+        {
+            const auto* rp = boost::get<Eigen::Matrix<T, 1, Eigen::Dynamic, Eigen::RowMajor>>(rhs);
+            if (!rp) return false;
+            // Check size first: Eigen's operator== assumes matching sizes and
+            // would assert/UB otherwise.
+            if (lhs.size() != rp->size()) return false;
+            // Eigen's == is a coefficient-wise expression; reduce with .all().
+            return (lhs.array() == rp->array()).all();
+        }
+
+        template <typename T>
+        bool compare_matrix(const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& lhs) const
+        {
+            const auto* rp = boost::get<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(rhs);
+            if (!rp) return false;
+            if (lhs.rows() != rp->rows() || lhs.cols() != rp->cols()) return false;
+            return (lhs.array() == rp->array()).all();
+        }
+
+        bool compare_string_vector(const VecXs& lhs) const
+        {
+            const VecXs* rp = boost::get<VecXs>(rhs);
+            if (!rp) return false;
+            const VecXs& r = *rp;
+            if (lhs.dimension(0) != r.dimension(0)) return false;
+            for (Eigen::Index i = 0; i < lhs.dimension(0); ++i)
+                if (lhs(i) != r(i)) return false;
+            return true;
+        }
+
+        bool compare_string_matrix(const MatXs& lhs) const
+        {
+            const MatXs* rp = boost::get<MatXs>(rhs);
+            if (!rp) return false;
+            const MatXs& r = *rp;
+            if (lhs.dimension(0) != r.dimension(0) || lhs.dimension(1) != r.dimension(1)) return false;
+            for (Eigen::Index i = 0; i < lhs.dimension(0); ++i)
+                for (Eigen::Index j = 0; j < lhs.dimension(1); ++j)
+                    if (lhs(i, j) != r(i, j)) return false;
+            return true;
+        }
+    };
+
+    // =========================================================================
     // Measurement -- metadata inference
     // =========================================================================
 
@@ -295,6 +397,12 @@ namespace xdataset
     {
         MeasurementFormatter fmt(unit_);
         return boost::apply_visitor(fmt, storage_);
+    }
+
+    bool Measurement::operator==(const Measurement& other) const
+    {
+        MeasurementEqualityVisitor v(&other.storage_);
+        return boost::apply_visitor(v, storage_);
     }
 
     // =========================================================================

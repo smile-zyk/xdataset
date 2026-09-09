@@ -534,6 +534,79 @@ TEST(MeasurementAtTest, TooManySelectorsThrows)
 }
 
 // =========================================================================
+//  Measurement::operator==
+// =========================================================================
+
+TEST(MeasurementEqualityTest, ScalarEquals)
+{
+    EXPECT_TRUE(Measurement::Real(1.0) == Measurement::Real(1.0));
+    EXPECT_FALSE(Measurement::Real(1.0) == Measurement::Real(2.0));
+    EXPECT_TRUE(Measurement::Integer(5) == Measurement::Integer(5));
+    EXPECT_FALSE(Measurement::Integer(5) == Measurement::Integer(6));
+    EXPECT_TRUE(Measurement::String("abc") == Measurement::String("abc"));
+    EXPECT_FALSE(Measurement::String("abc") == Measurement::String("abd"));
+    EXPECT_TRUE(Measurement::Boolean(true) == Measurement::Boolean(true));
+    EXPECT_FALSE(Measurement::Boolean(true) == Measurement::Boolean(false));
+    EXPECT_TRUE(Measurement::Complex(std::complex<double>(1.0, 2.0)) ==
+                Measurement::Complex(std::complex<double>(1.0, 2.0)));
+    EXPECT_FALSE(Measurement::Complex(std::complex<double>(1.0, 2.0)) ==
+                 Measurement::Complex(std::complex<double>(1.0, 3.0)));
+}
+
+TEST(MeasurementEqualityTest, DifferentDtypeNotEqual)
+{
+    EXPECT_FALSE(Measurement::Real(1.0) == Measurement::Integer(1));
+    EXPECT_FALSE(Measurement::Integer(1) == Measurement::Real(1.0));
+}
+
+TEST(MeasurementEqualityTest, VectorEqualsElementwise)
+{
+    VecXd a(3); a << 1.0, 2.0, 3.0;
+    VecXd b(3); b << 1.0, 2.0, 3.0;
+    VecXd c(3); c << 1.0, 2.0, 9.0;
+    EXPECT_TRUE(Measurement::Vector(a) == Measurement::Vector(b));
+    EXPECT_FALSE(Measurement::Vector(a) == Measurement::Vector(c));
+}
+
+TEST(MeasurementEqualityTest, VectorShapeMismatchNotEqual)
+{
+    VecXd a(2); a << 1.0, 2.0;
+    VecXd b(3); b << 1.0, 2.0, 3.0;
+    EXPECT_FALSE(Measurement::Vector(a) == Measurement::Vector(b));
+}
+
+TEST(MeasurementEqualityTest, StringVectorEquals)
+{
+    VecXs a(2); a(0) = "x"; a(1) = "y";
+    VecXs b(2); b(0) = "x"; b(1) = "y";
+    VecXs c(2); c(0) = "x"; c(1) = "z";
+    EXPECT_TRUE(Measurement::Vector(a) == Measurement::Vector(b));
+    EXPECT_FALSE(Measurement::Vector(a) == Measurement::Vector(c));
+}
+
+TEST(MeasurementEqualityTest, MatrixEqualsElementwise)
+{
+    MatXd a(2, 2); a << 1.0, 2.0, 3.0, 4.0;
+    MatXd b(2, 2); b << 1.0, 2.0, 3.0, 4.0;
+    MatXd c(2, 2); c << 1.0, 2.0, 3.0, 5.0;
+    EXPECT_TRUE(Measurement::Matrix(a) == Measurement::Matrix(b));
+    EXPECT_FALSE(Measurement::Matrix(a) == Measurement::Matrix(c));
+}
+
+TEST(MeasurementEqualityTest, UnitIsIgnoredInEquality)
+{
+    // Value equality ignores the unit (a value equals the same value with any
+    // unit); use unit().same_dimension() to compare units.
+    const Unit volt = Unit::parse("V");
+    EXPECT_TRUE(Measurement::Real(1.0, volt) == Measurement::Real(1.0, volt));
+    EXPECT_FALSE(Measurement::Real(1.0, volt) == Measurement::Real(2.0, volt));
+    // Same value, different unit -> still equal (value-only comparison).
+    EXPECT_TRUE(Measurement::Real(1.0, volt) == Measurement::Real(1.0));
+    // Different value -> not equal regardless of unit.
+    EXPECT_FALSE(Measurement::Real(1.0, volt) == Measurement::Real(2.0));
+}
+
+// =========================================================================
 //  Measurement::transform
 // =========================================================================
 

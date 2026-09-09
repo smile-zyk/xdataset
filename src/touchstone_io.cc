@@ -1,5 +1,7 @@
 #include "touchstone_io.h"
 
+#include <boost/filesystem.hpp>
+
 #include "block.h"
 #include "data_array.h"
 #include "data_series.h"
@@ -191,128 +193,111 @@ int infer_num_ports(int num_values_per_line)
 } // anonymous namespace
 
 // =========================================================================
-// TouchstoneDataArrayReader::Impl
+// TouchstoneDataArrayReader
 // =========================================================================
 
-class TouchstoneDataArrayReader::Impl
-{
-public:
-    explicit Impl(const std::string& path)
-        : file_path_(path)
-    {}
-
-    DataArray read()
-    {
-        std::string option_line;
-        std::vector<std::string> data_lines = read_data_lines(file_path_, option_line);
-        if (data_lines.empty())
-            throw std::runtime_error("Touchstone: no data lines in file");
-
-        TouchstoneOptions opts = parse_option_line(option_line);
-
-        std::vector<std::vector<double>> all_rows;
-        for (const auto& dl : data_lines)
-        {
-            auto vals = parse_data_line(dl);
-            if (!vals.empty())
-                all_rows.push_back(std::move(vals));
-        }
-
-        if (all_rows.empty())
-            throw std::runtime_error("Touchstone: no numeric data found");
-
-        int cols_per_row = static_cast<int>(all_rows[0].size());
-        opts.num_ports = infer_num_ports(cols_per_row);
-        int N = opts.num_ports;
-
-        std::size_t num_rows = all_rows.size();
-
-        // Extract frequency column
-        std::vector<double> freq_values(num_rows);
-        for (std::size_t i = 0; i < num_rows; ++i)
-        {
-            if (static_cast<int>(all_rows[i].size()) != cols_per_row)
-                throw std::runtime_error("Touchstone: inconsistent column count on row " +
-                                         std::to_string(i));
-            freq_values[i] = all_rows[i][0];
-        }
-
-        // Build S-matrix flat data (row-major per frequency point).
-        // Touchstone column order: S[1,1], S[2,1], ..., S[N,1], S[1,2], ..., S[N,N]
-        std::size_t mat_elems = static_cast<std::size_t>(N * N);
-        std::size_t total = num_rows * mat_elems;
-        std::vector<std::complex<double>> s_flat(total);
-
-        for (std::size_t i = 0; i < num_rows; ++i)
-        {
-            std::complex<double>* row_base = s_flat.data() + i * mat_elems;
-            for (int col = 1; col <= N; ++col)
-            {
-                for (int row = 1; row <= N; ++row)
-                {
-                    int base_idx = 1 + ((col - 1) * N + (row - 1)) * 2;
-                    double v1 = all_rows[i][base_idx];
-                    double v2 = all_rows[i][base_idx + 1];
-
-                    std::complex<double> val;
-                    switch (opts.format)
-                    {
-                    case 'R': val = std::complex<double>(v1, v2); break;
-                    case 'M': val = ma_to_complex(v1, v2);       break;
-                    case 'D': val = db_to_complex(v1, v2);       break;
-                    default:
-                        throw std::runtime_error(
-                            std::string("Touchstone: unknown format flag: ") + opts.format);
-                    }
-                    row_base[(row - 1) * N + (col - 1)] = val;
-                }
-            }
-        }
-
-        // Build DataArray: freq independent + S-matrix dependent
-        DataArrayCreateInfo info;
-        DataSeries freq_series = DataSeries::CreateScalarFromMemory<double>(
-            freq_values.data(), freq_values.size());
-        freq_series.set_unit(freq_unit_from(opts.freq_unit));
-        info.datas["freq"] = std::move(freq_series);
-        info.datas[DataArray::kSelf] = DataSeries::CreateMatrixFromMemory<std::complex<double>>(
-            N, N, s_flat.data(), total);
-        info.multi_dimension_spec.add_regular(num_rows);
-        info.kind = DataArrayKind::kDependent;
-
-        return DataArray(info);
-    }
-
-private:
-    std::string file_path_;
-};
-
 TouchstoneDataArrayReader::TouchstoneDataArrayReader(const std::string& file_path)
-    : impl_(new Impl(file_path))
+    : file_path_(file_path)
 {}
 
 TouchstoneDataArrayReader::~TouchstoneDataArrayReader() = default;
 
 DataArray TouchstoneDataArrayReader::Read()
 {
-    return impl_->read();
+    std::string option_line;
+    std::vector<std::string> data_lines = read_data_lines(file_path_, option_line);
+    if (data_lines.empty())
+        throw std::runtime_error("Touchstone: no data lines in file");
+
+    TouchstoneOptions opts = parse_option_line(option_line);
+
+    std::vector<std::vector<double>> all_rows;
+    for (const auto& dl : data_lines)
+    {
+        auto vals = parse_data_line(dl);
+        if (!vals.empty())
+            all_rows.push_back(std::move(vals));
+    }
+
+    if (all_rows.empty())
+        throw std::runtime_error("Touchstone: no numeric data found");
+
+    int cols_per_row = static_cast<int>(all_rows[0].size());
+    opts.num_ports = infer_num_ports(cols_per_row);
+    int N = opts.num_ports;
+
+    std::size_t num_rows = all_rows.size();
+
+    // Extract frequency column
+    std::vector<double> freq_values(num_rows);
+    for (std::size_t i = 0; i < num_rows; ++i)
+    {
+        if (static_cast<int>(all_rows[i].size()) != cols_per_row)
+            throw std::runtime_error("Touchstone: inconsistent column count on row " +
+                                     std::to_string(i));
+        freq_values[i] = all_rows[i][0];
+    }
+
+    // Build S-matrix flat data (row-major per frequency point).
+    // Touchstone column order: S[1,1], S[2,1], ..., S[N,1], S[1,2], ..., S[N,N]
+    std::size_t mat_elems = static_cast<std::size_t>(N * N);
+    std::size_t total = num_rows * mat_elems;
+    std::vector<std::complex<double>> s_flat(total);
+
+    for (std::size_t i = 0; i < num_rows; ++i)
+    {
+        std::complex<double>* row_base = s_flat.data() + i * mat_elems;
+        for (int col = 1; col <= N; ++col)
+        {
+            for (int row = 1; row <= N; ++row)
+            {
+                int base_idx = 1 + ((col - 1) * N + (row - 1)) * 2;
+                double v1 = all_rows[i][base_idx];
+                double v2 = all_rows[i][base_idx + 1];
+
+                std::complex<double> val;
+                switch (opts.format)
+                {
+                case 'R': val = std::complex<double>(v1, v2); break;
+                case 'M': val = ma_to_complex(v1, v2);       break;
+                case 'D': val = db_to_complex(v1, v2);       break;
+                default:
+                    throw std::runtime_error(
+                        std::string("Touchstone: unknown format flag: ") + opts.format);
+                }
+                row_base[(row - 1) * N + (col - 1)] = val;
+            }
+        }
+    }
+
+    // Build DataArray: freq independent + S-matrix dependent
+    DataArrayCreateInfo info;
+    DataSeries freq_series = DataSeries::CreateScalarFromMemory<double>(
+        freq_values.data(), freq_values.size());
+    freq_series.set_unit(freq_unit_from(opts.freq_unit));
+    info.datas["freq"] = std::move(freq_series);
+    info.datas[DataArray::kSelf] = DataSeries::CreateMatrixFromMemory<std::complex<double>>(
+        N, N, s_flat.data(), total);
+    info.multi_dimension_spec.add_regular(num_rows);
+    info.kind = DataArrayKind::kDependent;
+
+    return DataArray(info);
 }
 
 // =========================================================================
-// TouchstoneDataArrayWriter::Impl
+// TouchstoneDataArrayWriter
 // =========================================================================
 
-class TouchstoneDataArrayWriter::Impl
-{
-public:
-    explicit Impl(const std::string& path)
-        : file_path_(path)
-    {}
+TouchstoneDataArrayWriter::TouchstoneDataArrayWriter(const std::string& file_path)
+    : file_path_(file_path)
+{}
 
-    void write(const DataArray& array)
-    {
-        // Expect: 1 independent (freq), 1 dependent (S = NxN complex matrix)
-        const auto& datas_map = array.datas();
+TouchstoneDataArrayWriter::~TouchstoneDataArrayWriter() = default;
+
+void TouchstoneDataArrayWriter::Write(const DataArray& array)
+{
+    // Expect: 1 independent (freq), 1 dependent (S = NxN complex matrix)
+    const auto& datas_map = array.datas();
 
         // Find freq key (any key != kSelf)
         std::string freq_key;
@@ -386,103 +371,64 @@ public:
         }
 
         out.close();
-    }
-
-private:
-    std::string file_path_;
-};
-
-TouchstoneDataArrayWriter::TouchstoneDataArrayWriter(const std::string& file_path)
-    : impl_(new Impl(file_path))
-{}
-
-TouchstoneDataArrayWriter::~TouchstoneDataArrayWriter() = default;
-
-void TouchstoneDataArrayWriter::Write(const DataArray& array)
-{
-    impl_->write(array);
 }
 
 // =========================================================================
 // TouchstoneReader (Dataset convenience) -- delegates to DataArray reader
 // =========================================================================
 
-class TouchstoneReader::Impl
-{
-public:
-    Impl(const std::string& path, const std::string& name)
-        : file_path_(path)
-        , name_(name)
-    {}
-
-    Dataset read()
-    {
-        TouchstoneDataArrayReader da_reader(file_path_);
-        DataArray da = da_reader.Read();
-
-        // Build Dataset name from the file name, unless the caller supplied
-        // an authoritative name.
-        std::string ds_name = name_;
-        if (ds_name.empty())
-        {
-            ds_name = file_path_;
-            auto pos = ds_name.find_last_of("/\\");
-            if (pos != std::string::npos)
-                ds_name = ds_name.substr(pos + 1);
-            pos = ds_name.rfind('.');
-            if (pos != std::string::npos)
-                ds_name = ds_name.substr(0, pos);
-        }
-
-        Dataset ds(ds_name);
-
-        BlockCreateInfo info;
-        const auto& datas_map = da.datas();
-
-        // Extract independent (freq)
-        for (const auto& kv : datas_map)
-        {
-            if (kv.first != DataArray::kSelf)
-            {
-                IndependentSpec is = {kv.first, kv.second,
-                    DimensionSpec::Regular(kv.second.size())};
-                info.independent_specs.push_back(std::move(is));
-            }
-        }
-
-        // Extract dependent (S-matrix)
-        auto self_it = datas_map.find(DataArray::kSelf);
-        if (self_it != datas_map.end())
-        {
-            DependentSpec dep = {"S", self_it->second};
-            info.dependent_specs.push_back(std::move(dep));
-        }
-
-        ds.AddBlock("SP", std::move(info));
-        // Record the source file so hosts can show where the Dataset came
-        // from without tracking it themselves.
-        ds.set_source_path(file_path_);
-        return ds;
-    }
-
-private:
-    std::string file_path_;
-    std::string name_;
-};
-
 TouchstoneReader::TouchstoneReader(const std::string& file_path)
-    : impl_(new Impl(file_path, std::string()))
-{}
+    : TouchstoneReader(file_path, std::string())
+{
+}
 
 TouchstoneReader::TouchstoneReader(const std::string& file_path, const std::string& name)
-    : impl_(new Impl(file_path, name))
+    : file_path_(file_path),
+      name_(name)
 {}
 
 TouchstoneReader::~TouchstoneReader() = default;
 
 Dataset TouchstoneReader::Read()
 {
-    return impl_->read();
+    TouchstoneDataArrayReader da_reader(file_path_);
+    DataArray da = da_reader.Read();
+
+    // Build Dataset name from file name, unless the caller supplied an
+    // authoritative name.
+    std::string ds_name = name_.empty()
+        ? boost::filesystem::path(file_path_).stem().string()
+        : name_;
+
+    Dataset ds(ds_name);
+
+    BlockCreateInfo info;
+    const auto& datas_map = da.datas();
+
+    // Extract independent (freq)
+    for (const auto& kv : datas_map)
+    {
+        if (kv.first != DataArray::kSelf)
+        {
+            IndependentSpec is = {kv.first, kv.second,
+                DimensionSpec::Regular(kv.second.size())};
+            info.independent_specs.push_back(std::move(is));
+        }
+    }
+
+    // Extract dependent (S-matrix)
+    auto self_it = datas_map.find(DataArray::kSelf);
+    if (self_it != datas_map.end())
+    {
+        DependentSpec dep = {"S", self_it->second};
+        info.dependent_specs.push_back(std::move(dep));
+    }
+
+    ds.AddBlock("SP", std::move(info));
+    // Record the source file so hosts can show where the Dataset came
+    // from without tracking it themselves.
+    ds.set_source_path(file_path_);
+    return ds;
 }
 
 } // namespace xdataset

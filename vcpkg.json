@@ -3,6 +3,7 @@
         "gtest",
         "eigen3",
         "boost-variant",
+        "boost-filesystem",
         "tsl-ordered-map"
     ],
     "overrides": [

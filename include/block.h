@@ -63,6 +63,47 @@ namespace xdataset
         Block(std::string name, const BlockCreateInfo& info);
         Block(std::string name, BlockCreateInfo&& info);
 
+        /// Reconstruct a set of independent coordinate specs from tabular
+        /// coordinate rows.  This is the counterpart of the DataFrame tabular
+        /// view: it recovers each independent axis (name + coordinate values +
+        /// DimensionSpec) from the row-major coordinate cells.
+        ///
+        /// @param rows          One entry per row (row-major traversal order).
+        ///                      Each inner vector holds the independent
+        ///                      coordinate values for that row, in dimension
+        ///                      order (outermost dimension first).  All rows
+        ///                      must share the same size == rank.
+        /// @param column_names  Names of the independent axes, one per
+        ///                      dimension.  If empty, defaults are generated
+        ///                      ("dim0", "dim1", ...).  Otherwise its size must
+        ///                      equal rank.
+        ///
+        /// The reconstruction is a top-down run-length decomposition over the
+        /// coordinate columns:
+        ///   - dim 0 is always Regular (a single root group);
+        ///   - a dimension is Regular iff, for every parent group, the number
+        ///     of child segments is identical AND the child coordinate values
+        ///     are shared across all parents (a Cartesian product);
+        ///   - otherwise the dimension is Ragged, with sizes = the child
+        ///     counts of each parent group.
+        ///
+        /// Each returned IndependentSpec holds the axis in COMPACT form: its
+        /// data length equals the corresponding DimensionSpec::element_count()
+        /// (regular_size for Regular, prefix_sum().back() for Ragged), so the
+        /// spec can be passed directly into BlockCreateInfo.
+        ///
+        /// Coordinates are compared by their string representation, so each
+        /// Measurement only needs a unique textual form.  Scalars of any dtype
+        /// are supported.
+        ///
+        /// @pre  rank >= 1 and rows is non-empty.
+        /// @pre  Within each parent group, distinct child nodes map to
+        ///       distinct coordinate values (an injective "child -> value"
+        ///       mapping).  Violating this under-counts child segments.
+        static std::vector<IndependentSpec> FromCoordinates(
+            const std::vector<std::vector<Measurement>>& rows,
+            std::vector<std::string> column_names = {});
+
         /// Full path within the Dataset, e.g. "simulation.SP1.SP".
         const std::string& name() const;
 

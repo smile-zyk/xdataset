@@ -255,6 +255,22 @@ namespace xdataset
         /// Return a human-readable string representation.
         std::string to_string() const;
 
+        // ======== equality ================================================
+
+        /// Compare two Measurements for value equality.
+        ///
+        /// Two Measurements are equal iff they have the same data type, the
+        /// same shape, and equal underlying values (compared element-wise,
+        /// since Eigen matrices and string tensors do not define operator==).
+        /// The unit is NOT compared: a value is equal to the same value with
+        /// any unit.  Use unit().same_dimension() to compare units.
+        ///
+        /// Coordinates (scalar Measurements) are the primary use case, but
+        /// vector/matrix Measurements are also handled element-wise.
+        bool operator==(const Measurement& other) const;
+
+        bool operator!=(const Measurement& other) const { return !(*this == other); }
+
         // ======== DataFrame conversion ======================================
 
         /// Create a single-row DataFrame with this measurement as the only

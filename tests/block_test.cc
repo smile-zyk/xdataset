@@ -485,4 +485,140 @@ namespace xdataset
         EXPECT_THROW({ Block b(info); }, std::invalid_argument);
     }
 
+    // =========================================================================
+    // Block::FromCoordinates
+    // =========================================================================
+
+    namespace
+    {
+        std::vector<Measurement> MakeCoordRow(std::initializer_list<Index> coords)
+        {
+            std::vector<Measurement> row;
+            row.reserve(coords.size());
+            for (Index c : coords)
+                row.push_back(Measurement::Integer(static_cast<int>(c)));
+            return row;
+        }
+    } // namespace
+
+    TEST(BlockFromCoordinatesTest, ReconstructsRegularCartesian)
+    {
+        // (1,2)(1,3)(2,2)(2,3) -> Regular(2) x Regular(2)
+        const std::vector<std::vector<Measurement>> rows =
+        {
+            MakeCoordRow({1, 2}),
+            MakeCoordRow({1, 3}),
+            MakeCoordRow({2, 2}),
+            MakeCoordRow({2, 3}),
+        };
+
+        const std::vector<IndependentSpec> specs =
+            Block::FromCoordinates(rows, {"x", "y"});
+
+        ASSERT_EQ(specs.size(), 2u);
+        EXPECT_EQ(specs[0].name, "x");
+        EXPECT_EQ(specs[1].name, "y");
+
+        EXPECT_TRUE(specs[0].dimension.is_regular());
+        EXPECT_EQ(specs[0].dimension.regular_size(), 2u);
+        EXPECT_EQ(specs[0].data.size(), 2u);   // compact: [1,2]
+        EXPECT_EQ(specs[0].data.scalar_at<int>(0), 1);
+        EXPECT_EQ(specs[0].data.scalar_at<int>(1), 2);
+
+        EXPECT_TRUE(specs[1].dimension.is_regular());
+        EXPECT_EQ(specs[1].dimension.regular_size(), 2u);
+        EXPECT_EQ(specs[1].data.size(), 2u);   // compact: [2,3] shared
+        EXPECT_EQ(specs[1].data.scalar_at<int>(0), 2);
+        EXPECT_EQ(specs[1].data.scalar_at<int>(1), 3);
+    }
+
+    TEST(BlockFromCoordinatesTest, ReconstructsRaggedCoordinates)
+    {
+        // (1,2)(1,3)(2,4)(2,5) -> Regular(2) x Ragged({2,2})
+        const std::vector<std::vector<Measurement>> rows =
+        {
+            MakeCoordRow({1, 2}),
+            MakeCoordRow({1, 3}),
+            MakeCoordRow({2, 4}),
+            MakeCoordRow({2, 5}),
+        };
+
+        const std::vector<IndependentSpec> specs =
+            Block::FromCoordinates(rows, {"x", "y"});
+
+        ASSERT_EQ(specs.size(), 2u);
+        EXPECT_TRUE(specs[0].dimension.is_regular());
+        EXPECT_EQ(specs[0].dimension.regular_size(), 2u);
+        EXPECT_EQ(specs[0].data.size(), 2u);   // [1,2]
+
+        EXPECT_TRUE(specs[1].dimension.is_ragged());
+        EXPECT_EQ(specs[1].dimension.ragged_sizes(), (std::vector<std::size_t>{2, 2}));
+        EXPECT_EQ(specs[1].data.size(), 4u);   // [2,3,4,5] concatenated
+        EXPECT_EQ(specs[1].data.scalar_at<int>(0), 2);
+        EXPECT_EQ(specs[1].data.scalar_at<int>(1), 3);
+        EXPECT_EQ(specs[1].data.scalar_at<int>(2), 4);
+        EXPECT_EQ(specs[1].data.scalar_at<int>(3), 5);
+    }
+
+    TEST(BlockFromCoordinatesTest, ReconstructsUniformRaggedFromDistinctValues)
+    {
+        // Equal child counts but distinct y per parent -> Ragged({2,2})
+        const std::vector<std::vector<Measurement>> rows =
+        {
+            MakeCoordRow({1, 10}),
+            MakeCoordRow({1, 11}),
+            MakeCoordRow({2, 20}),
+            MakeCoordRow({2, 21}),
+        };
+
+        const std::vector<IndependentSpec> specs =
+            Block::FromCoordinates(rows, {"x", "y"});
+
+        EXPECT_TRUE(specs[1].dimension.is_ragged());
+        EXPECT_EQ(specs[1].dimension.ragged_sizes(), (std::vector<std::size_t>{2, 2}));
+        EXPECT_EQ(specs[1].data.size(), 4u);
+    }
+
+    TEST(BlockFromCoordinatesTest, DefaultsColumnNames)
+    {
+        const std::vector<std::vector<Measurement>> rows =
+        {
+            MakeCoordRow({1, 2}),
+            MakeCoordRow({1, 3}),
+            MakeCoordRow({2, 2}),
+            MakeCoordRow({2, 3}),
+        };
+
+        const std::vector<IndependentSpec> specs = Block::FromCoordinates(rows);
+        ASSERT_EQ(specs.size(), 2u);
+        EXPECT_EQ(specs[0].name, "dim0");
+        EXPECT_EQ(specs[1].name, "dim1");
+    }
+
+    TEST(BlockFromCoordinatesTest, ProducesValidBlockCreateInfo)
+    {
+        // Rebuild a full Block from reconstructed independent specs plus a
+        // dependent sized to the recovered cell count.
+        const std::vector<std::vector<Measurement>> rows =
+        {
+            MakeCoordRow({1, 2}),
+            MakeCoordRow({1, 3}),
+            MakeCoordRow({2, 4}),
+            MakeCoordRow({2, 5}),
+        };
+
+        std::vector<IndependentSpec> indeps = Block::FromCoordinates(rows, {"x", "y"});
+
+        BlockCreateInfo info;
+        info.independent_specs = std::move(indeps);
+
+        // Cell count of Regular(2) x Ragged({2,2}) is 4.
+        info.dependent_specs.push_back(
+            DependentSpec{"z", DataSeries::CreateScalar<double>(4, Unit(), 0.0)});
+
+        Block block("demo", info);
+        EXPECT_EQ(block.independents().size(), 2u);
+        EXPECT_EQ(block.dependents().size(), 1u);
+    }
+
 } // namespace xdataset

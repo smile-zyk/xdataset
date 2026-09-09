@@ -7,13 +7,12 @@
 // These concrete format implementations are NOT part of the public API.
 // They are instantiated only by the format factories (DataArrayIO, DatasetIO),
 // so their definitions must be visible to src/data_array_io.cc and
-// src/dataset_io.cc as well as src/touchstone_io.cc.
+// src/hdf5_io.cc as well as src/touchstone_io.cc.
 // =========================================================================
 
 #include "data_array_io.h"
 #include "dataset_io.h"
 
-#include <memory>
 #include <string>
 
 namespace xdataset
@@ -32,8 +31,7 @@ public:
     void Write(const DataArray& array) override;
 
 private:
-    class Impl;
-    std::unique_ptr<Impl> impl_;
+    std::string file_path_;
 };
 
 // =========================================================================
@@ -49,8 +47,7 @@ public:
     DataArray Read() override;
 
 private:
-    class Impl;
-    std::unique_ptr<Impl> impl_;
+    std::string file_path_;
 };
 
 // =========================================================================
@@ -71,8 +68,8 @@ public:
     Dataset Read() override;
 
 private:
-    class Impl;
-    std::unique_ptr<Impl> impl_;
+    std::string file_path_;
+    std::string name_;   // optional authoritative Dataset name
 };
 
 } // namespace xdataset

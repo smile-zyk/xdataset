@@ -6,12 +6,13 @@
 //
 // These concrete format implementations are NOT part of the public API.
 // They are instantiated only by the format factories (DatasetIO), whose
-// definitions live in src/dataset_io.cc.
+// definitions live in src/hdf5_io.cc.
 // =========================================================================
 
 #include "dataset_io.h"
 
-#include <memory>
+#include <hdf5.h>
+
 #include <string>
 
 namespace xdataset
@@ -30,8 +31,8 @@ public:
     void Write(const Dataset& dataset) override;
 
 private:
-    class Impl;
-    std::unique_ptr<Impl> impl_;
+    hid_t file_ = -1;
+    std::string file_path_;
 };
 
 // =========================================================================
@@ -48,8 +49,9 @@ public:
     Dataset Read() override;
 
 private:
-    class Impl;
-    std::unique_ptr<Impl> impl_;
+    hid_t file_ = -1;
+    std::string file_path_;
+    std::string name_;   // optional authoritative Dataset name
 };
 
 } // namespace xdataset
