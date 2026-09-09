@@ -40,6 +40,7 @@ set(XDATASET_SOURCES
 	src/unit.cc
 	src/unit_registry.cc
 	src/dataset.cc
+	src/dataset_io.cc
 	src/hdf5_io.cc
 	src/touchstone_io.cc
 	src/data_array_io.cc

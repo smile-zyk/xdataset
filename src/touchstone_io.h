@@ -7,7 +7,7 @@
 // These concrete format implementations are NOT part of the public API.
 // They are instantiated only by the format factories (DataArrayIO, DatasetIO),
 // so their definitions must be visible to src/data_array_io.cc and
-// src/hdf5_io.cc as well as src/touchstone_io.cc.
+// src/dataset_io.cc as well as src/touchstone_io.cc.
 // =========================================================================
 
 #include "data_array_io.h"

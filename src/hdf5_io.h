@@ -6,7 +6,7 @@
 //
 // These concrete format implementations are NOT part of the public API.
 // They are instantiated only by the format factories (DatasetIO), whose
-// definitions live in src/hdf5_io.cc.
+// definitions live in src/dataset_io.cc.
 // =========================================================================
 
 #include "dataset_io.h"
