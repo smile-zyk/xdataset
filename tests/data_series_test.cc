@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <complex>
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -12,8 +13,10 @@ using xdataset::DataKind;
 using xdataset::DataSeries;
 using xdataset::Measurement;
 using xdataset::DataType;
+using xdataset::DataShape;
 using xdataset::Index;
 using xdataset::Unit;
+using xdataset::UnitScale;
 using xdataset::VecXd;
 using xdataset::VecXi;
 using xdataset::VecXcd;
@@ -1033,6 +1036,229 @@ TEST(TransformTest, MatrixElementwiseAbsolute) {
     EXPECT_DOUBLE_EQ(abs_mats.matrix_at<double>(0)(1, 1), 4.0);
     EXPECT_DOUBLE_EQ(abs_mats.matrix_at<double>(1)(0, 0), 5.0);
     EXPECT_DOUBLE_EQ(abs_mats.matrix_at<double>(1)(1, 1), 8.0);
+}
+
+// =========================================================================
+// DataSeries -- min / max + min_index / max_index
+// =========================================================================
+
+TEST(ExtremaTest, ScalarMinMax) {
+    DataSeries s = DataSeries::CreateScalarFromVector<double>(
+        std::vector<double>{3.0, -1.5, 2.0, 4.5});
+
+    Measurement mn = s.min();
+    Measurement mx = s.max();
+    EXPECT_EQ(mn.data_type(), DataType::kReal);
+    EXPECT_EQ(mn.data_kind(), DataKind::kScalar);
+    EXPECT_DOUBLE_EQ(mn.as_scalar<double>(), -1.5);
+    EXPECT_DOUBLE_EQ(mx.as_scalar<double>(), 4.5);
+}
+
+TEST(ExtremaTest, ScalarMinMaxWithUnit) {
+    DataSeries s = DataSeries::CreateScalarFromVector<double>(
+        std::vector<double>{1.0, 2.0, 3.0}, Unit::parse("V"));
+
+    Measurement mn = s.min();
+    Measurement mx = s.max();
+    EXPECT_TRUE(mn.unit().same_dimension(Unit::parse("V")));
+    EXPECT_DOUBLE_EQ(mn.as_scalar<double>(), 1.0);
+    EXPECT_DOUBLE_EQ(mx.as_scalar<double>(), 3.0);
+}
+
+TEST(ExtremaTest, ScalarMinMaxIndex) {
+    DataSeries s = DataSeries::CreateScalarFromVector<double>(
+        std::vector<double>{3.0, -1.5, 2.0, 4.5});
+
+    Measurement mn_idx = s.min_index();
+    Measurement mx_idx = s.max_index();
+    EXPECT_EQ(mn_idx.data_type(), DataType::kInteger);
+    EXPECT_EQ(mn_idx.data_kind(), DataKind::kScalar);
+    EXPECT_EQ(mn_idx.as_scalar<int>(), 1);   // row 1 holds -1.5
+    EXPECT_EQ(mx_idx.as_scalar<int>(), 3);   // row 3 holds 4.5
+}
+
+TEST(ExtremaTest, IntegerMinMax) {
+    DataSeries s = DataSeries::CreateScalarFromVector<int>(
+        std::vector<int>{3, 1, 4, 1, 5});
+
+    Measurement mn = s.min();
+    Measurement mx = s.max();
+    EXPECT_EQ(mn.data_type(), DataType::kInteger);
+    EXPECT_EQ(mn.as_scalar<int>(), 1);
+    EXPECT_EQ(mx.as_scalar<int>(), 5);
+    // Ties: first row wins.
+    EXPECT_EQ(s.min_index().as_scalar<int>(), 1);
+    EXPECT_EQ(s.max_index().as_scalar<int>(), 4);
+}
+
+TEST(ExtremaTest, ComplexOrderedByMagnitude) {
+    using cd = std::complex<double>;
+    DataSeries s = DataSeries::CreateScalarFromVector<cd>(
+        std::vector<cd>{cd(1.0, 0.0), cd(-3.0, 4.0), cd(0.0, 2.0), cd(-1.0, 0.0)});
+    // |1| = 1, |-3+4i| = 5, |2i| = 2, |-1| = 1
+
+    Measurement mn = s.min();
+    Measurement mx = s.max();
+    EXPECT_EQ(mn.data_type(), DataType::kComplex);
+    EXPECT_DOUBLE_EQ(mn.as_scalar<cd>().real(), 1.0);
+    EXPECT_DOUBLE_EQ(mn.as_scalar<cd>().imag(), 0.0);
+    EXPECT_DOUBLE_EQ(mx.as_scalar<cd>().real(), -3.0);
+    EXPECT_DOUBLE_EQ(mx.as_scalar<cd>().imag(), 4.0);
+
+    EXPECT_EQ(s.min_index().as_scalar<int>(), 0);
+    EXPECT_EQ(s.max_index().as_scalar<int>(), 1);
+}
+
+TEST(ExtremaTest, StringLexicographic) {
+    DataSeries s = DataSeries::CreateScalarFromVector(
+        std::vector<std::string>{"banana", "apple", "cherry"});
+
+    EXPECT_EQ(s.min().as_scalar<std::string>(), "apple");
+    EXPECT_EQ(s.max().as_scalar<std::string>(), "cherry");
+    EXPECT_EQ(s.min_index().as_scalar<int>(), 1);
+    EXPECT_EQ(s.max_index().as_scalar<int>(), 2);
+}
+
+TEST(ExtremaTest, EmptySeriesThrows) {
+    DataSeries s = DataSeries::CreateScalar<double>(0);
+    EXPECT_THROW(s.min(), std::logic_error);
+    EXPECT_THROW(s.max(), std::logic_error);
+    EXPECT_THROW(s.min_index(), std::logic_error);
+    EXPECT_THROW(s.max_index(), std::logic_error);
+}
+
+TEST(ExtremaTest, VectorCellColumnWise) {
+    // rows: [1,10], [3,4], [2,8]
+    DataSeries s(DataType::kReal, DataShape::Vector(2));
+    s.resize(3);
+    s.vector_at<double>(0) << 1.0, 10.0;
+    s.vector_at<double>(1) << 3.0, 4.0;
+    s.vector_at<double>(2) << 2.0, 8.0;
+
+    Measurement mn = s.min();
+    Measurement mx = s.max();
+    EXPECT_EQ(mn.data_kind(), DataKind::kVector);
+    EXPECT_EQ(mn.data_type(), DataType::kReal);
+    EXPECT_EQ(mn.shape()[0], 2);
+    EXPECT_DOUBLE_EQ(mn.as_vector<double>()(0), 1.0);   // col0 min
+    EXPECT_DOUBLE_EQ(mn.as_vector<double>()(1), 4.0);   // col1 min
+    EXPECT_DOUBLE_EQ(mx.as_vector<double>()(0), 3.0);   // col0 max
+    EXPECT_DOUBLE_EQ(mx.as_vector<double>()(1), 10.0);  // col1 max
+
+    Measurement mn_idx = s.min_index();
+    Measurement mx_idx = s.max_index();
+    EXPECT_EQ(mn_idx.data_type(), DataType::kInteger);
+    EXPECT_EQ(mn_idx.shape()[0], 2);
+    EXPECT_EQ(mn_idx.as_vector<int>()(0), 0);  // col0 min at row 0
+    EXPECT_EQ(mn_idx.as_vector<int>()(1), 1);  // col1 min at row 1
+    EXPECT_EQ(mx_idx.as_vector<int>()(0), 1);  // col0 max at row 1
+    EXPECT_EQ(mx_idx.as_vector<int>()(1), 0);  // col1 max at row 0
+}
+
+TEST(ExtremaTest, MatrixCellElementWise) {
+    // row0: [[1, 5],[2, 6]]   row1: [[7, 3],[8, 4]]
+    DataSeries s(DataType::kReal, DataShape::Matrix(2, 2));
+    s.resize(2);
+    s.matrix_at<double>(0) << 1.0, 5.0, 2.0, 6.0;
+    s.matrix_at<double>(1) << 7.0, 3.0, 8.0, 4.0;
+
+    Measurement mn = s.min();
+    Measurement mx = s.max();
+    EXPECT_EQ(mn.data_kind(), DataKind::kMatrix);
+    EXPECT_EQ(mn.data_type(), DataType::kReal);
+    EXPECT_EQ(mn.shape()[0], 2);
+    EXPECT_EQ(mn.shape()[1], 2);
+    // element-wise min over rows: [[1,3],[2,4]]
+    EXPECT_DOUBLE_EQ(mn.as_matrix<double>()(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(mn.as_matrix<double>()(0, 1), 3.0);
+    EXPECT_DOUBLE_EQ(mn.as_matrix<double>()(1, 0), 2.0);
+    EXPECT_DOUBLE_EQ(mn.as_matrix<double>()(1, 1), 4.0);
+    // element-wise max over rows: [[7,5],[8,6]]
+    EXPECT_DOUBLE_EQ(mx.as_matrix<double>()(0, 0), 7.0);
+    EXPECT_DOUBLE_EQ(mx.as_matrix<double>()(0, 1), 5.0);
+    EXPECT_DOUBLE_EQ(mx.as_matrix<double>()(1, 0), 8.0);
+    EXPECT_DOUBLE_EQ(mx.as_matrix<double>()(1, 1), 6.0);
+
+    Measurement mn_idx = s.min_index();
+    Measurement mx_idx = s.max_index();
+    EXPECT_EQ(mn_idx.data_type(), DataType::kInteger);
+    // min: (0,0)@r0, (0,1)@r1, (1,0)@r0, (1,1)@r1
+    EXPECT_EQ(mn_idx.as_matrix<int>()(0, 0), 0);
+    EXPECT_EQ(mn_idx.as_matrix<int>()(0, 1), 1);
+    EXPECT_EQ(mn_idx.as_matrix<int>()(1, 0), 0);
+    EXPECT_EQ(mn_idx.as_matrix<int>()(1, 1), 1);
+    // max: (0,0)@r1, (0,1)@r0, (1,0)@r1, (1,1)@r0
+    EXPECT_EQ(mx_idx.as_matrix<int>()(0, 0), 1);
+    EXPECT_EQ(mx_idx.as_matrix<int>()(0, 1), 0);
+    EXPECT_EQ(mx_idx.as_matrix<int>()(1, 0), 1);
+    EXPECT_EQ(mx_idx.as_matrix<int>()(1, 1), 0);
+}
+
+// =========================================================================
+// DataSeries -- best_display_unit
+// =========================================================================
+
+TEST(BestDisplayUnitTest, PicksPrefixFromMaxMagnitude) {
+    // 2.4e9 Hz peak -> GHz.
+    DataSeries s = DataSeries::CreateScalarFromVector<double>(
+        std::vector<double>{1.0e6, 2.4e9}, Unit::parse("Hz"));
+    UnitScale bd = s.best_display_unit();
+    EXPECT_DOUBLE_EQ(bd.scale, 1e-9);
+    EXPECT_EQ(bd.name, "GHz");
+}
+
+TEST(BestDisplayUnitTest, MilliForSmallValues) {
+    // 0.005 V peak -> mV.
+    DataSeries s = DataSeries::CreateScalarFromVector<double>(
+        std::vector<double>{0.0001, 0.005}, Unit::parse("V"));
+    UnitScale bd = s.best_display_unit();
+    EXPECT_DOUBLE_EQ(bd.scale, 1e3);
+    EXPECT_EQ(bd.name, "mV");
+}
+
+TEST(BestDisplayUnitTest, DimensionlessNoPrefix) {
+    DataSeries s = DataSeries::CreateScalarFromVector<double>(
+        std::vector<double>{0.005, 0.02});
+    UnitScale bd = s.best_display_unit();
+    EXPECT_DOUBLE_EQ(bd.scale, 1.0);
+    EXPECT_TRUE(bd.name.empty());
+}
+
+TEST(BestDisplayUnitTest, StringNoScaling) {
+    DataSeries s = DataSeries::CreateScalarFromVector(
+        std::vector<std::string>{"a", "bb", "ccc"});
+    UnitScale bd = s.best_display_unit();
+    EXPECT_DOUBLE_EQ(bd.scale, 1.0);
+    EXPECT_TRUE(bd.name.empty());
+}
+
+TEST(BestDisplayUnitTest, ComplexUsesMagnitude) {
+    using cd = std::complex<double>;
+    DataSeries s = DataSeries::CreateScalarFromVector<cd>(
+        std::vector<cd>{cd(0.001, 0.0), cd(-3.0, 4.0)}, Unit::parse("V"));
+    // peak |z| = 5 -> 5 V, which is in [1,1000) so no prefix.
+    UnitScale bd = s.best_display_unit();
+    EXPECT_DOUBLE_EQ(bd.scale, 1.0);
+    EXPECT_EQ(bd.name, "V");
+}
+
+TEST(BestDisplayUnitTest, VectorCellConsidersAllElements) {
+    // cell width 2: max magnitude across all columns is 12000 -> 12 KV.
+    // (Unit::best_display uses "K" -- the uppercase kilo prefix -- as its
+    // 1e3 display token, matching history (see UnitTest::BestDisplayOhm).)
+    DataSeries s(DataType::kReal, DataShape::Vector(2));
+    s.set_unit(Unit::parse("V"));
+    s.resize(2);
+    s.vector_at<double>(0) << 1.0, 12000.0;
+    s.vector_at<double>(1) << 500.0, 8000.0;
+    UnitScale bd = s.best_display_unit();
+    EXPECT_DOUBLE_EQ(bd.scale, 1e-3);
+    EXPECT_EQ(bd.name, "KV");
+}
+
+TEST(BestDisplayUnitTest, EmptySeriesThrows) {
+    DataSeries s = DataSeries::CreateScalar<double>(0);
+    EXPECT_THROW(s.best_display_unit(), std::logic_error);
 }
 
 // =========================================================================

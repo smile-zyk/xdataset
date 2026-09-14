@@ -73,6 +73,7 @@ if(BUILD_XDATASET_TEST)
         tests/hdf5_io_test.cc
         tests/touchstone_io_test.cc
         tests/unit_test.cc
+        tests/xdataset_predefine_test.cc
     )
 
     target_include_directories(xdataset_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})

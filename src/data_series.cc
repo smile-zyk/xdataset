@@ -1,6 +1,7 @@
 #include "data_series.h"
 
 #include <algorithm>
+#include <cmath>
 #include <complex>
 #include <memory>
 #include <stdexcept>
@@ -413,6 +414,277 @@ Measurement DataSeries::measurement_at(Index i) const {
     if (data_type_ == DataType::kComplex)
         return Measurement::Matrix(matrix_at<std::complex<double> >(i), unit_);
     return Measurement::Matrix(matrix_at<std::string>(i));
+}
+
+// =========================================================================
+// DataSeries -- min / max + min_index / max_index
+// =========================================================================
+//
+//  Comparison policy for min/max:
+//    - double / int        : std::less (numeric order)
+//    - std::complex<double>: magnitude |z| = sqrt(re^2 + im^2)
+//    - std::string         : lexicographic order
+//
+//  min_index/max_index return the row that attained the extremum, per
+//  element, as a kInteger Measurement with the same cell shape and no unit
+//  (first row wins ties).
+
+namespace {
+
+    enum class ExtremaOp
+    {
+        kMin, kMax,
+        kMinIndex, kMaxIndex
+    };
+
+    // ---- per-type ordering ---------------------------------------------
+
+    template <typename T>
+    bool less_than(const T& a, const T& b)
+    {
+        return a < b;
+    }
+
+    bool less_than(const std::complex<double>& a, const std::complex<double>& b)
+    {
+        return std::abs(a) < std::abs(b);
+    }
+
+    // True when `cand` beats the current best `cur` for the given op.
+    // Ties never replace (first row wins).
+    template <typename T>
+    bool is_better(ExtremaOp op, const T& cur, const T& cand)
+    {
+        switch (op)
+        {
+            case ExtremaOp::kMin:
+            case ExtremaOp::kMinIndex:
+                return less_than(cand, cur);
+            case ExtremaOp::kMax:
+            case ExtremaOp::kMaxIndex:
+                return less_than(cur, cand);
+        }
+        return false;
+    }
+
+    // Reduce every element of every row into output row 0.  `out` has the
+    // same cell shape as `ds`, one row, and dtype `T` (or kInteger when
+    // `op` is an index op).
+    template <typename T>
+    void reduce_elements(const DataSeries& ds, ExtremaOp op, DataSeries& out)
+    {
+        const std::size_t n = ds.size();
+        const bool want_index =
+            op == ExtremaOp::kMinIndex || op == ExtremaOp::kMaxIndex;
+
+        if (ds.data_shape().kind() == DataKind::kScalar)
+        {
+            T best = ds.scalar_at<T>(0);
+            Index best_row = 0;
+            for (std::size_t i = 1; i < n; ++i)
+            {
+                const T cand = ds.scalar_at<T>(static_cast<Index>(i));
+                if (is_better(op, best, cand))
+                {
+                    best = cand;
+                    best_row = static_cast<Index>(i);
+                }
+            }
+            if (want_index)
+                out.scalar_at<int>(0) = static_cast<int>(best_row);
+            else
+                out.scalar_at<T>(0) = best;
+            return;
+        }
+
+        if (ds.data_shape().kind() == DataKind::kVector)
+        {
+            const Index width = ds.data_shape()[0];
+            for (Index c = 0; c < width; ++c)
+            {
+                T best = ds.vector_at<T>(0)(c);
+                Index best_row = 0;
+                for (std::size_t i = 1; i < n; ++i)
+                {
+                    const T cand = ds.vector_at<T>(static_cast<Index>(i))(c);
+                    if (is_better(op, best, cand))
+                    {
+                        best = cand;
+                        best_row = static_cast<Index>(i);
+                    }
+                }
+                if (want_index)
+                    out.vector_at<int>(0)(c) = static_cast<int>(best_row);
+                else
+                    out.vector_at<T>(0)(c) = best;
+            }
+            return;
+        }
+
+        const Index rows = ds.data_shape()[0];
+        const Index cols = ds.data_shape()[1];
+        for (Index r = 0; r < rows; ++r)
+        {
+            for (Index c = 0; c < cols; ++c)
+            {
+                T best = ds.matrix_at<T>(0)(r, c);
+                Index best_row = 0;
+                for (std::size_t i = 1; i < n; ++i)
+                {
+                    const T cand = ds.matrix_at<T>(static_cast<Index>(i))(r, c);
+                    if (is_better(op, best, cand))
+                    {
+                        best = cand;
+                        best_row = static_cast<Index>(i);
+                    }
+                }
+                if (want_index)
+                    out.matrix_at<int>(0)(r, c) = static_cast<int>(best_row);
+                else
+                    out.matrix_at<T>(0)(r, c) = best;
+            }
+        }
+    }
+
+    // Public entry: run `op` over the whole series and return the result as
+    // a single Measurement with the same cell shape as the series.
+    Measurement extreme(const DataSeries& ds, ExtremaOp op)
+    {
+        if (ds.empty())
+            throw std::logic_error("DataSeries: min/max requires a non-empty series");
+
+        const bool want_index =
+            op == ExtremaOp::kMinIndex || op == ExtremaOp::kMaxIndex;
+
+        // Index results are always kInteger and unitless; value results keep
+        // the series dtype and unit (string results are unitless as usual).
+        const DataType out_dtype = want_index ? DataType::kInteger
+                                              : ds.data_type();
+        DataSeries out(out_dtype, ds.data_shape());
+        out.set_unit(want_index || out_dtype == DataType::kString
+                         ? Unit()
+                         : ds.unit());
+        out.resize(1);
+
+        switch (ds.data_type())
+        {
+            case DataType::kReal:
+                reduce_elements<double>(ds, op, out);
+                break;
+            case DataType::kInteger:
+                reduce_elements<int>(ds, op, out);
+                break;
+            case DataType::kComplex:
+                reduce_elements<std::complex<double> >(ds, op, out);
+                break;
+            case DataType::kString:
+                reduce_elements<std::string>(ds, op, out);
+                break;
+            default:
+                throw std::logic_error("DataSeries: unsupported dtype for min/max");
+        }
+        return out.measurement_at(0);
+    }
+
+} // anonymous namespace
+
+Measurement DataSeries::min() const
+{
+    return extreme(*this, ExtremaOp::kMin);
+}
+
+Measurement DataSeries::max() const
+{
+    return extreme(*this, ExtremaOp::kMax);
+}
+
+Measurement DataSeries::min_index() const
+{
+    return extreme(*this, ExtremaOp::kMinIndex);
+}
+
+Measurement DataSeries::max_index() const
+{
+    return extreme(*this, ExtremaOp::kMaxIndex);
+}
+
+// =========================================================================
+// DataSeries -- best_display_unit
+// =========================================================================
+
+namespace {
+
+    // Largest |value| over every element of every row (numeric dtypes only;
+    // callers must reject string series before calling).
+    template <typename T>
+    double series_max_magnitude(const DataSeries& ds)
+    {
+        double best = 0.0;
+        const std::size_t n = ds.size();
+
+        switch (ds.data_shape().kind())
+        {
+            case DataKind::kScalar:
+                for (std::size_t i = 0; i < n; ++i)
+                {
+                    best = std::max(best, static_cast<double>(
+                        std::abs(ds.scalar_at<T>(static_cast<Index>(i)))));
+                }
+                break;
+
+            case DataKind::kVector:
+                for (std::size_t i = 0; i < n; ++i)
+                {
+                    const auto v = ds.vector_at<T>(static_cast<Index>(i));
+                    for (Index c = 0; c < v.size(); ++c)
+                        best = std::max(best, static_cast<double>(std::abs(v(c))));
+                }
+                break;
+
+            case DataKind::kMatrix:
+                for (std::size_t i = 0; i < n; ++i)
+                {
+                    const auto m = ds.matrix_at<T>(static_cast<Index>(i));
+                    for (Index r = 0; r < m.rows(); ++r)
+                        for (Index c = 0; c < m.cols(); ++c)
+                            best = std::max(best, static_cast<double>(std::abs(m(r, c))));
+                }
+                break;
+        }
+        return best;
+    }
+
+} // anonymous namespace
+
+UnitScale DataSeries::best_display_unit() const
+{
+    if (empty())
+        throw std::logic_error("DataSeries: best_display_unit requires a non-empty series");
+
+    // Strings and dimensionless units have no meaningful scale prefix.
+    // Return the raw multiplier so callers just render "{value} {unit}";
+    // this deliberately sidesteps Unit::best_display's prefix artifacts
+    // (e.g. "5 m" produced for unitless 0.005).
+    if (data_type_ == DataType::kString || !unit_.has_dimension())
+        return UnitScale{unit_.multiplier(), ""};
+
+    double max_mag = 0.0;
+    switch (data_type_)
+    {
+        case DataType::kReal:
+            max_mag = series_max_magnitude<double>(*this);
+            break;
+        case DataType::kInteger:
+            max_mag = series_max_magnitude<int>(*this);
+            break;
+        case DataType::kComplex:
+            max_mag = series_max_magnitude<std::complex<double> >(*this);
+            break;
+        default:
+            break;
+    }
+
+    return unit_.best_display(max_mag);
 }
 
 // =========================================================================

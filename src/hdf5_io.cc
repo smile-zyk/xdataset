@@ -303,6 +303,30 @@ namespace
 
 void load_groups(Dataset& ds, hid_t group, const std::string& prefix);
 
+// -----------------------------------------------------------------------
+// Name sanitization for external HDF5 files.
+//
+// HDF5 files authored by other tools may use group/dataset names that are
+// not valid REL identifiers (spaces, '(', '/', ...).  The on-disk names are
+// kept as the H5 lookup key (H5Gopen2/H5Dopen2 need the exact raw name),
+// while the in-memory Dataset tree is built from ConvertToValidIdentifier
+// snapshots, so every node stays a valid REL identifier.
+// -----------------------------------------------------------------------
+
+std::string sanitize_name(const std::string& raw)
+{
+    return ConvertToValidIdentifier(raw);
+}
+
+/// Build an in-memory block path from a possibly-unsanitized on-disk prefix
+/// plus the next group name.  `prefix` is already sanitized; `raw` is the
+/// raw on-disk group name.
+std::string join_sanitized(const std::string& prefix, const std::string& raw)
+{
+    const std::string clean = sanitize_name(raw);
+    return prefix.empty() ? clean : prefix + "." + clean;
+}
+
 std::string read_str_attr(hid_t loc, const char* name)
 {
     if (!H5Aexists(loc, name)) return "";
@@ -467,10 +491,17 @@ DataSeries read_data_series(hid_t loc, const std::string& name)
 
 // -----------------------------------------------------------------------
 // Read a Block from an HDF5 Group.
+//
+// `group` is the parent group, `raw_block_name` is the *raw on-disk* group
+// name (used for H5Gopen2), and `clean_block_name` is the sanitized name
+// used for the in-memory Block.  When the on-disk name is already a valid
+// identifier the two are identical.
 // -----------------------------------------------------------------------
-Block read_block(hid_t group, const std::string& block_name)
+Block read_block(hid_t group,
+                 const std::string& raw_block_name,
+                 const std::string& clean_block_name)
 {
-    hid_t bg = H5Gopen2(group, block_name.c_str(), H5P_DEFAULT);
+    hid_t bg = H5Gopen2(group, raw_block_name.c_str(), H5P_DEFAULT);
 
     BlockCreateInfo info;
 
@@ -508,23 +539,25 @@ Block read_block(hid_t group, const std::string& block_name)
         DimensionSpec dim = read_dimension_attr(dset);
         H5Dclose(dset);
 
-        IndependentSpec is = {name, std::move(data), dim};
+        IndependentSpec is = {sanitize_name(name), std::move(data), dim};
         info.independent_specs.push_back(is);
     }
 
     // Read dependents
     for (const auto& name : dep_names)
     {
-        DependentSpec ds = {name, read_data_series(bg, name)};
+        DependentSpec ds = {sanitize_name(name), read_data_series(bg, name)};
         info.dependent_specs.push_back(ds);
     }
 
     H5Gclose(bg);
 
-    return Block(info);
+    return Block(clean_block_name, info);
 }
 
 /// Walk an HDF5 group and recursively load Blocks into the Dataset.
+/// `prefix` is the sanitized in-memory path of the parent group; on-disk
+/// names that are not valid identifiers are sanitized on the way in.
 void load_groups(Dataset& ds, hid_t group, const std::string& prefix)
 {
     hsize_t num_objs = 0;
@@ -554,12 +587,14 @@ void load_groups(Dataset& ds, hid_t group, const std::string& prefix)
                 }
             }
 
-            std::string path = prefix.empty() ? oname : prefix + "." + oname;
+            const std::string clean_name = sanitize_name(oname);
+            std::string path = prefix.empty() ? clean_name : prefix + "." + clean_name;
 
             if (has_datasets)
             {
-                // This group is a Block.
-                ds.AddBlock(path, read_block(group, oname));
+                // This group is a Block.  The path is sanitized; the raw
+                // on-disk name stays the H5 lookup key.
+                ds.AddBlock(path, read_block(group, oname, clean_name));
             }
 
             // Recurse into subgroups.
@@ -609,8 +644,11 @@ Dataset Hdf5Reader::Read()
     H5Gget_objname_by_idx(file_, 0, root_name, sizeof(root_name));
 
     // When the caller supplied an authoritative name, use it as the root
-    // group name.
-    const std::string ds_name = name_.empty() ? root_name : name_;
+    // group name.  Otherwise the on-disk root group name may come from an
+    // external tool and is sanitized into a valid identifier.
+    const std::string ds_name = name_.empty()
+        ? sanitize_name(root_name)
+        : name_;
     Dataset ds(ds_name);
     hid_t root = H5Gopen2(file_, root_name, H5P_DEFAULT);
     load_groups(ds, root, "");

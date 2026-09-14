@@ -239,6 +239,40 @@ namespace xdataset
         return idx;
     }
 
+    DataSeries DataArray::expanded_data() const
+    {
+        if (data_kind_ == DataArrayKind::kDependent)
+            throw std::invalid_argument(
+                "expanded_data: data() of a Dependent DataArray is already expanded");
+
+        const std::size_t rank = multi_dimension_spec_.rank();
+        if (rank == 0)
+            throw std::logic_error("expanded_data: DataArray has no dimensions");
+
+        const DataSeries& self = data();
+
+        // Broadcast the innermost (kSelf) dimension data across the full
+        // grid: one row per leaf cell, indexed by the same
+        // dimension_row_indices the DataFrame uses to expand columns.
+        const std::size_t cell_count = multi_dimension_spec_.compute_cell_count();
+        DataSeries out(self.data_type(), self.data_shape());
+        out.set_unit(self.unit());
+        out.resize(cell_count);
+
+        const std::size_t self_dim = rank - 1;   // kSelf is always innermost
+        Index dst = 0;
+        multi_dimension_spec_.for_each_leaf_row(
+            [&](const MultiDimensionSpec::LeafRow& leaf_row)
+            {
+                const Index src_row = leaf_row.dimension_row_indices[self_dim];
+                if (src_row < 0 || static_cast<std::size_t>(src_row) >= self.size())
+                    throw std::out_of_range("expanded_data: independent source row index out of bounds");
+                out.assign_from(self, src_row, dst++);
+            });
+
+        return out;
+    }
+
     DataArray DataArray::indep(Index index) const
     {
         if (index <= 0)
@@ -264,10 +298,10 @@ namespace xdataset
             info.datas.emplace(it->first, std::move(ds));
         }
 
-        // Self entry: innermost dimension.  For Dependent DataArrays this
-        // is the (expanded) dependent data of the target dimension; for
-        // Independent DataArrays it is the raw dimension data when index>1,
-        // or a computed leaf-position index series when index==1.
+        // Self entry: innermost dimension.  For both kinds the copied entry
+        // is a raw (compact) coordinate column (indep_data(index)); the one
+        // exception is an Independent DataArray with index==1, where the
+        // entry is a computed leaf-position index series (self_index_series).
         if (data_kind_ == DataArrayKind::kIndependent && index == 1)
         {
             // Leaf-position index series of the innermost (self) dimension:

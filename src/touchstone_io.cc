@@ -395,9 +395,10 @@ Dataset TouchstoneReader::Read()
     DataArray da = da_reader.Read();
 
     // Build Dataset name from file name, unless the caller supplied an
-    // authoritative name.
+    // authoritative name.  File names are not guaranteed to be valid
+    // identifiers, so sanitize the stem when it comes from disk.
     std::string ds_name = name_.empty()
-        ? boost::filesystem::path(file_path_).stem().string()
+        ? ConvertToValidIdentifier(boost::filesystem::path(file_path_).stem().string())
         : name_;
 
     Dataset ds(ds_name);

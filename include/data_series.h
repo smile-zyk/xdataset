@@ -574,6 +574,51 @@ public:
 
     Measurement measurement_at(Index i) const;
 
+    // ---------------------------------------------------------------------
+    //  Extrema: per-element (column-wise) min / max across rows
+    // ---------------------------------------------------------------------
+    //
+    //  Reduces over rows element-by-element: for a vector cell of width W,
+    //  the output is a vector of W extrema (one per column, across all N
+    //  rows) -- equivalent to numpy's max(axis=0).  For scalar-cell series
+    //  the output is a single scalar.  The output cell kind/shape matches
+    //  the input cell shape and carries the same unit.
+    //
+    //  Supported dtypes:
+    //    - kReal / kInteger : ordinary numeric ordering.
+    //    - kComplex         : ordered by magnitude (std::abs); min/max
+    //                         return the winning complex value.
+    //    - kString          : lexicographic ordering.
+    //
+    //  All four functions throw std::logic_error when the series is empty.
+    //
+    //  min_index() / max_index() return the *row index* that attained the
+    //  extremum, per element, as an integer (kInteger) Measurement with the
+    //  same cell shape and no unit.  On ties the first row wins.
+
+    Measurement min() const;
+    Measurement max() const;
+
+    Measurement min_index() const;
+    Measurement max_index() const;
+
+    // -------------------------------------------------------------------
+    //  Best display unit for the whole series
+    // -------------------------------------------------------------------
+    //
+    //  Returns the UnitScale that makes the largest |value| in the series
+    //  land in a readable range -- display_value = raw_value * scale,
+    //  display unit = name.  Uses the same max-abs rule as range / axis
+    //  formatting (delegates to Unit::best_display with the global max
+    //  magnitude of every element of every row).
+    //
+    //    - Numeric series with a dimensioned unit: picks the SI prefix,
+    //      e.g. a series peaking at 2.4e9 Hz -> {1e-9, "GHz"}.
+    //    - String cells or dimensionless units: {1.0, ""} (no scaling,
+    //      avoids prefix artifacts such as "5 m" for unitless 0.005).
+    //    - Throws std::logic_error when the series is empty.
+    UnitScale best_display_unit() const;
+
     DataSeries at(const std::vector<Index>& selected) const;
 
     DataSeries at(

@@ -26,13 +26,17 @@ namespace xdataset
     {
         /// Unified storage for independent variable data and self data.
         /// The last entry (key = kSelf = "") is always the self data.
-        /// For Independent DataArrays, the number of entries equals
-        /// multi_dimension_spec.rank(), and all entries (including the last)
-        /// are independent dimension data stored in raw (un-expanded) form.
-        /// For Dependent DataArrays, the number of entries equals
-        /// multi_dimension_spec.rank() + 1: the first rank entries are
-        /// independent variable data (expanded), and the last (kSelf) is
-        /// the dependent data (also expanded).
+        /// Coordinate columns are stored raw (un-expanded) for BOTH kinds;
+        /// only the meaning of kSelf differs:
+        ///   - Independent: datas_ holds exactly multi_dimension_spec.rank()
+        ///     entries, and every entry (including the last) is raw dimension
+        ///     data -- kSelf is the innermost coordinate column.
+        ///   - Dependent:   datas_ holds multi_dimension_spec.rank() + 1
+        ///     entries -- the first rank are the (raw, un-expanded)
+        ///     independent coordinate columns, and the last (kSelf) is the
+        ///     dependent value column, expanded to one row per grid cell.
+        /// DataArrayKind is thus a semantic label for kSelf (coordinate vs
+        /// value), not a different storage layout.
         DataSeriesMap datas;
 
         MultiDimensionSpec multi_dimension_spec;
@@ -67,8 +71,12 @@ namespace xdataset
         DataArray& operator=(DataArray&&) = default;
 
         /// Self data -- the last entry in datas_ (key = kSelf).
-        /// For Independent: raw (un-expanded) dimension data of the last dimension.
-        /// For Dependent:   the dependent variable data (already expanded).
+        /// For Independent: raw (un-expanded) dimension data of the last
+        ///                   dimension.  A row-per-cell view of it is
+        ///                   materialised on demand by DataFrame /
+        ///                   for_each_leaf_row() indexing.
+        /// For Dependent:   the dependent variable data, already expanded so
+        ///                   that data().size() == cell_count().
         const DataSeries& data() const;
 
         /// Replace the self DataSeries (the last entry in datas_ with key = kSelf).
@@ -247,6 +255,15 @@ namespace xdataset
         /// series, hence returned by value.
         DataSeries self_index_series() const;
 
+        /// For Independent DataArrays, broadcast the innermost (kSelf)
+        /// dimension data -- stored raw (un-expanded) -- across the full
+        /// multi-dimensional grid, producing one row per leaf cell.
+        /// The result has the same dtype / shape / unit as data() and
+        /// cell_count rows, laid out identically to the DataFrame's data
+        /// column (same dimension_row_indices indexing).  Computed value:
+        /// no source provenance.  This is the canonical "expansion at read
+        /// time" entry point for independent coordinate columns.
+        DataSeries expanded_data() const;
 
         DataArray indep(Index index = 1) const;
 

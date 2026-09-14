@@ -5,6 +5,8 @@
 #include <unsupported/Eigen/CXX11/Tensor>
 
 #include <complex>
+#include <cstdint>
+#include <cstdio>
 #include <string>
 #include <type_traits>
 
@@ -160,6 +162,80 @@ namespace xdataset
     ///     consistent separator, so round-trips are preserved.
     ///   - Touchstone uses a single-segment block ("SP"), so it never splits
     ///     a multi-segment path.
+    /// FNV-1a 32-bit hash truncated to 24 bits, rendered as six lowercase
+    /// hex digits.  Deterministic across runs and platforms, unlike std::hash.
+    inline std::string ShortHash(const std::string& input)
+    {
+        std::uint32_t h = 2166136261u;  // FNV offset basis
+        for (unsigned char c : input)
+        {
+            h ^= c;
+            h *= 16777619u;             // FNV prime
+        }
+        char buf[7];
+        std::snprintf(buf, sizeof(buf), "%06x", h & 0xFFFFFFu);
+        return std::string(buf);
+    }
+
+    /// Convert an arbitrary string into a valid REL identifier
+    /// ([A-Za-z_][A-Za-z0-9_]*).  Already-valid inputs are returned
+    /// unchanged.  Runs of illegal characters are condensed into a single
+    /// '_'; a leading digit gets an '_' prefix; if the result contains no
+    /// legal characters at all (empty or all-illegal input), a deterministic
+    /// name derived from the input hash is returned (stable across runs, no
+    /// shared state).
+    ///
+    /// Intended for on-disk names read from external files (e.g. HDF5 group
+    /// and dataset names authored by other tools).  Names entered directly
+    /// by users should keep being validated with IsValidIdentifier +
+    /// std::invalid_argument instead.
+    ///
+    /// Note: sanitization is not lossless -- "a-b" and "a_b" both map to
+    /// "a_b".  Callers relying on uniqueness must still detect collisions
+    /// (the tree/block duplicate checks throw), rather than silently
+    /// overwriting one of the colliding entries.
+    inline std::string ConvertToValidIdentifier(const std::string& input)
+    {
+        if (IsValidIdentifier(input))
+            return input;
+
+        // Condense runs of illegal characters into a single '_'.  Track
+        // whether any legal character survived: when every input character
+        // was illegal the condensation would collapse to "_", which would
+        // collide for arbitrary all-illegal names ("!!!", "   ", "-", ...).
+        std::string result;
+        result.reserve(input.size());
+        bool has_legal_char = false;
+        bool trailing_separator = false;
+        for (char c : input)
+        {
+            const bool ok =
+                (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                (c >= '0' && c <= '9') || c == '_';
+            if (ok)
+            {
+                result.push_back(c);
+                has_legal_char = true;
+                trailing_separator = false;
+            }
+            else if (!trailing_separator)
+            {
+                result.push_back('_');
+                trailing_separator = true;
+            }
+        }
+
+        // Empty input or all-illegal input: fall back to a stable name
+        // derived from the input hash.
+        if (!has_legal_char)
+            return "invalid_node_" + ShortHash(input);
+
+        // A leading digit is illegal; prefix with an underscore.
+        if (result[0] >= '0' && result[0] <= '9')
+            result.insert(result.begin(), '_');
+
+        return result;
+    }
 }
 
 #endif // XDATASET_PREDEFINE_H
