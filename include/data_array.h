@@ -196,9 +196,17 @@ namespace xdataset
             return multi_dimension_spec_;
         }
 
-        DataArrayKind data_kind() const
+        /// Shape kind of the self data (Scalar / Vector / Matrix) -- the
+        /// same notion as DataSeries::data_kind() and Measurement::data_kind().
+        /// Delegates to data().data_kind().
+        DataKind data_kind() const;
+
+        /// Whether this array is Dependent (kSelf is a value column) or
+        /// Independent (kSelf is the innermost coordinate column).  This is
+        /// the array-level kind, distinct from the shape kind above.
+        DataArrayKind data_array_kind() const
         {
-            return data_kind_;
+            return data_array_kind_;
         }
 
         /// Free-form string hint for downstream consumers (e.g. plotting).
@@ -309,7 +317,7 @@ namespace xdataset
         DataSeriesMap datas_;
 
         MultiDimensionSpec multi_dimension_spec_;
-        DataArrayKind       data_kind_;
+        DataArrayKind       data_array_kind_;
 
         /// Free-form string hint for downstream consumers (e.g. plotting).
         std::string hint_;

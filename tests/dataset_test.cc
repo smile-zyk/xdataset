@@ -1,4 +1,4 @@
-#include "dataset.h"
+﻿#include "dataset.h"
 #include "block_fixtures.h"
 
 #include <gtest/gtest.h>
@@ -243,7 +243,7 @@ namespace xdataset
         ds.AddBlock("simulation.SP", make_block_info());
 
         const DataArray& da = ds.GetDataArray("simulation.SP", "iv0");
-        EXPECT_EQ(da.data_kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(da.data_array_kind(), DataArrayKind::kIndependent);
     }
 
     TEST(DatasetTest, GetDataArrayFullPathThrowsOnMissingBlock)
@@ -422,11 +422,11 @@ namespace xdataset
         ds.AddBlock("SP", MakeDottedDependentCreateInfo());
 
         const DataArray& i_data = ds.GetDataArray("SP", "SRC1.i");
-        EXPECT_EQ(i_data.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(i_data.data_array_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(i_data.data().size(), 2u);
 
         const DataArray& v_data = ds.GetDataArray("SP", "SRC1.v");
-        EXPECT_EQ(v_data.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(v_data.data_array_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(v_data.data().size(), 2u);
     }
 

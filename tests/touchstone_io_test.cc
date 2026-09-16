@@ -1,4 +1,4 @@
-#include "data_array_io.h"
+﻿#include "data_array_io.h"
 #include "dataset_io.h"
 #include "dataset.h"
 #include "block.h"
@@ -115,7 +115,7 @@ namespace xdataset
         DataArray da = DataArrayIO::Load("touchstone", "test_da_s2p_ri.s2p");
         std::remove("test_da_s2p_ri.s2p");
 
-        EXPECT_EQ(da.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(da.data_array_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(da.multi_dimension_spec().rank(), 1u);
 
         const DataSeries& freq = da.datas().find("freq")->second;
@@ -170,7 +170,7 @@ namespace xdataset
         DataArray da = DataArrayIO::Load("snp", "test_da_alias.s2p");
         std::remove("test_da_alias.s2p");
 
-        EXPECT_EQ(da.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(da.data_array_kind(), DataArrayKind::kDependent);
     }
 
     TEST(TouchstoneDataArrayIoTest, WriteAndReadS2P)
@@ -303,7 +303,7 @@ namespace xdataset
         DataArray da = DataArrayIO::Load("touchstone",
             "../tests/case/LQP01HV0N3B02.s2p");
 
-        EXPECT_EQ(da.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(da.data_array_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(da.multi_dimension_spec().rank(), 1u);
 
         const DataSeries& s = da.data();

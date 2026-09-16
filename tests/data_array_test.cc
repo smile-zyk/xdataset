@@ -1,4 +1,4 @@
-#include "block_fixtures.h"
+﻿#include "block_fixtures.h"
 #include "dataset.h"
 
 #include <gtest/gtest.h>
@@ -238,7 +238,7 @@ namespace xdataset
 
         // indep(1) = innermost independent (z) expanded to full product
         DataArray indep1 = w_data.indep(1);
-        EXPECT_EQ(indep1.data_kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(indep1.data_array_kind(), DataArrayKind::kIndependent);
         EXPECT_EQ(indep1.multi_dimension_spec().rank(), 3u);
 
         // indep(2) = middle independent (y)
@@ -259,7 +259,7 @@ namespace xdataset
         DataArray z_data = block.GetOrCreateDataArray("z");
         // z has raw data {100.0, 200.0}, dims U2 x J{1,2} x U2.
         DataArray self_indep = z_data.indep(1);   // self-reference ??index series
-        EXPECT_EQ(self_indep.data_kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(self_indep.data_array_kind(), DataArrayKind::kIndependent);
         EXPECT_EQ(self_indep.data().size(), 2u);   // index series for 2 raw entries
 
         EXPECT_EQ(self_indep.data().scalar_at<int>(0), 0);
@@ -286,7 +286,7 @@ namespace xdataset
         selectors.push_back(MultiIndexSelector::Any());
         selectors.push_back(MultiIndexSelector::In(std::vector<Index>{0, 1}));
 
-        DataArray selected = w_data.select(selectors); EXPECT_EQ(selected.data_kind(), DataArrayKind::kDependent);
+        DataArray selected = w_data.select(selectors); EXPECT_EQ(selected.data_array_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(selected.multi_dimension_spec().rank(), 2u);
 
         EXPECT_EQ(selected.multi_dimension_spec().dims()[0].as_regular()->size, 2u);
@@ -347,7 +347,7 @@ namespace xdataset
         DataArray z_data = block.GetOrCreateDataArray("z"); std::vector<MultiIndexSelector> selectors;
         selectors.push_back(MultiIndexSelector::In(std::vector<Index>{1, 3}));
 
-        DataArray selected = z_data.select(selectors); EXPECT_EQ(selected.data_kind(), DataArrayKind::kDependent);
+        DataArray selected = z_data.select(selectors); EXPECT_EQ(selected.data_array_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(selected.multi_dimension_spec().rank(), 1u);
         EXPECT_EQ(selected.multi_dimension_spec().dims()[0].as_regular()->size, 2u);
 
@@ -372,7 +372,7 @@ namespace xdataset
         selectors.push_back(MultiIndexSelector::Any());
         selectors.push_back(MultiIndexSelector::Equal(0));
 
-        DataArray selected = w_data.select(selectors); EXPECT_EQ(selected.data_kind(), DataArrayKind::kDependent);
+        DataArray selected = w_data.select(selectors); EXPECT_EQ(selected.data_array_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(selected.multi_dimension_spec().rank(), 2u);
 
         EXPECT_NE(selected.multi_dimension_spec().dims()[0].as_regular(), nullptr);
@@ -418,7 +418,7 @@ namespace xdataset
         selectors.push_back(MultiIndexSelector::Equal(0));
 
         DataArray selected = z_data.select(selectors);
-        EXPECT_EQ(selected.data_kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(selected.data_array_kind(), DataArrayKind::kIndependent);
         EXPECT_EQ(selected.multi_dimension_spec().rank(), 3u);
 
         // After Equal(0) on z-self: raw z data had 2 entries, only index 0 selected ??1 entry.
@@ -917,7 +917,7 @@ namespace xdataset
             return Measurement::Real(v * v).set_unit(m.unit());
         });
 
-        EXPECT_EQ(squared.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(squared.data_array_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(squared.multi_dimension_spec().rank(),
                   z_data.multi_dimension_spec().rank());
         ASSERT_EQ(squared.data().size(), 6u);
@@ -933,7 +933,7 @@ namespace xdataset
             return Measurement::Real(m.as_scalar<double>() * 2.0);
         });
 
-        EXPECT_EQ(doubled.data_kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(doubled.data_array_kind(), DataArrayKind::kIndependent);
         EXPECT_EQ(doubled.multi_dimension_spec().rank(),
                   da.multi_dimension_spec().rank());
         ASSERT_EQ(doubled.data().size(), 4u);
@@ -950,7 +950,7 @@ namespace xdataset
             return Measurement::String(std::string("val_") + std::to_string(static_cast<int>(v)));
         });
 
-        EXPECT_EQ(labels.data_kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(labels.data_array_kind(), DataArrayKind::kIndependent);
         EXPECT_EQ(labels.data().data_type(), DataType::kString);
         ASSERT_EQ(labels.data().size(), 3u);
         EXPECT_EQ(labels.data().scalar_at<std::string>(0), "val_1");
@@ -980,7 +980,7 @@ namespace xdataset
         // perm = {2, 1} (innermost-first): result innermost = src #2 (x),
         // result outermost = src #1 (y).
         DataArray p = z_data.permute({2, 1});
-        EXPECT_EQ(p.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(p.data_array_kind(), DataArrayKind::kDependent);
         ASSERT_EQ(p.multi_dimension_spec().rank(), 2u);
         EXPECT_EQ(p.indep_names()[0], "y");
         EXPECT_EQ(p.indep_names()[1], "x");
@@ -1002,7 +1002,7 @@ namespace xdataset
         DataArray z_data = block.GetOrCreateDataArray("z");
 
         DataArray p = z_data.permute({1, 2});
-        EXPECT_EQ(p.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(p.data_array_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(p.indep_names()[0], "x");
         EXPECT_EQ(p.indep_names()[1], "y");
         ASSERT_EQ(p.data().size(), 6u);
@@ -1080,7 +1080,7 @@ namespace xdataset
         DataArray z_data = block.GetOrCreateDataArray("z");
 
         DataArray p = z_data.permute();
-        EXPECT_EQ(p.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(p.data_array_kind(), DataArrayKind::kDependent);
         ASSERT_EQ(p.multi_dimension_spec().rank(), 2u);
         EXPECT_EQ(p.indep_names()[0], "y");
         EXPECT_EQ(p.indep_names()[1], "x");
@@ -1123,7 +1123,7 @@ namespace xdataset
         Dataset ds("sim");
         Block& block = ds.AddBlock("SP", MakeSingleIndependentCreateInfo());  // x(3), z dependent
         DataArray x_data = block.GetOrCreateDataArray("x");
-        EXPECT_EQ(x_data.data_kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(x_data.data_array_kind(), DataArrayKind::kIndependent);
         EXPECT_TRUE(x_data.has_source());
         EXPECT_EQ(x_data.source_name(), "x");
 

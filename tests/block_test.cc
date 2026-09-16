@@ -1,4 +1,4 @@
-#include "block_fixtures.h"
+﻿#include "block_fixtures.h"
 
 #include <gtest/gtest.h>
 
@@ -131,13 +131,13 @@ namespace xdataset
     {
         Block block(MakeBaseCreateInfo());
 
-        const DataArray& x_data = block.GetOrCreateDataArray("x"); EXPECT_EQ(x_data.data_kind(), DataArrayKind::kIndependent);
+        const DataArray& x_data = block.GetOrCreateDataArray("x"); EXPECT_EQ(x_data.data_array_kind(), DataArrayKind::kIndependent);
         ASSERT_EQ(x_data.multi_dimension_spec().rank(), 1u);
         ASSERT_EQ(x_data.multi_dimension_spec().dims().size(), 1u);
         EXPECT_EQ(x_data.multi_dimension_spec().dims()[0].regular_size(), 2);
         EXPECT_EQ(x_data.data().size(), 2u);
 
-        const DataArray& y_data = block.GetOrCreateDataArray("y"); EXPECT_EQ(y_data.data_kind(), DataArrayKind::kIndependent);
+        const DataArray& y_data = block.GetOrCreateDataArray("y"); EXPECT_EQ(y_data.data_array_kind(), DataArrayKind::kIndependent);
         ASSERT_EQ(y_data.multi_dimension_spec().rank(), 2u);
         ASSERT_EQ(y_data.multi_dimension_spec().dims().size(), 2u);
         EXPECT_EQ(y_data.multi_dimension_spec().dims()[0].regular_size(), 2);
@@ -149,7 +149,7 @@ namespace xdataset
     {
         Block block(MakeBaseCreateInfo());
 
-        const DataArray& z_data = block.GetOrCreateDataArray("z"); EXPECT_EQ(z_data.data_kind(), DataArrayKind::kDependent);
+        const DataArray& z_data = block.GetOrCreateDataArray("z"); EXPECT_EQ(z_data.data_array_kind(), DataArrayKind::kDependent);
         ASSERT_EQ(z_data.multi_dimension_spec().rank(), 2u);
         ASSERT_EQ(z_data.multi_dimension_spec().dims().size(), 2u);
         EXPECT_EQ(z_data.multi_dimension_spec().dims()[0].regular_size(), 2);
@@ -161,7 +161,7 @@ namespace xdataset
     {
         Block block(MakeRaggedCreateInfo());
 
-        const DataArray& y_data = block.GetOrCreateDataArray("y"); EXPECT_EQ(y_data.data_kind(), DataArrayKind::kIndependent);
+        const DataArray& y_data = block.GetOrCreateDataArray("y"); EXPECT_EQ(y_data.data_array_kind(), DataArrayKind::kIndependent);
         ASSERT_EQ(y_data.multi_dimension_spec().rank(), 2u);
         ASSERT_EQ(y_data.multi_dimension_spec().dims().size(), 2u);
         EXPECT_TRUE(y_data.multi_dimension_spec().dims()[0].is_regular());
@@ -177,7 +177,7 @@ namespace xdataset
     {
         Block block(MakeInterleavedCreateInfo());
 
-        const DataArray& z_data = block.GetOrCreateDataArray("z"); EXPECT_EQ(z_data.data_kind(), DataArrayKind::kIndependent);
+        const DataArray& z_data = block.GetOrCreateDataArray("z"); EXPECT_EQ(z_data.data_array_kind(), DataArrayKind::kIndependent);
         ASSERT_EQ(z_data.multi_dimension_spec().rank(), 3u);
         ASSERT_EQ(z_data.multi_dimension_spec().dims().size(), 3u);
         EXPECT_TRUE(z_data.multi_dimension_spec().dims()[0].is_regular());
@@ -415,11 +415,11 @@ namespace xdataset
         const DataArray& p = block.GetOrCreateDataArray("p");
         const DataArray& q = block.GetOrCreateDataArray("q");
 
-        EXPECT_EQ(a.data_kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(a.data_array_kind(), DataArrayKind::kIndependent);
         EXPECT_EQ(a.multi_dimension_spec().rank(), 1u);
-        EXPECT_EQ(p.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(p.data_array_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(p.multi_dimension_spec().rank(), 3u);
-        EXPECT_EQ(q.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(q.data_array_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(q.multi_dimension_spec().rank(), 3u);
     }
     TEST(BlockDataFrameTest, AggregatesMatrixTypedVariables)
@@ -460,16 +460,16 @@ namespace xdataset
         Block block(MakeDottedDependentCreateInfo());
 
         const DataArray& i_data = block.GetOrCreateDataArray("SRC1.i");
-        EXPECT_EQ(i_data.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(i_data.data_array_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(i_data.data().size(), 2u);
 
         const DataArray& v_data = block.GetOrCreateDataArray("SRC1.v");
-        EXPECT_EQ(v_data.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(v_data.data_array_kind(), DataArrayKind::kDependent);
         EXPECT_EQ(v_data.data().size(), 2u);
 
         // freq is independent
         const DataArray& freq_data = block.GetOrCreateDataArray("freq");
-        EXPECT_EQ(freq_data.data_kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(freq_data.data_array_kind(), DataArrayKind::kIndependent);
     }
 
     TEST(BlockConstructorTest, RejectsDuplicateDottedAndFlatName)
