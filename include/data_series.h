@@ -359,6 +359,19 @@ public:
     // Return a canonicalised copy without modifying *this.
     DataSeries canonicalized() const;
 
+    // Return a copy expressed in \p target unit.  Every element is scaled by
+    //   factor = unit().multiplier() / target.multiplier()
+    // and the unit tag is replaced.  Shape and row count are preserved.
+    //
+    //   - kReal / kComplex : scaled element-wise.
+    //   - kInteger         : kept as int when factor == 1, otherwise promoted
+    //                        to kReal first (int * 1e-3 would truncate).
+    //   - kString          : no numeric value; only the unit tag is replaced.
+    //
+    // Throws std::invalid_argument when both units carry a dimension and they
+    // differ.  canonicalized() == converted_to(unit().canonicalized()).
+    DataSeries converted_to(const Unit& target) const;
+
     /// Promote the dtype: int -> real -> complex.  No-op if
     /// already at or above target.  String is not promotable.
     /// Returns a new DataSeries; does not modify *this.
@@ -411,6 +424,23 @@ public:
     //---------------------------------------------------------------------
 
     Index element_count() const { return shape_.element_count(); }
+
+    /// Copy the whole cell (scalar / vector / matrix) at row `src_row` of
+    /// `src` into row `dst_row` of *this.  Both series must share dtype and
+    /// shape; otherwise std::bad_cast is thrown.
+    void assign_cell_from(const DataSeries& src, Index src_row, Index dst_row);
+
+    /// Copy element `e` of `src` row `src_row` into row `dst_row` of *this
+    /// as a SCALAR.  *this must be a scalar series of the same dtype; `src`
+    /// may be scalar / vector / matrix.  `e` is a flat element offset --
+    /// use DataShape::element_position() / element_index() to convert.
+    void assign_element_from(const DataSeries& src, Index src_row,
+                             Index dst_row, Index e);
+
+    /// |value| of element `e` of row `i` (Complex -> magnitude).
+    /// `e` is a flat element offset within the cell.  String series throw
+    /// std::invalid_argument (no ordering / magnitude defined).
+    double element_magnitude(Index i, Index e) const;
 
     void resize(std::size_t n) { storage_->resize(n); }
     void clear() { storage_->resize(0); }
@@ -626,6 +656,11 @@ public:
         const std::vector<Index>& selected_cols) const;
 
 private:
+    // Shared implementation of canonicalize() / converted_to(): scales every
+    // element by unit_.multiplier() / target.multiplier() and re-tags the
+    // unit.  Does NOT validate dimensions (callers do that).
+    void convert_to_unit(const Unit& target);
+
     template <typename T>
     DataSeries at_vector_numeric_impl(const std::vector<Index>& selected) const {
         DataSeries out(DataTypeOf<T>::tag, DataShape::Vector(static_cast<Index>(selected.size())));

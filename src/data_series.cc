@@ -94,41 +94,57 @@ void scale_by_multiplier(DataSeries& ds, double mult)
     }
 }
 
-void DataSeries::canonicalize() {
+void DataSeries::convert_to_unit(const Unit& target) {
     // Strings are not numeric -- only update the unit tag, no value conversion.
     if (data_type_ == DataType::kString) {
-        unit_ = unit_.canonicalized();
-        return;
-    }
-
-    const double mult = unit_.multiplier();
-    const Unit target = unit_.canonicalized();
-
-    if (mult == 1.0) {
         unit_ = target;
         return;
     }
 
-    // Integer storage cannot hold scaled values (int * 1e9 would truncate);
-    // promote to real first -- same semantics as Measurement::canonicalized().
+    const double factor = unit_.multiplier() / target.multiplier();
+
+    if (factor == 1.0) {
+        unit_ = target;
+        return;
+    }
+
+    // Integer storage cannot hold scaled values (int * 1e-3 would truncate);
+    // promote to real first -- same semantics as Measurement::converted_to().
     if (data_type_ == DataType::kInteger) {
         DataSeries real = promoted_data_type(DataType::kReal);
-        real.canonicalize();             // now kReal -- scales in place above
+        real.convert_to_unit(target);    // now kReal -- scales in place above
         *this = std::move(real);
         return;
     }
 
     if (data_type_ == DataType::kReal)
-        scale_by_multiplier<double>(*this, mult);
+        scale_by_multiplier<double>(*this, factor);
     else  // kComplex
-        scale_by_multiplier<std::complex<double>>(*this, mult);
+        scale_by_multiplier<std::complex<double>>(*this, factor);
 
     unit_ = target;
+}
+
+void DataSeries::canonicalize() {
+    convert_to_unit(unit_.canonicalized());
 }
 
 DataSeries DataSeries::canonicalized() const {
     DataSeries result(*this);
     result.canonicalize();
+    return result;
+}
+
+DataSeries DataSeries::converted_to(const Unit& target) const {
+    if (unit_.has_dimension() && target.has_dimension() &&
+        !unit_.same_dimension(target)) {
+        throw std::invalid_argument(
+            "DataSeries::converted_to: dimension mismatch [" +
+            unit_.to_string() + "] -> [" + target.to_string() + "]");
+    }
+
+    DataSeries result(*this);
+    result.convert_to_unit(target);
     return result;
 }
 
@@ -328,6 +344,104 @@ void DataSeries::assign_from(const DataSeries& src, Index src_row, Index dst_row
         matrix_at<std::complex<double> >(dst_row) = src.matrix_at<std::complex<double> >(src_row);
     } else {
         matrix_at<std::string>(dst_row) = src.matrix_at<std::string>(src_row);
+    }
+}
+
+void DataSeries::assign_cell_from(const DataSeries& src, Index src_row,
+                                  Index dst_row) {
+    // Same-dtype / same-shape whole-cell copy -- exactly assign_from()'s
+    // contract, minus the unit bookkeeping (the caller owns the unit).
+    assign_from(src, src_row, dst_row);
+}
+
+void DataSeries::assign_element_from(const DataSeries& src, Index src_row,
+                                     Index dst_row, Index e) {
+    if (data_type_ != src.data_type_) throw std::bad_cast();
+    if (shape_.kind() != DataKind::kScalar)
+        throw std::invalid_argument(
+            "assign_element_from: destination must be a scalar series");
+    if (src_row < 0 || static_cast<std::size_t>(src_row) >= src.size() ||
+        dst_row < 0 || static_cast<std::size_t>(dst_row) >= size())
+        throw std::out_of_range("row index out of range");
+    if (e < 0 || e >= src.element_count())
+        throw std::out_of_range("element index out of range");
+
+    switch (src.data_type_) {
+        case DataType::kReal:
+            scalar_at<double>(dst_row) =
+                src.contiguous_data<double>()[
+                    static_cast<std::size_t>(src_row) *
+                    static_cast<std::size_t>(src.element_count()) +
+                    static_cast<std::size_t>(e)];
+            break;
+        case DataType::kInteger:
+            scalar_at<int>(dst_row) =
+                src.contiguous_data<int>()[
+                    static_cast<std::size_t>(src_row) *
+                    static_cast<std::size_t>(src.element_count()) +
+                    static_cast<std::size_t>(e)];
+            break;
+        case DataType::kComplex:
+            scalar_at<std::complex<double> >(dst_row) =
+                src.contiguous_data<std::complex<double> >()[
+                    static_cast<std::size_t>(src_row) *
+                    static_cast<std::size_t>(src.element_count()) +
+                    static_cast<std::size_t>(e)];
+            break;
+        default:
+            // String cells are not contiguous -- index them directly.
+            switch (src.shape_.kind()) {
+                case DataKind::kScalar:
+                    scalar_at<std::string>(dst_row) =
+                        src.scalar_at<std::string>(src_row);
+                    break;
+                case DataKind::kVector:
+                    scalar_at<std::string>(dst_row) =
+                        src.vector_at<std::string>(src_row)(e);
+                    break;
+                default: {
+                    const Index cols = src.shape_[1];
+                    scalar_at<std::string>(dst_row) =
+                        src.matrix_at<std::string>(src_row)(e / cols, e % cols);
+                    break;
+                }
+            }
+            break;
+    }
+}
+
+double DataSeries::element_magnitude(Index i, Index e) const {
+    if (data_type_ == DataType::kString)
+        throw std::invalid_argument(
+            "element_magnitude: string series has no magnitude");
+    if (i < 0 || static_cast<std::size_t>(i) >= size())
+        throw std::out_of_range("row index out of range");
+    if (e < 0 || e >= element_count())
+        throw std::out_of_range("element index out of range");
+
+    switch (shape_.kind()) {
+        case DataKind::kScalar:
+            switch (data_type_) {
+                case DataType::kReal:    return std::abs(scalar_at<double>(i));
+                case DataType::kInteger: return std::abs(static_cast<double>(scalar_at<int>(i)));
+                default:                 return std::abs(scalar_at<std::complex<double> >(i));
+            }
+        case DataKind::kVector:
+            switch (data_type_) {
+                case DataType::kReal:    return std::abs(vector_at<double>(i)(e));
+                case DataType::kInteger: return std::abs(static_cast<double>(vector_at<int>(i)(e)));
+                default:                 return std::abs(vector_at<std::complex<double> >(i)(e));
+            }
+        default: {
+            const Index cols = shape_[1];
+            const Index r = e / cols;
+            const Index c = e % cols;
+            switch (data_type_) {
+                case DataType::kReal:    return std::abs(matrix_at<double>(i)(r, c));
+                case DataType::kInteger: return std::abs(static_cast<double>(matrix_at<int>(i)(r, c)));
+                default:                 return std::abs(matrix_at<std::complex<double> >(i)(r, c));
+            }
+        }
     }
 }
 

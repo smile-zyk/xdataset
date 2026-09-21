@@ -821,67 +821,76 @@ namespace xdataset
     }
 
 // =========================================================================
-//  Measurement -> canonicalized
+//  Measurement -> converted_to / canonicalized
 // =========================================================================
 
-Measurement Measurement::canonicalized() const {
-    if (data_type_ == DataType::kString ||
-        data_type_ == DataType::kBoolean) {
-        Measurement result(*this);
-        result.unit_ = unit_.canonicalized();
-        return result;
+Measurement Measurement::converted_to(const Unit& target) const {
+    if (unit_.has_dimension() && target.has_dimension() &&
+        !unit_.same_dimension(target)) {
+        throw std::invalid_argument(
+            "Measurement::converted_to: dimension mismatch [" +
+            unit_.to_string() + "] -> [" + target.to_string() + "]");
     }
 
-    double mult = unit_.multiplier();
-    Unit target = unit_.canonicalized();
-
-    // Fast path: already canonical
-    if (mult == 1.0) {
+    // Strings / booleans carry no numeric value -- only re-tag the unit.
+    if (data_type_ == DataType::kString ||
+        data_type_ == DataType::kBoolean) {
         Measurement result(*this);
         result.unit_ = target;
         return result;
     }
 
-    // Promote integer to real when scaling is needed
-    DataType res_dtype = (data_type_ == DataType::kInteger) ? DataType::kReal : data_type_;
+    const double factor = unit_.multiplier() / target.multiplier();
+
+    // Fast path: no scaling needed (also covers target == unit()).
+    if (factor == 1.0) {
+        Measurement result(*this);
+        result.unit_ = target;
+        return result;
+    }
+
+    // Integer storage cannot hold scaled values (int * 1e-3 truncates to 0);
+    // promote to real first.
+    const DataType res_dtype =
+        (data_type_ == DataType::kInteger) ? DataType::kReal : data_type_;
 
     Measurement result;
     result.data_type_ = res_dtype;
-    result.shape_ = shape_;
-    result.unit_  = target;
+    result.shape_     = shape_;
+    result.unit_      = target;
 
-    Index count = 1;
-    if (shape_.kind() == DataKind::kVector) count = shape_[0];
-    else if (shape_.kind() == DataKind::kMatrix) count = shape_[0] * shape_[1];
+    const DataKind kind = shape_.kind();
 
-    if (shape_.kind() == DataKind::kScalar) {
-        double v = (data_type_ == DataType::kInteger)
-                   ? static_cast<double>(boost::get<int>(storage_))
-                   : boost::get<double>(storage_);
-        v *= mult;
+    if (kind == DataKind::kScalar) {
+        // Dispatch on dtype BEFORE reading storage: a kComplex measurement
+        // must not be read via boost::get<double>() (throws bad_get).
         if (res_dtype == DataType::kComplex) {
             std::complex<double> cv = boost::get<std::complex<double> >(storage_);
-            cv *= mult;
+            cv *= factor;
             result.storage_ = cv;
         } else {
-            result.storage_ = v;
+            const double v = (data_type_ == DataType::kInteger)
+                             ? static_cast<double>(boost::get<int>(storage_))
+                             : boost::get<double>(storage_);
+            result.storage_ = v * factor;
         }
         return result;
     }
 
-    if (shape_.kind() == DataKind::kVector) {
+    if (kind == DataKind::kVector) {
         if (res_dtype == DataType::kComplex) {
             VecXcd vec = boost::get<VecXcd>(storage_);
-            vec *= mult;
+            vec *= factor;
+            result.storage_ = vec;
+        } else if (data_type_ == DataType::kInteger) {
+            const VecXi& src = boost::get<VecXi>(storage_);
+            VecXd vec(src.size());
+            for (Index i = 0; i < src.size(); ++i)
+                vec(i) = static_cast<double>(src(i)) * factor;
             result.storage_ = vec;
         } else {
-            VecXd vec(count);
-            for (Index i = 0; i < count; ++i) {
-                double v = (data_type_ == DataType::kInteger)
-                           ? static_cast<double>(boost::get<VecXi>(storage_)(i))
-                           : boost::get<VecXd>(storage_)(i);
-                vec(i) = v * mult;
-            }
+            VecXd vec = boost::get<VecXd>(storage_);
+            vec *= factor;
             result.storage_ = vec;
         }
         return result;
@@ -890,26 +899,136 @@ Measurement Measurement::canonicalized() const {
     // Matrix
     if (res_dtype == DataType::kComplex) {
         MatXcd mat = boost::get<MatXcd>(storage_);
-        mat *= mult;
+        mat *= factor;
+        result.storage_ = mat;
+    } else if (data_type_ == DataType::kInteger) {
+        const MatXi& src = boost::get<MatXi>(storage_);
+        MatXd mat(src.rows(), src.cols());
+        for (Index r = 0; r < src.rows(); ++r)
+            for (Index c = 0; c < src.cols(); ++c)
+                mat(r, c) = static_cast<double>(src(r, c)) * factor;
         result.storage_ = mat;
     } else {
-        Index rows = shape_[0], cols = shape_[1];
-        MatXd mat(rows, cols);
-        for (Index r = 0; r < rows; ++r) {
-            for (Index c = 0; c < cols; ++c) {
-                double v = (data_type_ == DataType::kInteger)
-                           ? static_cast<double>(boost::get<MatXi>(storage_)(r, c))
-                           : boost::get<MatXd>(storage_)(r, c);
-                mat(r, c) = v * mult;
-            }
-        }
+        MatXd mat = boost::get<MatXd>(storage_);
+        mat *= factor;
         result.storage_ = mat;
     }
     return result;
 }
 
+Measurement Measurement::canonicalized() const {
+    return converted_to(unit_.canonicalized());
+}
+
 bool Measurement::is_canonicalized() const {
     return unit_.is_canonical();
+}
+
+void Measurement::canonicalize() {
+    *this = canonicalized();
+}
+
+// =========================================================================
+//  Measurement -> promoted_data_type / promoted_double
+// =========================================================================
+
+Measurement Measurement::promoted_data_type(DataType target) const {
+    if (data_type_ == target) return *this;
+
+    // Only one-directional: int -> real -> complex.  String / Boolean cannot
+    // promote.  Same rule as DataSeries::promoted_data_type().
+    auto can_promote = [](DataType from, DataType to) -> bool {
+        if (from == DataType::kInteger && to == DataType::kReal)    return true;
+        if (from == DataType::kInteger && to == DataType::kComplex) return true;
+        if (from == DataType::kReal    && to == DataType::kComplex) return true;
+        return false;
+    };
+    if (!can_promote(data_type_, target))
+        throw std::invalid_argument(
+            "Measurement::promoted_data_type: cannot promote from " +
+            std::string(DataTypeToString(data_type_)) + " to " +
+            std::string(DataTypeToString(target)));
+
+    // Unit is preserved verbatim -- mirror of DataSeries::promoted_data_type(),
+    // which only copies unit_ across.  Only the dtype changes here; callers
+    // that need SI values canonicalize first (see promoted_double()).
+    Measurement result(*this);
+
+    // Step up one rung at a time: int -> real -> complex.
+    while (result.data_type_ != target) {
+        const DataKind kind = result.shape_.kind();
+
+        if (result.data_type_ == DataType::kInteger) {
+            // int -> real
+            if (kind == DataKind::kScalar) {
+                result.data_type_ = DataType::kReal;
+                result.storage_ =
+                    static_cast<double>(boost::get<int>(result.storage_));
+            } else if (kind == DataKind::kVector) {
+                const VecXi& src = boost::get<VecXi>(result.storage_);
+                VecXd out(src.size());
+                for (Index i = 0; i < src.size(); ++i)
+                    out(i) = static_cast<double>(src(i));
+                result.data_type_ = DataType::kReal;
+                result.storage_ = out;
+            } else {
+                const MatXi& src = boost::get<MatXi>(result.storage_);
+                MatXd out(src.rows(), src.cols());
+                for (Index r = 0; r < src.rows(); ++r)
+                    for (Index c = 0; c < src.cols(); ++c)
+                        out(r, c) = static_cast<double>(src(r, c));
+                result.data_type_ = DataType::kReal;
+                result.storage_ = out;
+            }
+            continue;
+        }
+
+        // real -> complex
+        if (kind == DataKind::kScalar) {
+            result.data_type_ = DataType::kComplex;
+            result.storage_ = std::complex<double>(
+                boost::get<double>(result.storage_), 0.0);
+        } else if (kind == DataKind::kVector) {
+            const VecXd& src = boost::get<VecXd>(result.storage_);
+            VecXcd out(src.size());
+            for (Index i = 0; i < src.size(); ++i)
+                out(i) = std::complex<double>(src(i), 0.0);
+            result.data_type_ = DataType::kComplex;
+            result.storage_ = out;
+        } else {
+            const MatXd& src = boost::get<MatXd>(result.storage_);
+            MatXcd out(src.rows(), src.cols());
+            for (Index r = 0; r < src.rows(); ++r)
+                for (Index c = 0; c < src.cols(); ++c)
+                    out(r, c) = std::complex<double>(src(r, c), 0.0);
+            result.data_type_ = DataType::kComplex;
+            result.storage_ = out;
+        }
+    }
+    return result;
+}
+
+double Measurement::promoted_double() const {
+    if (shape_.kind() != DataKind::kScalar) {
+        throw std::logic_error(
+            "Measurement::promoted_double: not a scalar (kind=" +
+            std::to_string(static_cast<int>(shape_.kind())) + ")");
+    }
+
+    const double mult = unit_.multiplier();
+
+    switch (data_type_) {
+        case DataType::kReal:
+            return boost::get<double>(storage_) * mult;
+        case DataType::kInteger:
+            return static_cast<double>(boost::get<int>(storage_)) * mult;
+        case DataType::kComplex:
+            return boost::get<std::complex<double> >(storage_).real() * mult;
+        default:
+            throw std::invalid_argument(
+                "Measurement::promoted_double: dtype is not numeric (dtype=" +
+                std::to_string(static_cast<int>(data_type_)) + ")");
+    }
 }
 
 // =========================================================================

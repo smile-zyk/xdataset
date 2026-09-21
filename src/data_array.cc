@@ -205,6 +205,19 @@ namespace xdataset
         return it->second;
     }
 
+    DataSeries DataArray::plot_x_series() const
+    {
+        if (multi_dimension_spec_.empty())
+            throw std::logic_error("plot_x_series requires non-empty dimensions");
+
+        // Dependent: the innermost independent coordinate column.
+        // Independent: no coordinate column of its own -- its data IS the
+        // coordinate, so the x axis is the leaf-position index series.
+        if (data_array_kind_ == DataArrayKind::kDependent)
+            return indep_data(1);   // 1 = innermost
+        return self_index_series();
+    }
+
     DataSeries DataArray::self_index_series() const
     {
         if (multi_dimension_spec_.empty())
@@ -1124,6 +1137,15 @@ void DataArray::set_indep_data(const std::string& indep_name, Index row, Measure
 DataArray DataArray::clone() const
 {
     return DataArray(*this);
+}
+
+DataArray DataArray::converted_to(const Unit& target) const
+{
+    // Dimension validation happens in DataSeries::converted_to(); converting
+    // kSelf only -- independent coordinate columns keep their own units.
+    DataArray result(*this);
+    result.set_data(data().converted_to(target));
+    return result;
 }
 
 } // namespace xdataset
