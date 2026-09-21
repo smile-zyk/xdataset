@@ -42,6 +42,16 @@ public:
 
     Index element_count() const;
 
+    /// Decode a flat element offset into a position tuple within the cell:
+    ///   Scalar -> {},  Vector -> {e},  Matrix -> {row, col}
+    /// Inverse of element_index().  `e` must be in [0, element_count()).
+    std::vector<Index> element_position(Index e) const;
+
+    /// Encode a position tuple back into a flat element offset.
+    /// Inverse of element_position().  Accepts {} (scalar), {e} (vector)
+    /// or {row, col} (matrix); a wrong arity throws std::invalid_argument.
+    Index element_index(const std::vector<Index>& pos) const;
+
     std::vector<Index> copy() const;
 
     std::string to_string() const;

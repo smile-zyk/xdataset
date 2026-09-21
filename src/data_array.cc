@@ -1,4 +1,4 @@
-#include "data_array.h"
+﻿#include "data_array.h"
 #include "data_series.h"
 #include "dimension_spec.h"
 #include "multi_dimension_spec.h"
@@ -77,32 +77,32 @@ namespace xdataset
     DataArray::DataArray(const DataArrayCreateInfo& info)
         : datas_(info.datas),
           multi_dimension_spec_(info.multi_dimension_spec),
-          data_kind_(info.kind),
+          data_array_kind_(info.kind),
           hint_(info.hint)
     {
         // Canonicalize then validate.  validate() canonicalizes its own copy
         // of the datas, so the member is handled independently.
         for (auto it = datas_.begin(); it != datas_.end(); ++it)
             it.value().canonicalize();
-        validate_datas_internal(datas_, multi_dimension_spec_, data_kind_);
+        validate_datas_internal(datas_, multi_dimension_spec_, data_array_kind_);
     }
 
     DataArray::DataArray(DataArrayCreateInfo&& info)
         : datas_(std::move(info.datas)),
           multi_dimension_spec_(std::move(info.multi_dimension_spec)),
-          data_kind_(info.kind),
+          data_array_kind_(info.kind),
           hint_(std::move(info.hint))
     {
         // info.datas has been moved; canonicalize and validate datas_ directly.
         for (auto it = datas_.begin(); it != datas_.end(); ++it)
             it.value().canonicalize();
-        validate_datas_internal(datas_, multi_dimension_spec_, data_kind_);
+        validate_datas_internal(datas_, multi_dimension_spec_, data_array_kind_);
     }
 
     DataArray::DataArray(const DataArray& other)
         : datas_(other.datas_),
           multi_dimension_spec_(other.multi_dimension_spec_),
-          data_kind_(other.data_kind_),
+          data_array_kind_(other.data_array_kind_),
           hint_(other.hint_),
           source_block_path_(other.source_block_path_),
           source_name_(other.source_name_)
@@ -116,7 +116,7 @@ namespace xdataset
         {
             datas_ = other.datas_;
             multi_dimension_spec_ = other.multi_dimension_spec_;
-            data_kind_ = other.data_kind_;
+            data_array_kind_ = other.data_array_kind_;
             hint_ = other.hint_;
             source_block_path_ = other.source_block_path_;
             source_name_ = other.source_name_;
@@ -137,6 +137,11 @@ namespace xdataset
             names.push_back(item.first);
         }
         return names;
+    }
+
+    DataKind DataArray::data_kind() const
+    {
+        return data().data_kind();
     }
 
     const DataFrame& DataArray::GetOrCreateDataFrame(const std::string& variable_name) const
@@ -174,7 +179,7 @@ namespace xdataset
 
     const DataSeries& DataArray::indep_data(const std::string& name) const
     {
-        if (data_kind_ == DataArrayKind::kDependent && name == kSelf)
+        if (data_array_kind_ == DataArrayKind::kDependent && name == kSelf)
             throw std::invalid_argument(
                 "indep_data: kSelf is not an independent variable for Dependent DataArray");
 
@@ -183,7 +188,7 @@ namespace xdataset
             throw std::invalid_argument("indep_data name not found: " + name);
 
         // For Dependent, verify the entry is within the first rank entries.
-        if (data_kind_ == DataArrayKind::kDependent)
+        if (data_array_kind_ == DataArrayKind::kDependent)
         {
             const std::size_t rank = multi_dimension_spec_.rank();
             std::size_t pos = 0;
@@ -198,6 +203,19 @@ namespace xdataset
         }
 
         return it->second;
+    }
+
+    DataSeries DataArray::plot_x_series() const
+    {
+        if (multi_dimension_spec_.empty())
+            throw std::logic_error("plot_x_series requires non-empty dimensions");
+
+        // Dependent: the innermost independent coordinate column.
+        // Independent: no coordinate column of its own -- its data IS the
+        // coordinate, so the x axis is the leaf-position index series.
+        if (data_array_kind_ == DataArrayKind::kDependent)
+            return indep_data(1);   // 1 = innermost
+        return self_index_series();
     }
 
     DataSeries DataArray::self_index_series() const
@@ -241,7 +259,7 @@ namespace xdataset
 
     DataSeries DataArray::expanded_data() const
     {
-        if (data_kind_ == DataArrayKind::kDependent)
+        if (data_array_kind_ == DataArrayKind::kDependent)
             throw std::invalid_argument(
                 "expanded_data: data() of a Dependent DataArray is already expanded");
 
@@ -302,7 +320,7 @@ namespace xdataset
         // is a raw (compact) coordinate column (indep_data(index)); the one
         // exception is an Independent DataArray with index==1, where the
         // entry is a computed leaf-position index series (self_index_series).
-        if (data_kind_ == DataArrayKind::kIndependent && index == 1)
+        if (data_array_kind_ == DataArrayKind::kIndependent && index == 1)
         {
             // Leaf-position index series of the innermost (self) dimension:
             // Regular -> 0..N-1; Ragged -> within-group 0..sizes[p]-1.
@@ -331,7 +349,7 @@ namespace xdataset
         for (const auto& item : datas_)
         {
             // For Dependent, stop at rank (exclude kSelf).
-            if (data_kind_ == DataArrayKind::kDependent && pos >= multi_dimension_spec_.rank())
+            if (data_array_kind_ == DataArrayKind::kDependent && pos >= multi_dimension_spec_.rank())
                 break;
 
             if (item.first == name)
@@ -365,7 +383,7 @@ namespace xdataset
             padded.push_back(MultiIndexSelector::Any());
 
         DataArrayCreateInfo info;
-        info.kind = data_kind_;
+        info.kind = data_array_kind_;
         info.datas = datas_;
         info.multi_dimension_spec = multi_dimension_spec_;
 
@@ -417,7 +435,7 @@ namespace xdataset
 
         // Independent DataArray: the last dimension (self) must never be eliminated,
         // even when the selector is Equal -- otherwise the result has no data.
-        if (data_kind_ == DataArrayKind::kIndependent && rank > 0)
+        if (data_array_kind_ == DataArrayKind::kIndependent && rank > 0)
             is_dim_retain[rank - 1] = true;
 
         struct SelectionDimensionInformation
@@ -533,7 +551,7 @@ namespace xdataset
         }
 
         DataArrayCreateInfo info;
-        info.kind = data_kind_;
+        info.kind = data_array_kind_;
         info.multi_dimension_spec = selected_multi_dim;
 
         // Iterate datas_ in order and select from each entry.
@@ -545,7 +563,7 @@ namespace xdataset
         {
             const bool is_self = (idx == datas_.size() - 1);   // kSelf entry
 
-            if (is_self && data_kind_ == DataArrayKind::kDependent)
+            if (is_self && data_array_kind_ == DataArrayKind::kDependent)
             {
                 // Dependent kSelf: select by flat row indices.
                 DataSeries sel(data().data_type(), data().data_shape());
@@ -573,7 +591,7 @@ namespace xdataset
         // If only kSelf remains and the original was Dependent, demote to
         // Independent because a Dependent DataArray requires independent
         // variables as dependencies.
-        if (data_kind_ == DataArrayKind::kDependent && info.datas.size() == 1)
+        if (data_array_kind_ == DataArrayKind::kDependent && info.datas.size() == 1)
         {
             info.kind = DataArrayKind::kIndependent;
             const Index data_size = info.datas[kSelf].size();
@@ -589,7 +607,7 @@ namespace xdataset
         // Only Dependent DataArrays carry multiple named coordinate columns
         // that can be reordered.  An Independent is a single coordinate
         // column (its own data); permuting it is not meaningful.
-        if (data_kind_ != DataArrayKind::kDependent)
+        if (data_array_kind_ != DataArrayKind::kDependent)
             throw std::invalid_argument(
                 "permute: only dependent DataArrays can be permuted");
 
@@ -769,7 +787,7 @@ namespace xdataset
                 throw std::invalid_argument(
                     "CreateDependent: null indep_variable in list");
             }
-            if (var->data_kind() != DataArrayKind::kIndependent)
+            if (var->data_array_kind() != DataArrayKind::kIndependent)
             {
                 throw std::invalid_argument(
                     "CreateDependent: DataArray is not an independent DataArray");
@@ -804,7 +822,7 @@ namespace xdataset
 void DataArray::set_data(DataSeries new_self)
 {
     // For Dependent, validate that the new series size matches the cell count.
-    if (data_kind_ == DataArrayKind::kDependent && !multi_dimension_spec_.empty())
+    if (data_array_kind_ == DataArrayKind::kDependent && !multi_dimension_spec_.empty())
     {
         const std::size_t expected = multi_dimension_spec_.compute_cell_count();
         if (new_self.size() != static_cast<Index>(expected))
@@ -923,7 +941,7 @@ void DataArray::set_indep_data(Index indep_index, DataSeries new_series)
     if (static_cast<std::size_t>(indep_index) > rank)
         throw std::out_of_range("indep_index out of range");
 
-    if (indep_index == 1 && data_kind_ == DataArrayKind::kIndependent)
+    if (indep_index == 1 && data_array_kind_ == DataArrayKind::kIndependent)
         throw std::invalid_argument(
             "set_indep_data: indep_index=1 targets kSelf for Independent DataArray; use set_data() instead");
 
@@ -980,7 +998,7 @@ void DataArray::set_indep_data(Index indep_index, Index row, Measurement value)
     if (static_cast<std::size_t>(indep_index) > rank)
         throw std::out_of_range("indep_index out of range");
 
-    if (indep_index == 1 && data_kind_ == DataArrayKind::kIndependent)
+    if (indep_index == 1 && data_array_kind_ == DataArrayKind::kIndependent)
         throw std::invalid_argument(
             "set_indep_data: indep_index=1 targets kSelf for Independent DataArray; use set_data() instead");
 
@@ -1119,6 +1137,15 @@ void DataArray::set_indep_data(const std::string& indep_name, Index row, Measure
 DataArray DataArray::clone() const
 {
     return DataArray(*this);
+}
+
+DataArray DataArray::converted_to(const Unit& target) const
+{
+    // Dimension validation happens in DataSeries::converted_to(); converting
+    // kSelf only -- independent coordinate columns keep their own units.
+    DataArray result(*this);
+    result.set_data(data().converted_to(target));
+    return result;
 }
 
 } // namespace xdataset

@@ -1,4 +1,4 @@
-#include "dataset_io.h"
+﻿#include "dataset_io.h"
 #include "dataset.h"
 #include "block.h"
 #include "block_fixtures.h"
@@ -165,10 +165,10 @@ namespace xdataset
         Dataset loaded = DatasetIO::Load("hdf5", "test_da.h5");
 
         const DataArray& da = loaded.GetDataArray("b", "freq");
-        EXPECT_EQ(da.data_kind(), DataArrayKind::kIndependent);
+        EXPECT_EQ(da.data_array_kind(), DataArrayKind::kIndependent);
 
         const DataArray& dep = loaded.GetDataArray("b", "Vout");
-        EXPECT_EQ(dep.data_kind(), DataArrayKind::kDependent);
+        EXPECT_EQ(dep.data_array_kind(), DataArrayKind::kDependent);
     }
 
     TEST(Hdf5IoTest, WriterReaderDirect) {

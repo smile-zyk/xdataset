@@ -1,4 +1,4 @@
-#include "data_frame.h"
+﻿#include "data_frame.h"
 #include "block.h"
 #include "data_series.h"
 #include "data_array.h"
@@ -568,7 +568,7 @@ namespace xdataset
             if (is_self)
             {
                 col_name = variable_name_;
-                if (dataArray.data_kind() == DataArrayKind::kDependent)
+                if (dataArray.data_array_kind() == DataArrayKind::kDependent)
                 {
                     // kSelf is the dependent data column.
                     dep_series = &item.second;
@@ -585,7 +585,7 @@ namespace xdataset
                 indep_columns.push_back(std::make_pair(col_name, &item.second));
             }
 
-            if (!is_self || dataArray.data_kind() != DataArrayKind::kDependent)
+            if (!is_self || dataArray.data_array_kind() != DataArrayKind::kDependent)
             {
                 const std::vector<std::string> hdrs = ExpandHeadersForSeries(col_name, item.second);
                 all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
@@ -660,7 +660,7 @@ namespace xdataset
             const bool is_self = (item.first == DataArray::kSelf);
             std::string col_name = is_self ? variable_name_ : item.first;
 
-            if (is_self && data_array_->data_kind() == DataArrayKind::kDependent)
+            if (is_self && data_array_->data_array_kind() == DataArrayKind::kDependent)
             {
                 // Dependent kSelf column: add after indep columns.
                 continue;
@@ -670,7 +670,7 @@ namespace xdataset
             all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());
         }
 
-        if (data_array_->data_kind() == DataArrayKind::kDependent)
+        if (data_array_->data_array_kind() == DataArrayKind::kDependent)
         {
             const std::vector<std::string> hdrs = ExpandHeadersForSeries(variable_name_, data_array_->data());
             all_headers.insert(all_headers.end(), hdrs.begin(), hdrs.end());

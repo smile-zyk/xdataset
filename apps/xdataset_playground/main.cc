@@ -1,4 +1,4 @@
-#include "block.h"
+﻿#include "block.h"
 #include "dataset.h"
 #include "dataset_io.h"
 #include "unit.h"
@@ -237,7 +237,7 @@ int main()
             Block block(info);
 
             auto w = block.GetOrCreateDataArray("w");           // dependent
-            std::cout << "w.data_kind() = " << (w.data_kind() == DataArrayKind::kDependent ? "dependent" : "independent") << std::endl;
+            std::cout << "w.data_array_kind() = " << (w.data_array_kind() == DataArrayKind::kDependent ? "dependent" : "independent") << std::endl;
 
             auto z_var = w.indep(1);
             std::cout << "w.indep(1) rank = " << z_var.multi_dimension_spec().rank() << std::endl;

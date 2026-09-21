@@ -806,8 +806,8 @@ BlockDataFrame 和 DataArrayDataFrame 按固定行数分块生成，默认每块
 ## 数据装配（Matrix / Sweep 生成器）
 
 > 早期版本的 `Concat` / `Combine` 函数已从代码库中**移除**。当前“把多个值堆叠 / 装配到一起”
-> 的能力由 REL 语言层的两个**变参生成器**承担（实现在 `rel::operation::OperationMatrix` 与
-> `OperationSweep`，语法见 [REL.md](../REL/REL.md) 的索引与生成器章节）。
+> 的能力由 REL 语言层的两个**变参生成器**承担（实现在 `rel::operation::OperationHorzcat` /
+> `OperationVertcat` 与 `OperationSweep`，语法见 [REL.md](../REL/REL.md) 的索引与生成器章节）。
 > 二者不逐元素计算，DataType 按提升规则并允许 String（String 与数值混合时抛异常），
 > Unit 通过 `DeriveUnitPromoteDimension` 统一处理：
 
@@ -816,19 +816,23 @@ BlockDataFrame 和 DataArrayDataFrame 按固定行数分块生成，默认每块
 3. **量纲冲突抛异常** — 如 `meter` 与 `sec` 混用
 4. **全部无量纲** — 结果也无量纲
 
-### Matrix `{}`（OperationMatrix）
+### Matrix `{}`（OperationHorzcat / OperationVertcat）
 
-将 `expr_list` 中每一项视为若干行数据，**逐行堆叠**为一个结果：
+`{}` 生成器按各 item 是否为内层 `{}` 包裹分两种拼接方向，对应 MATLAB 的 `[A B]`（横拼）vs `[A; B]`（竖拼）：
 
-- **行数规则**：所有 item 的行数要么相等，要么为 1（仅一行的 item 广播复制到最大行数）；`(3行, 1行, 3行)` 允许，`(3行, 2行)` 不允许
-- **形状规则**：每行的 shape（Scalar / Vector / Matrix）必须一致；纯 Measurement 输入时结果升阶：Scalar × N → Vector(N)，Vector(w) × N → Matrix(N, w)
+- **水平拼接（平级裸 item，`OperationHorzcat`）**：`{A, B, ...}` 从左到右拼接列（列扩展）。所有 item 的有效行数要么相等、要么为 1（1 行 item 广播复制到最大行数）；每行 shape（Scalar / Vector / Matrix）必须一致。
+- **垂直堆叠（内层 `{}` 包裹的块 item，`OperationVertcat`）**：`{{A}, {B}, ...}` 从上到下堆叠行（行扩展）；所有块的列数必须一致，数据行数保持不变。
+
 - **结果类型**：任一 item 是 DataArray 时结果为 DataArray（继承其坐标结构）；纯 Measurement 时结果为 Measurement；单一元素 `{5}` 保持原值
 - **DataType / Unit**：`DeriveDtypePromoteWithString` + 上述统一单位规则
 
 ```
-{1, 2, 3}         → 3 个 Scalar → Vector(3)                       [Measurement]
-{{1, 2}, {3, 4}}  → 2 个 Vector(2) → Matrix(2, 2)                 [Measurement]
-{DA(3行), M}       → M 广播到 3 行 → 结果保持 DataArray              [DataArray]
+{1, 2, 3}         → 3 个 Scalar → Vector(3)                            [Measurement]
+{{1, 2}, {3, 4}}  → 2 个 Vector(2) → Matrix(2, 2)                      [Measurement]
+{{1}, {2}}        → 2 个块(各1×1) → Matrix(2, 1)                       [Measurement]
+{S, S} (S: 2×2)   → 2 个 Matrix(2,2) → Matrix(2, 4)                    [Measurement]
+{{S}, {S}} (S:2×2)→ 2 个块(各2×2) → Matrix(4, 2)                       [Measurement]
+{DA(3行), M}       → M 广播到 3 行 → 结果保持 DataArray                   [DataArray]
 ```
 
 ### Sweep `[]`（OperationSweep）

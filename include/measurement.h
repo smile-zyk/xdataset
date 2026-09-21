@@ -468,13 +468,82 @@ namespace xdataset
         /// opaque unique_ptr<DataFrame> return.
         std::unique_ptr<DataFrame> to_dataframe(const std::string& name) const;
 
+        // ======== unit conversion ======================================
+
+        /// Convert to \p target unit and return the result.  This is a pure
+        /// unit-domain operation: the shape (scalar / vector / matrix) is
+        /// preserved and every element is scaled by
+        ///     factor = unit().multiplier() / target.multiplier()
+        /// (SI value = stored value * multiplier, so conversion is the ratio
+        /// of the two multipliers).
+        ///
+        ///   500 mV -> V   : 0.5
+        ///   0.5 V  -> mV  : 500
+        ///   2 kHz  -> Hz  : 2000
+        ///
+        /// dtype handling:
+        ///   - kReal / kComplex : scaled in place (complex: both parts).
+        ///   - kInteger         : kept as int when factor == 1, otherwise
+        ///                        promoted to kReal (int * 1e-3 truncates).
+        ///   - kString / kBoolean: no numeric value to scale; only the unit
+        ///                        tag is replaced.
+        ///
+        /// Throws std::invalid_argument when both units carry a dimension and
+        /// they differ (unit().same_dimension(target) == false).
+        ///
+        /// canonicalized() is exactly converted_to(unit().canonicalized()).
+        Measurement converted_to(const Unit& target) const;
+
         // ======== canonicalisation ======================================
+
+        /// Convert in-place to canonical SI (value scaled, unit = base_units).
+        /// Equivalent to `*this = canonicalized()`.
+        void canonicalize();
 
         /// Return a canonicalised copy (value scaled to SI, unit = base_units).
         Measurement canonicalized() const;
 
         /// True when the stored unit is already canonical (multiplier == 1, non-affine).
         bool is_canonicalized() const;
+
+        // ======== dtype promotion ========================================
+
+        /// Promote the dtype: int -> real -> complex.  No-op when already at
+        /// or above \p target.  String / Boolean are not promotable.
+        /// Shape and unit are preserved verbatim; returns a new Measurement.
+        ///
+        /// Mirror of DataSeries::promoted_data_type() -- same one-directional
+        /// rule, same exception on an impossible promotion, and the same
+        /// "unit is copied, not converted" behaviour.  This is a pure dtype
+        /// operation: it never touches values or units.
+        ///
+        /// Throws std::invalid_argument when the promotion is not possible
+        /// (including any narrowing, e.g. complex -> real).
+        Measurement promoted_data_type(DataType target) const;
+
+        // ======== numeric conversion ======================================
+
+        /// Canonicalised scalar narrowed to a plain \c double -- the unit
+        /// multiplier is absorbed and the value is read as kReal:
+        ///   500 mV -> 0.5,   1.5 V -> 1.5,   2 kHz -> 2000.
+        ///
+        /// Why this exists alongside promoted_data_type(): the promotion
+        /// ladder is one-directional (int -> real -> complex), so
+        /// promoted_data_type(kReal) *rejects* a kComplex input.  This helper
+        /// additionally performs the narrowing complex -> real (taking the
+        /// real part), which is not a promotion at all.  It also absorbs the
+        /// unit multiplier, which promoted_data_type() deliberately does not.
+        ///
+        /// - kReal / kInteger: value * unit().multiplier()
+        /// - kComplex:         real part * unit().multiplier()
+        /// - kString / kBoolean: throws std::invalid_argument
+        /// - vector / matrix:    throws std::logic_error
+        ///
+        /// This is the unit-safe way to compare a Measurement against a
+        /// canonicalised DataSeries axis.  A bare as_scalar<double>() silently
+        /// ignores the unit and mis-compares (e.g. 500 mV reads as 500, not
+        /// 0.5, and never matches a 0.5 V axis).
+        double promoted_double() const;
 
     private:
         void infer_metadata();

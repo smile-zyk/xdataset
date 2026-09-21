@@ -109,6 +109,20 @@ namespace xdataset
         /// Return a deep copy of this DataArray.
         DataArray clone() const;
 
+        /// Return a copy whose self (kSelf) data is expressed in \p target
+        /// unit.  Independent coordinate columns are left untouched -- they
+        /// carry their own units and are not part of the value being
+        /// converted.  Delegates to DataSeries::converted_to().
+        ///
+        /// NOTE: DataArray's constructor canonicalizes every DataSeries it
+        /// stores, so the returned array's kSelf is always canonical
+        /// regardless of \p target.  The conversion is still applied first,
+        /// so the result is correct for canonical targets; a non-canonical
+        /// target is normalized by the storage invariant.
+        ///
+        /// Throws std::invalid_argument on a dimension mismatch.
+        DataArray converted_to(const Unit& target) const;
+
         // --------------------------------------------------------------------
         //  Source provenance (origin)
         // --------------------------------------------------------------------
@@ -196,9 +210,17 @@ namespace xdataset
             return multi_dimension_spec_;
         }
 
-        DataArrayKind data_kind() const
+        /// Shape kind of the self data (Scalar / Vector / Matrix) -- the
+        /// same notion as DataSeries::data_kind() and Measurement::data_kind().
+        /// Delegates to data().data_kind().
+        DataKind data_kind() const;
+
+        /// Whether this array is Dependent (kSelf is a value column) or
+        /// Independent (kSelf is the innermost coordinate column).  This is
+        /// the array-level kind, distinct from the shape kind above.
+        DataArrayKind data_array_kind() const
         {
-            return data_kind_;
+            return data_array_kind_;
         }
 
         /// Free-form string hint for downstream consumers (e.g. plotting).
@@ -255,6 +277,25 @@ namespace xdataset
         /// series, hence returned by value.
         DataSeries self_index_series() const;
 
+        /// The x coordinate series used when plotting this array's data
+        /// against the innermost independent axis -- i.e. "what goes on the
+        /// horizontal axis".
+        ///
+        ///   - Dependent:   the innermost independent coordinate column
+        ///                  (indep_data(1)).
+        ///   - Independent: the leaf-position index series
+        ///                  (self_index_series()), since an Independent has
+        ///                  no coordinate column of its own -- its data IS
+        ///                  the coordinate.
+        ///
+        /// This is the same choice the marker functions (mark / line_mark)
+        /// make, so callers that need "the x axis" do not have to branch on
+        /// data_array_kind() themselves.
+        ///
+        /// Throws std::logic_error when the array has no dimensions.
+        /// Derived (computed) for Independent, hence returned by value.
+        DataSeries plot_x_series() const;
+
         /// For Independent DataArrays, broadcast the innermost (kSelf)
         /// dimension data -- stored raw (un-expanded) -- across the full
         /// multi-dimensional grid, producing one row per leaf cell.
@@ -309,7 +350,7 @@ namespace xdataset
         DataSeriesMap datas_;
 
         MultiDimensionSpec multi_dimension_spec_;
-        DataArrayKind       data_kind_;
+        DataArrayKind       data_array_kind_;
 
         /// Free-form string hint for downstream consumers (e.g. plotting).
         std::string hint_;
