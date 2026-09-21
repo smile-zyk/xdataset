@@ -85,6 +85,19 @@ bool UnitData::operator==(const UnitData& o) const
 
 bool UnitData::operator!=(const UnitData& o) const { return !(*this == o); }
 
+bool UnitData::operator<(const UnitData& o) const
+{
+    // Lexicographic over the 7 exponents.  A memcmp would also compare the
+    // struct's trailing padding byte, which is uninitialised.
+    if (m != o.m) return m < o.m;
+    if (kg != o.kg) return kg < o.kg;
+    if (s != o.s) return s < o.s;
+    if (A != o.A) return A < o.A;
+    if (K != o.K) return K < o.K;
+    if (mol != o.mol) return mol < o.mol;
+    return cd < o.cd;
+}
+
 std::string UnitData::key() const
 {
     struct Part { std::string name; int8_t exp; };
@@ -188,6 +201,20 @@ bool Unit::has_dimension() const
 
 std::string Unit::to_string() const
 {
+    // The result depends only on (multiplier, dimension), and computing it can
+    // trigger UnitRegistry::decompose() -- a recursive search over the whole
+    // base-unit table.  Table views format one string per cell, so memoise it.
+    UnitRegistry& reg = UnitRegistry::Instance();
+    if (const std::string* hit = reg.cached_display(mult_, dim_))
+        return *hit;
+
+    std::string result = compute_to_string();
+    reg.cache_display(mult_, dim_, result);
+    return result;
+}
+
+std::string Unit::compute_to_string() const
+{
     UnitRegistry& reg = UnitRegistry::Instance();
     Unit canonical = canonicalized();
 
@@ -268,33 +295,43 @@ UnitScale Unit::best_display(double value) const
         return {mult, base_str};
 
     UnitRegistry& reg = UnitRegistry::Instance();
-    const std::map<std::string, double>& scales = reg.scale_prefixes();
+    const std::vector<std::pair<std::string, double>>& scales =
+        reg.scale_prefix_list();
 
-    // Walk from largest to smallest factor to find the best display scale.
-    double best_mult = 1.0;
-    for (std::map<std::string, double>::const_reverse_iterator it = scales.rbegin();
-         it != scales.rend(); ++it) {
-        double m = it->second;
+    // Find the SMALLEST scale factor m with |value * mult / m| in [1, 1000)
+    // -- that is the prefix that brings the value into the readable range
+    // (0.002 V -> m = 1e-3 -> "mV"; 1e9 Hz -> m = 1e9 -> "GHz").
+    //
+    // The original code walked scale_map_ in reverse (which, because the map
+    // is ordered by prefix NAME, goes from the smallest factor "a" = 1e-18 up
+    // to the largest "T" = 1e12) and broke on the first match -- i.e. the
+    // smallest qualifying m.  scale_prefix_list() keeps that same ordering, so
+    // scanning forward and keeping the smallest match reproduces it exactly.
+    double best_mult = 0.0;
+    const double abs_raw = std::abs(value * mult);
+    for (std::size_t i = 0; i < scales.size(); ++i) {
+        double m = scales[i].second;
         if (m <= 0) continue;
-        double absv = std::abs(value * mult / m);
-        if (absv >= 1.0 && absv < 1000.0) {
+        double absv = abs_raw / m;
+        if (absv >= 1.0 && absv < 1000.0 && (best_mult == 0.0 || m < best_mult)) {
             best_mult = m;
-            break;
         }
     }
 
-    if (best_mult == 1.0)
-        return {1.0, to_string()};
+    // No scaling (or the identity prefix "_"): show the value as-is.
+    if (best_mult == 0.0 || best_mult == 1.0)
+        return {1.0, to_string(), std::string()};
 
+    std::string prefix;
     std::string display_unit = base_str;
-    for (std::map<std::string, double>::const_iterator it = scales.begin();
-         it != scales.end(); ++it) {
-        if (it->second == best_mult) {
-            display_unit = it->first + base_str;
+    for (std::size_t i = 0; i < scales.size(); ++i) {
+        if (scales[i].second == best_mult) {
+            prefix = scales[i].first;
+            display_unit = prefix + base_str;
             break;
         }
     }
-    return {mult / best_mult, display_unit};
+    return {mult / best_mult, display_unit, prefix};
 }
 
 // =========================================================================

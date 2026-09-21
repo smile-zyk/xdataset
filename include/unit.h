@@ -62,6 +62,11 @@ struct XDATASET_API UnitData
     bool operator==(const UnitData& o) const;
     bool operator!=(const UnitData& o) const;
 
+    /// Total order over the 7 exponents, so UnitData can be used as a map key
+    /// (the Unit display-string cache).  Compares field by field -- a memcmp
+    /// would also compare the struct's padding byte, which is uninitialised.
+    bool operator<(const UnitData& o) const;
+
     // ---- serialisation -------------------------------------------------
     //
     //  Produces a canonical key string for reverse-lookup maps.
@@ -108,8 +113,22 @@ struct XDATASET_API UnitData
 
 /// Result of best_display: how to convert a raw value for display.
 struct UnitScale {
-    double scale;       ///< Multiply raw value by this to get display value.
-    std::string name;   ///< Display-unit string (empty if dimensionless).
+    double scale = 1.0;  ///< Multiply raw value by this to get display value.
+    std::string name;    ///< Full display unit: prefix + base ("GHz").
+    /// Scale prefix alone ("G", "K", "m"), empty when no scaling applies.
+    ///
+    /// Kept separate from @p name so a caller can render the prefix WITHOUT
+    /// the base unit -- SPICE style ("2.4G") -- which is what Engineering
+    /// notation does when the unit itself is hidden.
+    std::string prefix;
+
+    // C++11: default member initializers make this a non-aggregate, so
+    // brace-init like `{1.0, "Hz"}` needs explicit constructors.
+    UnitScale() = default;
+    UnitScale(double s, std::string n)
+        : scale(s), name(std::move(n)) {}
+    UnitScale(double s, std::string n, std::string p)
+        : scale(s), name(std::move(n)), prefix(std::move(p)) {}
 };
 
 class XDATASET_API Unit
@@ -141,6 +160,9 @@ public:
 
     /// Human-readable string.  Tries REL vocabulary first, falls back to
     /// raw SI-exponent combination (e.g. "kg*m^2*s^-3*A^-1").
+    ///
+    /// The result depends only on (multiplier, dimension), so it is memoised
+    /// in the UnitRegistry -- see compute_to_string().
     std::string to_string() const;
 
     // ---- display -------------------------------------------------------
@@ -171,6 +193,12 @@ private:
     // Private constructor — only for internal use
     // by canonicalize / multiply_dim / etc.
     explicit Unit(double mult, UnitData dim);
+
+    /// Uncached implementation of to_string().  May call
+    /// UnitRegistry::decompose(), which is a recursive search over the whole
+    /// base-unit table -- far too expensive to repeat per table cell, hence
+    /// the memoisation in to_string().
+    std::string compute_to_string() const;
 
     double   mult_ = 1.0;
     UnitData dim_;

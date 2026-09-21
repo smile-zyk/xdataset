@@ -3,6 +3,8 @@
 
 #include <map>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "unit.h"
 
@@ -105,6 +107,18 @@ public:
     /// Map of scale-prefix name -> numeric factor.
     const std::map<std::string, double>& scale_prefixes() const;
 
+    /// The same table as a flat list, in scale_map_ order (i.e. sorted by
+    /// prefix NAME, not by factor).  Iterating a contiguous vector is much
+    /// cheaper than walking the map's nodes, and Unit::best_display() does it
+    /// twice per call.
+    const std::vector<std::pair<std::string, double>>& scale_prefix_list() const;
+
+    /// Memoised Unit::to_string() result for a (multiplier, dimension) pair.
+    /// Returns nullptr on a cache miss.  Populated by cache_display().
+    const std::string* cached_display(double mult, const UnitData& dim) const;
+    void cache_display(double mult, const UnitData& dim,
+                       const std::string& display) const;
+
 private:
     UnitRegistry();
 
@@ -123,6 +137,14 @@ private:
     mutable std::map<std::string, std::string>    reverse_map_;
     mutable bool                                  reverse_built_ = false;
     void build_reverse_map() const;
+
+    // (multiplier, dimension) -> Unit::to_string() result.  Unit::to_string()
+    // can trigger decompose(), so it must not run per table cell.
+    mutable std::map<std::pair<double, UnitData>, std::string> display_cache_;
+
+    // Flat copy of scale_map_ (same order), built lazily.
+    mutable std::vector<std::pair<std::string, double>>        scale_list_;
+    mutable bool                                               scale_list_built_ = false;
 };
 }  // namespace xdataset
 

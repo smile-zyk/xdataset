@@ -37,6 +37,16 @@ namespace xdataset
         EXPECT_EQ(Measurement::String(std::string("hello")).to_string(), "hello");
     }
 
+    // Full mode must never pad with trailing zeros: a plain value keeps its
+    // natural digits ("3.14", not "3.14000").
+    TEST(MeasurementTest, FullModeDoesNotPadTrailingZeros)
+    {
+        EXPECT_EQ(Measurement::Real(1.0).to_string(),  "1");
+        EXPECT_EQ(Measurement::Real(-2.5).to_string(), "-2.5");
+        EXPECT_EQ(Measurement::Real(0.0).to_string(),  "0");
+        EXPECT_EQ(Measurement::Real(100.0).to_string(), "100");
+    }
+
     TEST(MeasurementTest, KindAndDtype)
     {
         EXPECT_EQ(Measurement::Real(3.14).data_type(),    DataType::kReal);
@@ -228,7 +238,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, StaticSmallTableNoTruncation)
     {
-        // 3 rows, max_display_rows=10 â†?all rows shown, no ellipsis
+        // 3 rows, max_display_rows=10 ï¿½?all rows shown, no ellipsis
         std::vector<DataFrameRow> rows;
         for (int i = 0; i < 3; ++i)
         {
@@ -265,7 +275,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, StaticTruncatedHeadOnly)
     {
-        // 10 rows, max_display_rows=6 â†?head-only truncation
+        // 10 rows, max_display_rows=6 ï¿½?head-only truncation
         // rows 0-5 shown, then ellipsis, then footer
         std::vector<DataFrameRow> rows;
         for (int i = 0; i < 10; ++i)
@@ -297,7 +307,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, TruncationFooterPlural)
     {
-        // 10 rows, max_display_rows=6 â†?4 rows omitted (plural)
+        // 10 rows, max_display_rows=6 ï¿½?4 rows omitted (plural)
         std::vector<DataFrameRow> rows;
         for (int i = 0; i < 10; ++i)
         {
@@ -316,7 +326,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, TruncationFooterSingular)
     {
-        // 9 rows, max_display_rows=8 â†?1 row omitted (singular)
+        // 9 rows, max_display_rows=8 ï¿½?1 row omitted (singular)
         std::vector<DataFrameRow> rows;
         for (int i = 0; i < 9; ++i)
         {
@@ -335,7 +345,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, ExactFitNoTruncation)
     {
-        // 6 rows, max_display_rows=6 â†?exact fit, no truncation
+        // 6 rows, max_display_rows=6 ï¿½?exact fit, no truncation
         std::vector<DataFrameRow> rows;
         for (int i = 0; i < 6; ++i)
         {
@@ -380,7 +390,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, DefaultParameterIs32)
     {
-        // Only 10 rows â€?default 32 should show all without truncation
+        // Only 10 rows ï¿½?default 32 should show all without truncation
         std::vector<DataFrameRow> rows;
         for (int i = 0; i < 10; ++i)
         {
@@ -422,7 +432,7 @@ namespace xdataset
 
     TEST(DataFrameToStringTest, FromBlockTruncated)
     {
-        // 2x3x4 = 24 rows, max_display_rows=8 â†?truncation
+        // 2x3x4 = 24 rows, max_display_rows=8 ï¿½?truncation
         Block block(MakeThreeDimMultiDepCreateInfo());
         const DataFrame& table = block.GetOrCreateDataFrame();
 

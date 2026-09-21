@@ -252,6 +252,14 @@ namespace xdataset
 
     TEST(BlockDataFrameTest, AggregatesInterleavedJaggedVariablesIntoOneTable)
     {
+        // This test checks FRAME CONTENT, not the formatting mode, so the
+        // expected strings below assume best-unit-display auto-scaling
+        // (kEngineering) rather than whatever the process default happens to
+        // be.  Keeps the expectations readable: "1 K" rather than "1000.00".
+        FormatOptions eng;
+        eng.number_format = NumberFormat::kEngineering;
+        FormatScope scope(eng);
+
         Block block(MakeInterleavedCreateInfo());
         const DataFrame& table = block.GetOrCreateDataFrame();
 

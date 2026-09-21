@@ -12,6 +12,9 @@ using xdataset::DataKind;
 using xdataset::DataSeries;
 using xdataset::Measurement;
 using xdataset::DataType;
+using xdataset::FormatOptions;
+using xdataset::NumberFormat;
+using xdataset::ComplexFormat;
 using xdataset::Index;
 using xdataset::MultiIndexSelector;
 using xdataset::Unit;
@@ -218,67 +221,451 @@ TEST(MeasurementCanonTest, CanonicalizedStringNoValueChange)
 }
 
 // =========================================================================
-//  MeasurementFormatter auto-scale
+//  Auto-scaling (best unit display) -- only kEngineering does this now
+//
+//  kFull (the default) never auto-scales, so these tests opt in explicitly.
 // =========================================================================
+
+namespace
+{
+FormatOptions engineering()
+{
+    FormatOptions o;
+    o.number_format = NumberFormat::kEngineering;
+    return o;
+}
+} // namespace
 
 TEST(MeasurementFormatTest, AutoScaleMega)
 {
     Measurement m = Measurement::Real(1e9).set_unit(xdataset::Unit::parse("Hz"));
-    std::string s = m.to_string();
-    // 1e9 Hz -> 1 GHz
-    EXPECT_TRUE(s.find("GHz") != std::string::npos);
+    EXPECT_EQ(m.to_string(engineering()), "1 GHz");
 }
 
 TEST(MeasurementFormatTest, AutoScaleMilli)
 {
     Measurement m = Measurement::Real(0.002).set_unit(xdataset::Unit::parse("V"));
-    std::string s = m.to_string();
-    // 0.002 V -> 2 mV
-    EXPECT_TRUE(s.find("2") != std::string::npos);
-    EXPECT_TRUE(s.find("mV") != std::string::npos);
+    EXPECT_EQ(m.to_string(engineering()), "2 mV");
 }
 
 TEST(MeasurementFormatTest, AutoScaleKiloMeter)
 {
     Measurement m = Measurement::Real(5000).set_unit(xdataset::Unit::parse("meter"));
-    std::string s = m.to_string();
-    // 5000 meter -> 5 Kmeter
-    EXPECT_TRUE(s.find("5") != std::string::npos);
-    EXPECT_TRUE(s.find("Kmeter") != std::string::npos);
+    EXPECT_EQ(m.to_string(engineering()), "5 Kmeter");
 }
 
 TEST(MeasurementFormatTest, AutoScaleMilliMeter)
 {
     Measurement m = Measurement::Real(0.003).set_unit(xdataset::Unit::parse("meter"));
-    std::string s = m.to_string();
-    // 0.003 meter -> 3 mmeter
-    EXPECT_TRUE(s.find("3") != std::string::npos);
-    EXPECT_TRUE(s.find("mmeter") != std::string::npos);
+    EXPECT_EQ(m.to_string(engineering()), "3 mmeter");
 }
 
 TEST(MeasurementFormatTest, AutoScaleNoneForDimensionless)
 {
     Measurement m = Measurement::Real(3.14);
-    std::string s = m.to_string();
-    // 3.14 stays 3.14 (in [1, 1000))
-    EXPECT_NE(s.find("3.14"), std::string::npos);
+    // 3.14 is already in [1, 1000) -> no prefix.
+    EXPECT_EQ(m.to_string(engineering()), "3.14");
 }
 
 TEST(MeasurementFormatTest, AutoScaleMegaDimensionless)
 {
     Measurement m = Measurement::Integer(1000000);
-    std::string s = m.to_string();
-    // 1000000 -> 1 M (dimensionless auto-scale)
-    EXPECT_TRUE(s.find("M") != std::string::npos);
-    EXPECT_TRUE(s.find("1") != std::string::npos);
+    // Dimensionless values get the best-display prefix too: 1000000 -> "1 M".
+    EXPECT_EQ(m.to_string(engineering()), "1 M");
 }
 
 TEST(MeasurementFormatTest, AutoScaleKiloFor100Hz)
 {
     Measurement m = Measurement::Real(100.0).set_unit(xdataset::Unit::parse("Hz"));
-    std::string s = m.to_string();
-    // 100 Hz stays 100 Hz (1 <= 100 < 1000)
-    EXPECT_TRUE(s.find("100") != std::string::npos);
+    // 100 Hz stays 100 Hz (1 <= 100 < 1000).
+    EXPECT_EQ(m.to_string(engineering()), "100 Hz");
+}
+
+// =========================================================================
+//  Measurement::to_string(FormatOptions) -- NumberFormat
+// =========================================================================
+
+namespace
+{
+using xdataset::FormatDefaults;
+using xdataset::FormatScope;
+using xdataset::DisplayScale;
+using xdataset::ResolveScale;
+using xdataset::FormatWithScale;
+
+const Unit kV  = Unit::parse("V");
+const Unit kHz = Unit::parse("Hz");
+const Unit kOhm = Unit::parse("Ohm");
+
+std::string fmt(double v, const Unit& u, NumberFormat nf, int digits = 6)
+{
+    FormatOptions o;
+    o.number_format = nf;
+    o.significant_digits = digits;
+    return Measurement::Real(v, u).to_string(o);
+}
+} // namespace
+
+// kFull is the DEFAULT mode: no exponent, no unit auto-scaling.
+TEST(MeasurementFormatOptionsTest, DefaultIsFull)
+{
+    FormatOptions o;
+    EXPECT_EQ(o.number_format, NumberFormat::kFull);
+
+    EXPECT_EQ(Measurement::Real(0.002, kV).to_string(),   "0.002 V");
+    EXPECT_EQ(Measurement::Real(1500.0, kV).to_string(),  "1500 V");
+    EXPECT_EQ(Measurement::Real(1e9, kHz).to_string(),    "1000000000 Hz");
+    // An integer never gets a decimal point, even in Full mode.
+    EXPECT_EQ(Measurement::Integer(42).to_string(),       "42");
+    // Dimensionless: no prefix, because Full never auto-scales.
+    EXPECT_EQ(Measurement::Real(0.002).to_string(),       "0.002");
+    EXPECT_EQ(Measurement::Real(1e9).to_string(),         "1000000000");
+}
+
+TEST(MeasurementFormatOptionsTest, FullShowsAllIntegerDigitsNoScaling)
+{
+    // "Full": every digit before the decimal point, no exponent, and NO unit
+    // auto-scaling (the exponent is carried by the digits).
+    //
+    // The significant-digit budget is spent on the integer digits first; any
+    // remainder becomes decimals, and trailing zeros are NOT padded.
+    // 1530000.123 has 7 integer digits, which already exceeds the 6-digit
+    // budget, so no decimals are shown.
+    EXPECT_EQ(fmt(1530000.123, kHz, NumberFormat::kFull), "1530000 Hz");
+    EXPECT_EQ(fmt(1000.0, kHz, NumberFormat::kFull),      "1000 Hz");
+    EXPECT_EQ(fmt(0.002, kV, NumberFormat::kFull),        "0.002 V");
+}
+
+TEST(MeasurementFormatOptionsTest, FullDoesNotPadTrailingZeros)
+{
+    // The digit budget caps precision but must NOT pad with zeros.
+    EXPECT_EQ(fmt(3.14, kHz, NumberFormat::kFull),   "3.14 Hz");
+    EXPECT_EQ(fmt(1.0, kHz, NumberFormat::kFull),    "1 Hz");
+    EXPECT_EQ(fmt(42.0, kHz, NumberFormat::kFull),   "42 Hz");
+    EXPECT_EQ(fmt(0.5, kV, NumberFormat::kFull),     "0.5 V");
+    EXPECT_EQ(fmt(-2.0, kV, NumberFormat::kFull),    "-2 V");
+    EXPECT_EQ(fmt(0.0, kV, NumberFormat::kFull),     "0 V");
+    EXPECT_EQ(fmt(1.0 / 3.0, kHz, NumberFormat::kFull), "0.333333 Hz");
+}
+
+TEST(MeasurementFormatOptionsTest, FullHonoursSignificantDigits)
+{
+    EXPECT_EQ(fmt(1234.567890, kHz, NumberFormat::kFull, 3), "1235 Hz");
+    EXPECT_EQ(fmt(1234.567890, kHz, NumberFormat::kFull, 6), "1234.57 Hz");
+    EXPECT_EQ(fmt(1234.567890, kHz, NumberFormat::kFull, 9), "1234.56789 Hz");
+}
+
+TEST(MeasurementFormatOptionsTest, ScientificUsesExponentNoScaling)
+{
+    EXPECT_EQ(fmt(1000.0, kHz, NumberFormat::kScientific, 3), "1e3 Hz");
+    EXPECT_EQ(fmt(1530000.0, kHz, NumberFormat::kScientific), "1.53e6 Hz");
+    EXPECT_EQ(fmt(0.002, kV, NumberFormat::kScientific),      "2e-3 V");
+}
+
+TEST(MeasurementFormatOptionsTest, EngineeringForcesMultipleOfThree)
+{
+    EXPECT_EQ(fmt(1000.0, kHz, NumberFormat::kEngineering),  "1 KHz");
+    EXPECT_EQ(fmt(1e9, kHz, NumberFormat::kEngineering),     "1 GHz");
+    EXPECT_EQ(fmt(0.002, kV, NumberFormat::kEngineering),    "2 mV");
+    EXPECT_EQ(fmt(4700.0, kOhm, NumberFormat::kEngineering), "4.7 KOhm");
+}
+
+TEST(MeasurementFormatOptionsTest, IntegerBases)
+{
+    EXPECT_EQ(fmt(255.0, kV, NumberFormat::kHex),    "0xff");
+    EXPECT_EQ(fmt(8.0, kV, NumberFormat::kOctal),    "010");
+    EXPECT_EQ(fmt(5.0, kV, NumberFormat::kBinary),   "0b101");
+    // Non-integral values cannot be represented positionally -> decimal
+    // (Full notation).
+    EXPECT_EQ(fmt(1.5, kV, NumberFormat::kHex),      "1.5");
+    // No unit suffix in base modes.
+    EXPECT_EQ(fmt(255.0, kV, NumberFormat::kHex),    "0xff");
+}
+
+// =========================================================================
+//  show_unit
+// =========================================================================
+
+TEST(MeasurementFormatOptionsTest, ShowUnitFalseIsBareInFull)
+{
+    FormatOptions o;   // kFull (default)
+    o.show_unit = false;
+    // Full never auto-scales anyway, so hiding the unit only drops the suffix.
+    EXPECT_EQ(Measurement::Real(0.002, kV).to_string(o),  "0.002");
+    EXPECT_EQ(Measurement::Real(2.4e9, kHz).to_string(o), "2400000000");
+}
+
+TEST(MeasurementFormatOptionsTest, ShowUnitFalseKeepsSpicePrefixInEngineering)
+{
+    // The 10^3 step belongs to the MODE, not to the unit, so the prefix
+    // survives -- SPICE style, no space.
+    FormatOptions o;
+    o.number_format = NumberFormat::kEngineering;
+    o.show_unit = false;
+    EXPECT_EQ(Measurement::Real(2.4e9, kHz).to_string(o),  "2.4G");
+    EXPECT_EQ(Measurement::Real(1000.0, kHz).to_string(o), "1K");
+    EXPECT_EQ(Measurement::Real(0.002, kV).to_string(o),   "2m");
+    EXPECT_EQ(Measurement::Real(4700.0, kOhm).to_string(o), "4.7K");
+    // No scaling needed -> no prefix at all.
+    EXPECT_EQ(Measurement::Real(50.0, kHz).to_string(o),   "50");
+}
+
+TEST(MeasurementFormatOptionsTest, ShowUnitTrueIsDefaultBehaviour)
+{
+    FormatOptions o;
+    EXPECT_TRUE(o.show_unit);
+    o.number_format = NumberFormat::kEngineering;
+    EXPECT_EQ(Measurement::Real(2.4e9, kHz).to_string(o), "2.4 GHz");
+}
+
+// =========================================================================
+//  ComplexFormat
+// =========================================================================
+
+namespace
+{
+std::string cfmt(const std::complex<double>& z, const Unit& u, ComplexFormat cf)
+{
+    FormatOptions o;
+    o.complex_format = cf;
+    return Measurement::Complex(z, u).to_string(o);
+}
+} // namespace
+
+TEST(MeasurementFormatOptionsTest, ComplexRealImaginary)
+{
+    // kRealImaginary is the ONLY mode that carries a unit.  Under the default
+    // kFull there is no auto-scaling and no zero padding, so the value stays
+    // in volts with its natural digits.
+    const std::string s = cfmt(std::complex<double>(0.778, -0.258), kV,
+                               ComplexFormat::kRealImaginary);
+    EXPECT_EQ(s, "0.778-0.258i V");
+}
+
+// With kEngineering, kRealImaginary scales both parts by ONE shared factor
+// (resolved from |z|) and shows the unit.
+TEST(MeasurementFormatOptionsTest, ComplexRealImaginaryEngineering)
+{
+    FormatOptions o;
+    o.number_format = NumberFormat::kEngineering;
+    o.complex_format = ComplexFormat::kRealImaginary;
+    const std::string s =
+        Measurement::Complex(std::complex<double>(0.778, -0.258), kV).to_string(o);
+    EXPECT_EQ(s, "778-258i mV");
+}
+
+TEST(MeasurementFormatOptionsTest, ComplexMagDegrees)
+{
+    // Pure "a/b" pair: NO unit, NO scaling.
+    const std::string s = cfmt(std::complex<double>(0.778, -0.258), kV,
+                               ComplexFormat::kMagDegrees);
+    EXPECT_EQ(s, "0.819663/-18.3465");
+    EXPECT_TRUE(s.find("V") == std::string::npos);
+    EXPECT_TRUE(s.find("mV") == std::string::npos);
+}
+
+TEST(MeasurementFormatOptionsTest, ComplexDbDegrees)
+{
+    // 20*log10(0.8197) = -1.727 dB ; arg = -18.35 deg.  No unit.
+    const std::string s = cfmt(std::complex<double>(0.778, -0.258), kV,
+                               ComplexFormat::kDbDegrees);
+    EXPECT_EQ(s, "-1.72729/-18.3465");
+    EXPECT_TRUE(s.find("V") == std::string::npos);
+}
+
+TEST(MeasurementFormatOptionsTest, ComplexRadiansVariants)
+{
+    const std::string mag = cfmt(std::complex<double>(0.778, -0.258), kV,
+                                 ComplexFormat::kMagRadians);
+    EXPECT_EQ(mag, "0.819663/-0.320207");
+
+    const std::string db = cfmt(std::complex<double>(0.778, -0.258), kV,
+                                ComplexFormat::kDbRadians);
+    EXPECT_EQ(db, "-1.72729/-0.320207");
+}
+
+// Only kRealImaginary carries a unit; every other mode must be unit-less.
+TEST(MeasurementFormatOptionsTest, OnlyRealImaginaryCarriesUnit)
+{
+    const std::complex<double> z(0.778, -0.258);
+    const std::string ri = cfmt(z, kV, ComplexFormat::kRealImaginary);
+    EXPECT_TRUE(ri.find("V") != std::string::npos);
+
+    const ComplexFormat others[] = {
+        ComplexFormat::kMagDegrees, ComplexFormat::kDbDegrees,
+        ComplexFormat::kMagRadians, ComplexFormat::kDbRadians};
+    for (ComplexFormat cf : others)
+    {
+        const std::string s = cfmt(z, kV, cf);
+        EXPECT_TRUE(s.find("V") == std::string::npos) << s;
+        EXPECT_TRUE(s.find("mV") == std::string::npos) << s;
+        EXPECT_TRUE(s.find('/') != std::string::npos) << s;
+    }
+}
+
+TEST(MeasurementFormatOptionsTest, ComplexDefaultIsRealImaginary)
+{
+    FormatOptions o;
+    EXPECT_EQ(o.complex_format, ComplexFormat::kRealImaginary);
+}
+
+// =========================================================================
+//  significant_digits clamping + shared-instance safety
+// =========================================================================
+
+TEST(MeasurementFormatOptionsTest, SignificantDigitsClamped)
+{
+    // Clamped to [1, 17]; must not crash or produce garbage.
+    FormatOptions o;
+    o.number_format = NumberFormat::kFull;
+    o.significant_digits = 0;
+    EXPECT_FALSE(Measurement::Real(1234.5, kHz).to_string(o).empty());
+    o.significant_digits = 100;
+    EXPECT_FALSE(Measurement::Real(1234.5, kHz).to_string(o).empty());
+}
+
+// Rendering is a pure function: interleaving different option sets across
+// calls must not leak state between them.
+TEST(MeasurementFormatOptionsTest, OptionsDoNotLeakBetweenCalls)
+{
+    FormatOptions a;                                   // kFull (default)
+    FormatOptions b; b.number_format = NumberFormat::kEngineering;
+    b.show_unit = false;
+
+    for (int i = 0; i < 5; ++i)
+    {
+        EXPECT_EQ(Measurement::Real(2.4e9, kHz).to_string(a), "2400000000 Hz");
+        EXPECT_EQ(Measurement::Real(2.4e9, kHz).to_string(b), "2.4G");
+        EXPECT_EQ(Measurement::Real(2.4e9, kHz).to_string(),  "2400000000 Hz");
+    }
+}
+
+// =========================================================================
+//  FormatDefaults / FormatScope
+// =========================================================================
+
+TEST(FormatDefaultsTest, DefaultsToFull)
+{
+    // Reset first so this test does not depend on execution order.
+    FormatDefaults::Instance().Set(FormatOptions());
+    EXPECT_EQ(Measurement::Real(0.002, kV).to_string(), "0.002 V");
+}
+
+TEST(FormatDefaultsTest, SetAffectsTo_stringWithoutOptions)
+{
+    FormatOptions o;
+    o.number_format = NumberFormat::kEngineering;
+
+    FormatDefaults::Instance().Set(o);
+    EXPECT_EQ(Measurement::Real(2.4e9, kHz).to_string(), "2.4 GHz");
+
+    // Explicit options still override the global default.
+    FormatOptions full;
+    EXPECT_EQ(Measurement::Real(2.4e9, kHz).to_string(full),
+              "2400000000 Hz");
+
+    FormatDefaults::Instance().Set(FormatOptions());   // restore
+}
+
+// to_string(opts) must NOT disturb the process-wide default.
+TEST(FormatDefaultsTest, ExplicitOptionsDoNotChangeTheDefault)
+{
+    FormatDefaults::Instance().Set(FormatOptions());   // kFull
+
+    FormatOptions eng;
+    eng.number_format = NumberFormat::kEngineering;
+    EXPECT_EQ(Measurement::Real(2.4e9, kHz).to_string(eng), "2.4 GHz");
+
+    // The default is untouched.
+    EXPECT_EQ(Measurement::Real(2.4e9, kHz).to_string(), "2400000000 Hz");
+}
+
+TEST(FormatDefaultsTest, ScopeRestoresOnExit)
+{
+    FormatDefaults::Instance().Set(FormatOptions());   // known start state
+
+    FormatOptions eng;
+    eng.number_format = NumberFormat::kEngineering;
+
+    {
+        FormatScope scope(eng);
+        EXPECT_EQ(Measurement::Real(2.4e9, kHz).to_string(), "2.4 GHz");
+    }
+    // Restored to what was in effect before the scope (kFull).
+    EXPECT_EQ(Measurement::Real(2.4e9, kHz).to_string(), "2400000000 Hz");
+}
+
+TEST(FormatDefaultsTest, ScopeIsNestable)
+{
+    FormatDefaults::Instance().Set(FormatOptions());   // known start state
+
+    FormatOptions eng;
+    eng.number_format = NumberFormat::kEngineering;
+    FormatOptions sci;
+    sci.number_format = NumberFormat::kScientific;
+
+    {
+        FormatScope outer(eng);
+        EXPECT_EQ(Measurement::Real(1000.0, kHz).to_string(), "1 KHz");
+        {
+            FormatScope inner(sci);
+            EXPECT_EQ(Measurement::Real(1000.0, kHz).to_string(), "1e3 Hz");
+        }
+        // Inner scope restored the outer one, not the process default.
+        EXPECT_EQ(Measurement::Real(1000.0, kHz).to_string(), "1 KHz");
+    }
+    // Back to the process default (kFull, no auto-scaling).
+    EXPECT_EQ(Measurement::Real(1000.0, kHz).to_string(), "1000 Hz");
+}
+
+// =========================================================================
+//  ResolveScale / FormatWithScale -- the host-side hoisting seam
+// =========================================================================
+
+TEST(FormatScaleTest, ResolveThenFormatMatchesDirectRender)
+{
+    FormatOptions o;
+    o.number_format = NumberFormat::kEngineering;
+
+    // Hoist the expensive unit resolution out of the loop.
+    const DisplayScale s = ResolveScale(2.4e9, kHz, o);
+
+    EXPECT_EQ(FormatWithScale(2.4e9, s, o.number_format, o.significant_digits),
+              Measurement::Real(2.4e9, kHz).to_string(o));
+}
+
+TEST(FormatScaleTest, SuffixCarriesLeadingSpaceForUnits)
+{
+    FormatOptions o;
+    o.number_format = NumberFormat::kEngineering;
+    const DisplayScale s = ResolveScale(2.4e9, kHz, o);
+    EXPECT_EQ(s.suffix, " GHz");
+}
+
+TEST(FormatScaleTest, SuffixIsSpiceBareWhenUnitHidden)
+{
+    FormatOptions o;
+    o.number_format = NumberFormat::kEngineering;
+    o.show_unit = false;
+    const DisplayScale s = ResolveScale(2.4e9, kHz, o);
+    EXPECT_EQ(s.suffix, "G");       // no leading space: SPICE style
+}
+
+TEST(FormatScaleTest, FullModeDoesNotScale)
+{
+    FormatOptions o;                 // kFull
+    const DisplayScale s = ResolveScale(2.4e9, kHz, o);
+    EXPECT_DOUBLE_EQ(s.scale, 1.0);
+    EXPECT_EQ(s.suffix, " Hz");
+}
+
+TEST(FormatScaleTest, IntegerWithScaleStaysIntegralWhenPossible)
+{
+    FormatOptions o;                 // kFull, no scaling
+    const DisplayScale s = ResolveScale(42.0, Unit(), o);
+    // An integer must never gain a decimal point.
+    EXPECT_EQ(FormatWithScale(42, s, o.number_format, o.significant_digits),
+              "42");
 }
 
 // =========================================================================

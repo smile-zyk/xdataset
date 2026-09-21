@@ -158,6 +158,12 @@ namespace xdataset
 
     TEST(DataArrayDataFrameTest, InterleavedRaggedDependentTableContainsDataColumnAndCsv)
     {
+        // Frame-content test: see the note in
+        // BlockDataFrameTest.AggregatesInterleavedJaggedVariablesIntoOneTable.
+        FormatOptions eng;
+        eng.number_format = NumberFormat::kEngineering;
+        FormatScope scope(eng);
+
         Block block(MakeInterleavedCreateInfo());
         DataArray w_data = block.GetOrCreateDataArray("w"); const DataFrame& table = w_data.GetOrCreateDataFrame();
         ASSERT_EQ(table.headers().size(), 4u);
@@ -280,6 +286,12 @@ namespace xdataset
 
     TEST(DataArraySelectTest, DependentSelectReturnsCompleteVariable)
     {
+        // Frame-content test: see the note in
+        // BlockDataFrameTest.AggregatesInterleavedJaggedVariablesIntoOneTable.
+        FormatOptions eng;
+        eng.number_format = NumberFormat::kEngineering;
+        FormatScope scope(eng);
+
         Block block(MakeInterleavedCreateInfo());
         DataArray w_data = block.GetOrCreateDataArray("w"); std::vector<MultiIndexSelector> selectors;
         selectors.push_back(MultiIndexSelector::Equal(1));
@@ -365,6 +377,12 @@ namespace xdataset
 
     TEST(DataArraySelectTest, DependentSelectProducesJaggedResultWhenInnerDimCollapsed)
     {
+        // Frame-content test: see the note in
+        // BlockDataFrameTest.AggregatesInterleavedJaggedVariablesIntoOneTable.
+        FormatOptions eng;
+        eng.number_format = NumberFormat::kEngineering;
+        FormatScope scope(eng);
+
         Block block(MakeInterleavedCreateInfo());
         DataArray w_data = block.GetOrCreateDataArray("w"); // Collapse z (Regular(2)) with Equal(0); retain x (Regular(2)) and y (Ragged({1,2})).
         std::vector<MultiIndexSelector> selectors;

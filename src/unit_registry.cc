@@ -288,6 +288,32 @@ const std::map<std::string, double>& UnitRegistry::scale_prefixes() const
     return scale_map_;
 }
 
+const std::vector<std::pair<std::string, double>>&
+UnitRegistry::scale_prefix_list() const
+{
+    if (!scale_list_built_)
+    {
+        scale_list_.assign(scale_map_.begin(), scale_map_.end());
+        scale_list_built_ = true;
+    }
+    return scale_list_;
+}
+
+const std::string* UnitRegistry::cached_display(double mult,
+                                                const UnitData& dim) const
+{
+    std::map<std::pair<double, UnitData>, std::string>::const_iterator it =
+        display_cache_.find(std::make_pair(mult, dim));
+    if (it == display_cache_.end()) return 0;
+    return &it->second;
+}
+
+void UnitRegistry::cache_display(double mult, const UnitData& dim,
+                                 const std::string& display) const
+{
+    display_cache_[std::make_pair(mult, dim)] = display;
+}
+
 // =========================================================================
 //  REL vocabulary
 // =========================================================================

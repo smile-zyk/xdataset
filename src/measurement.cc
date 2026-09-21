@@ -3,8 +3,14 @@
 #include "data_frame.h"
 
 #include <cmath>
-#include <sstream>
+#include <climits>
+#include <cstdio>
+#include <cstring>
 #include <stdexcept>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace xdataset
 {
@@ -395,8 +401,14 @@ namespace xdataset
 
     std::string Measurement::to_string() const
     {
-        MeasurementFormatter fmt(unit_);
-        return boost::apply_visitor(fmt, storage_);
+        // No formatter object is constructed: Format() is a free function and
+        // the options are read straight from the process-wide defaults.
+        return Format(*this, FormatDefaults::Instance().Get());
+    }
+
+    std::string Measurement::to_string(const FormatOptions& options) const
+    {
+        return Format(*this, options);
     }
 
     bool Measurement::operator==(const Measurement& other) const
@@ -606,218 +618,793 @@ namespace xdataset
     }
 
     // =========================================================================
-    // MeasurementFormatter
+    //  Rendering
     // =========================================================================
+    //
+    //  Layered, all free functions taking (unit, options) explicitly:
+    //
+    //    FormatElement / FormatElementInt   pure NUMBER layer -- no unit
+    //    ResolveScale                       the only expensive step
+    //    FormatValue / FormatValueInt / FormatComplex
+    //    RenderScalar / RenderVector / RenderMatrix
+    //    Format                             dispatch on cached kind / dtype
+    //
+    //  Nothing is stored, so there is no object to construct and no state to
+    //  make thread-local: Measurement::to_string() just calls Format().
 
-    std::string MeasurementFormatter::with_unit(const std::string& s) const
+    namespace
     {
-        if (!unit_.has_dimension())
+        /// Append @p v to @p out using the same formatting std::ostream's
+        /// default `operator<<(double)` produces (6 significant digits,
+        /// shortest of fixed / scientific, no trailing zeros).
+        ///
+        /// std::ostringstream is the single biggest cost in the old
+        /// implementation: constructing one pulls in the global locale and a
+        /// streambuf, and each `<<` goes through the num_put facet.  snprintf
+        /// with "%.6g" is byte-for-byte equivalent for every finite double and
+        /// roughly an order of magnitude faster.
+        void AppendDouble(std::string& out, double v)
+        {
+            char buf[40];
+            const int n = std::snprintf(buf, sizeof(buf), "%.6g", v);
+            if (n > 0)
+                out.append(buf, static_cast<std::size_t>(n));
+        }
+
+        void AppendInt(std::string& out, int v)
+        {
+            char buf[24];
+            const int n = std::snprintf(buf, sizeof(buf), "%d", v);
+            if (n > 0)
+                out.append(buf, static_cast<std::size_t>(n));
+        }
+
+        /// Clamp significant digits to a sane range (a double round-trips in
+        /// at most 17 digits).
+        int ClampDigits(int d)
+        {
+            if (d < 1) return 1;
+            if (d > 17) return 17;
+            return d;
+        }
+
+        /// Render @p v with @p digits significant digits, shortest of fixed /
+        /// scientific -- i.e. printf's "%.<digits>g".
+        void AppendSignificant(std::string& out, double v, int digits)
+        {
+            char buf[64];
+            char fmt[16];
+            std::snprintf(fmt, sizeof(fmt), "%%.%dg", ClampDigits(digits));
+            const int n = std::snprintf(buf, sizeof(buf), fmt, v);
+            if (n > 0)
+                out.append(buf, static_cast<std::size_t>(n));
+        }
+
+        /// Render @p v in fixed (non-exponent) notation with @p digits
+        /// significant digits, WITHOUT trailing zeros.
+        ///
+        /// "Full" means: never use an exponent -- every digit before the
+        /// decimal point is shown.  @p digits caps precision but does not
+        /// PAD: the budget is spent on the integer digits first and whatever
+        /// remains becomes decimals, and only as many of those as are
+        /// actually significant are kept.
+        ///
+        ///   1530000.123 w/ 6 -> "1530000"   (7 int digits already exceed it)
+        ///   1000.0      w/ 6 -> "1000"      (not "1000.00")
+        ///   0.002       w/ 6 -> "0.002"     (not "0.00200000")
+        ///   1234.567890 w/ 6 -> "1234.57"
+        ///   1234.567890 w/ 3 -> "1235"
+        void AppendFull(std::string& out, double v, int digits)
+        {
+            const int d = ClampDigits(digits);
+            const double av = std::abs(v);
+            if (av == 0.0)
+            {
+                out += '0';
+                return;
+            }
+            // Digits before the decimal point.  This is <= 0 for values below
+            // 1 (0.002 -> -2), which correctly gives such values a larger
+            // decimal budget so they still get @p d significant digits.
+            const int int_digits = static_cast<int>(std::floor(std::log10(av))) + 1;
+            int decimals = d - int_digits;
+            if (decimals < 0) decimals = 0;
+            if (decimals > 17) decimals = 17;
+
+            // "%.0f" of a huge double expands to every integer digit (1e308
+            // needs 309 of them), so snprintf's return value -- which counts
+            // what it WOULD have written -- can exceed the buffer.  Clamp to
+            // what was actually stored, or we would read past the end.
+            char buf[64];
+            char fmt[16];
+            std::snprintf(fmt, sizeof(fmt), "%%.%df", decimals);
+            const int n = std::snprintf(buf, sizeof(buf), fmt, v);
+            if (n <= 0)
+                return;
+            int len = (n < static_cast<int>(sizeof(buf))) ? n
+                                                          : static_cast<int>(sizeof(buf)) - 1;
+
+            // Drop trailing zeros (and a now-bare decimal point) so "1000.00"
+            // prints as "1000" and "3.14000" as "3.14".  Only touch the
+            // fractional part -- an integer like "1000" has no '.' and is
+            // emitted verbatim.
+            const char* dot = std::strchr(buf, '.');
+            if (dot != nullptr)
+            {
+                while (len > 0 && buf[len - 1] == '0')
+                    --len;
+                if (len > 0 && buf[len - 1] == '.')
+                    --len;
+            }
+            out.append(buf, static_cast<std::size_t>(len));
+        }
+
+        /// Render an exact integer in "Full" notation: no decimal point at
+        /// all.  An integer has no fractional part, so printing "42.0000"
+        /// (what AppendFull would do with a 6-digit budget) is wrong.
+        ///
+        /// Takes `int` -- the same type the Storage variant holds for
+        /// DataType::kInteger (and the element type of VecXi / MatXi).
+        void AppendFullInt(std::string& out, int v)
+        {
+            char buf[24];
+            const int n = std::snprintf(buf, sizeof(buf), "%d", v);
+            if (n > 0)
+                out.append(buf, static_cast<std::size_t>(n));
+        }
+
+        /// Render @p v in scientific notation: mantissa with @p digits
+        /// significant digits, then "e<exp>" (1000 -> "1e3").
+        void AppendScientific(std::string& out, double v, int digits)
+        {
+            const int d = ClampDigits(digits);
+            if (v == 0.0)
+            {
+                out += "0e0";
+                return;
+            }
+            const int exp = static_cast<int>(std::floor(std::log10(std::abs(v))));
+            const double mant = v / std::pow(10.0, exp);
+            char buf[64];
+            char fmt[16];
+            std::snprintf(fmt, sizeof(fmt), "%%.%dg", d - 1);
+            const int n = std::snprintf(buf, sizeof(buf), fmt, mant);
+            if (n > 0)
+                out.append(buf, static_cast<std::size_t>(n));
+            out += 'e';
+            AppendInt(out, exp);
+        }
+
+        /// Render @p v as an exact integer in base @p base, with @p prefix.
+        /// Non-integral / out-of-range values fall back to plain decimal
+        /// (a positional base cannot represent a fraction).
+        void AppendIntegerBase(std::string& out, double v, int base,
+                               const char* prefix, int digits)
+        {
+            // Only exact integers are representable in a positional base.
+            if (!std::isfinite(v) || v != std::floor(v) ||
+                std::abs(v) > 9.0e15)
+            {
+                AppendFull(out, v, digits);
+                return;
+            }
+            const bool neg = v < 0.0;
+            unsigned long long n =
+                static_cast<unsigned long long>(neg ? -v : v);
+            if (neg) out += '-';
+            out += prefix;
+            if (n == 0)
+            {
+                out += '0';
+                return;
+            }
+            char buf[80];
+            int pos = 0;
+            while (n > 0)
+            {
+                const int digit = static_cast<int>(n % static_cast<unsigned>(base));
+                buf[pos++] = (digit < 10) ? char('0' + digit)
+                                          : char('a' + (digit - 10));
+                n /= static_cast<unsigned>(base);
+            }
+            while (pos > 0) out += buf[--pos];
+        }
+    } // namespace
+
+    std::string WithUnit(const std::string& s, const Unit& unit_,
+                         const FormatOptions& options_)
+    {
+        // The unit suffix is suppressed entirely when show_unit is false --
+        // including the dimensionless scale prefix, which is part of the
+        // suffix rather than a unit of its own.
+        if (!options_.show_unit || !unit_.has_dimension())
             return s;
         return s + " " + unit_.to_string();
     }
 
-    // --- scalar with auto-scale ------------------------------------------
+    // --- number rendering ------------------------------------------------
 
-    std::string MeasurementFormatter::operator()(double v) const
+    /// Render one number according to @p options.number_format.  This is the
+    /// pure NUMBER layer: it knows nothing about units -- no scaling and no
+    /// suffix (the caller does both once, see FormatValue()).
+    std::string FormatElement(double v, const FormatOptions& options_)
+    {
+        std::string out;
+        out.reserve(32);
+        switch (options_.number_format)
+        {
+        case NumberFormat::kFull:
+            AppendFull(out, v, options_.significant_digits);
+            break;
+        case NumberFormat::kScientific:
+            AppendScientific(out, v, options_.significant_digits);
+            break;
+        case NumberFormat::kEngineering:
+            // The exponent is folded into the unit prefix by format_value();
+            // here we only render the mantissa.
+            AppendSignificant(out, v, options_.significant_digits);
+            break;
+        case NumberFormat::kHex:
+            AppendIntegerBase(out, v, 16, "0x", options_.significant_digits);
+            break;
+        case NumberFormat::kOctal:
+            AppendIntegerBase(out, v, 8, "0", options_.significant_digits);
+            break;
+        case NumberFormat::kBinary:
+            AppendIntegerBase(out, v, 2, "0b", options_.significant_digits);
+            break;
+        }
+        return out;
+    }
+
+    /// Integer variant of FormatElement(): keeps the value integral so that
+    /// "Full" renders 42 as "42" rather than "42.0000".
+    ///
+    /// Takes `int` -- the same type the Storage variant holds for
+    /// DataType::kInteger (and the element type of VecXi / MatXi).
+    std::string FormatElementInt(int v, const FormatOptions& options_)
+    {
+        std::string out;
+        out.reserve(32);
+        switch (options_.number_format)
+        {
+        case NumberFormat::kFull:
+            AppendFullInt(out, v);
+            break;
+        case NumberFormat::kScientific:
+            AppendScientific(out, static_cast<double>(v),
+                             options_.significant_digits);
+            break;
+        case NumberFormat::kEngineering:
+            AppendSignificant(out, static_cast<double>(v),
+                              options_.significant_digits);
+            break;
+        case NumberFormat::kHex:
+            AppendIntegerBase(out, static_cast<double>(v), 16, "0x",
+                              options_.significant_digits);
+            break;
+        case NumberFormat::kOctal:
+            AppendIntegerBase(out, static_cast<double>(v), 8, "0",
+                              options_.significant_digits);
+            break;
+        case NumberFormat::kBinary:
+            AppendIntegerBase(out, static_cast<double>(v), 2, "0b",
+                              options_.significant_digits);
+            break;
+        }
+        return out;
+    }
+
+    /// Resolve how a value must be scaled and which suffix (if any) to append.
+    ///
+    /// Shared by FormatValue() and FormatComplex() so a complex value obeys
+    /// exactly the same number_format / show_unit rules as a real one.
+    ///
+    /// The suffix is stored PRE-FORMATTED: it already carries the leading
+    /// space for a unit (" GHz") or none for a SPICE prefix ("G"), so the
+    /// caller just appends it.
+    DisplayScale ResolveScale(double v, const Unit& unit_,
+                              const FormatOptions& options_)
+    {
+        DisplayScale d;
+
+        // Hex / octal / binary are exact integer representations: no unit
+        // scaling and no unit suffix apply.
+        if (options_.number_format == NumberFormat::kHex ||
+            options_.number_format == NumberFormat::kOctal ||
+            options_.number_format == NumberFormat::kBinary)
+        {
+            return d;
+        }
+
+        if (!options_.show_unit &&
+            options_.number_format == NumberFormat::kEngineering)
+        {
+            // Engineering + unit hidden: the 10^3 step is part of the MODE,
+            // not of the unit, so the scaling still applies -- but only the
+            // prefix is shown, SPICE-style with no space: 2.4e9 Hz -> "2.4G".
+            const UnitScale bd = unit_.best_display(v);
+            d.scale = bd.scale;
+            d.suffix = bd.prefix;
+        }
+        else if (!options_.show_unit)
+        {
+            // Unit hidden in any other mode: render the raw value.  No
+            // auto-scaling either -- the scale is carried by the unit prefix,
+            // so without the unit there is no way to express it
+            // (0.002 V -> "0.002", not "2").
+            d.scale = 1.0;
+        }
+        else if (options_.number_format == NumberFormat::kFull ||
+                 options_.number_format == NumberFormat::kScientific)
+        {
+            // "Full" and "Scientific" show the number as-is: the exponent is
+            // carried by the digits (or by "e<n>"), so the unit must NOT be
+            // auto-scaled.  1530000.123 Hz -> "1530000 Hz", not "1.53 MHz".
+            d.scale = 1.0;
+            const std::string name = unit_.to_string();
+            if (!name.empty())
+            {
+                d.suffix = ' ' + name;
+            }
+        }
+        else
+        {
+            // kEngineering: auto-scale to a readable prefix.
+            //
+            // This applies to DIMENSIONLESS values too: a bare scale prefix
+            // ("m", "M", "K", "G" ...) is not a *unit*, but it is exactly
+            // what "best unit display" means here -- 0.002 renders as "2 m".
+            const UnitScale bd = unit_.best_display(v);
+            d.scale = bd.scale;
+            if (!bd.name.empty())
+            {
+                d.suffix = ' ' + bd.name;
+            }
+        }
+        return d;
+    }
+
+    /// Append the resolved suffix to @p out (it is already pre-formatted).
+    void AppendSuffix(std::string& out, const DisplayScale& d)
+    {
+        out += d.suffix;
+    }
+
+    /// Render one number using an ALREADY-RESOLVED scale.  Cheap: no unit
+    /// lookup, just the number formatting plus the suffix.
+    std::string FormatWithScale(double v, const DisplayScale& scale,
+                                NumberFormat format, int digits)
     {
         if (!std::isfinite(v)) return "<invalid>";
-        auto bd = unit_.best_display(v);
-        std::ostringstream oss;
-        oss << (v * bd.scale);
-        if (bd.name.empty())
-            return oss.str();
-        return oss.str() + " " + bd.name;
+        FormatOptions o;
+        o.number_format = format;
+        o.significant_digits = digits;
+        std::string out = FormatElement(v * scale.scale, o);
+        out += scale.suffix;
+        return out;
     }
 
-    std::string MeasurementFormatter::operator()(int v) const
+    /// Render one integer using an already-resolved scale.  An integer never
+    /// gets a decimal point in kFull mode.
+    std::string FormatWithScale(int v, const DisplayScale& scale,
+                                NumberFormat format, int digits)
     {
-        auto bd = unit_.best_display(static_cast<double>(v));
-        std::ostringstream oss;
-        oss << (v * bd.scale);
-        if (bd.name.empty())
-            return oss.str();
-        return oss.str() + " " + bd.name;
+        FormatOptions o;
+        o.number_format = format;
+        o.significant_digits = digits;
+        const double scaled = static_cast<double>(v) * scale.scale;
+        std::string out;
+        const bool integral = (scaled == std::floor(scaled)) &&
+                              scaled >= static_cast<double>(INT_MIN) &&
+                              scaled <= static_cast<double>(INT_MAX);
+        if (integral)
+        {
+            out = FormatElementInt(static_cast<int>(scaled), o);
+        }
+        else
+        {
+            out = FormatElement(scaled, o);
+        }
+        out += scale.suffix;
+        return out;
     }
 
-    std::string MeasurementFormatter::operator()(const std::complex<double>& v) const
+    /// Integer variant of FormatValue(): applies the unit scale, then renders
+    /// the result as an integer when the scale left it integral (e.g. Full
+    /// with no scaling), and as a double otherwise (Engineering may turn
+    /// 4700 Ohm into 4.7 KOhm).
+    std::string FormatValueInt(int v, const Unit& unit_,
+                               const FormatOptions& options_)
+    {
+        if (options_.number_format == NumberFormat::kHex ||
+            options_.number_format == NumberFormat::kOctal ||
+            options_.number_format == NumberFormat::kBinary)
+        {
+            return FormatElementInt(v, options_);
+        }
+
+        const DisplayScale d = ResolveScale(static_cast<double>(v), unit_, options_);
+        const double scaled = static_cast<double>(v) * d.scale;
+
+        std::string out;
+        // Render as an integer only when the scale left the value integral
+        // AND it still fits in int (Engineering may scale 4700 Ohm to 4.7,
+        // which must fall back to the double path).
+        const bool integral = (scaled == std::floor(scaled)) &&
+                              scaled >= static_cast<double>(INT_MIN) &&
+                              scaled <= static_cast<double>(INT_MAX);
+        if (integral)
+        {
+            out = FormatElementInt(static_cast<int>(scaled), options_);
+        }
+        else
+        {
+            out = FormatElement(scaled, options_);
+        }
+        AppendSuffix(out, d);
+        return out;
+    }
+
+    /// Render one scalar: apply the unit scale, format the number, and append
+    /// the unit suffix.
+    std::string FormatValue(double v, const Unit& unit_,
+                            const FormatOptions& options_)
+    {
+        if (!std::isfinite(v)) return "<invalid>";
+
+        // Hex / octal / binary are exact integer representations: no unit
+        // scaling and no unit suffix apply.
+        if (options_.number_format == NumberFormat::kHex ||
+            options_.number_format == NumberFormat::kOctal ||
+            options_.number_format == NumberFormat::kBinary)
+        {
+            return FormatElement(v, options_);
+        }
+
+        const DisplayScale d = ResolveScale(v, unit_, options_);
+        std::string out = FormatElement(v * d.scale, options_);
+        AppendSuffix(out, d);
+        return out;
+    }
+
+    /// Render a complex value according to options_.complex_format.
+    std::string FormatComplex(const std::complex<double>& v, const Unit& unit_,
+                              const FormatOptions& options_)
     {
         if (!std::isfinite(v.real()) || !std::isfinite(v.imag())) return "<invalid>";
-        auto bd = unit_.best_display(v.real());
-        std::ostringstream oss;
-        oss << (v.real() * bd.scale);
-        double imag = v.imag() * bd.scale;
-        if (imag >= 0.0) oss << "+";
-        oss << imag << "i";
-        if (bd.name.empty())
-            return oss.str();
-        return oss.str() + " " + bd.name;
+
+        std::string out;
+        out.reserve(64);
+
+        switch (options_.complex_format)
+        {
+        case ComplexFormat::kRealImaginary:
+        {
+            // Both parts share ONE unit scale, resolved from the magnitude so
+            // that a value like 0.002+0.003i is not scaled by the (possibly
+            // near-zero) real part alone.  ResolveScale() applies exactly the
+            // same number_format / show_unit rules as FormatValue().
+            const DisplayScale d = ResolveScale(std::abs(v), unit_, options_);
+
+            // FormatElement() honours number_format, so Full / Scientific /
+            // Hex / ... apply to complex values too (they used to be ignored).
+            out += FormatElement(v.real() * d.scale, options_);
+            const double im = v.imag() * d.scale;
+            if (im >= 0.0) out += '+';
+            out += FormatElement(im, options_);
+            out += 'i';
+            AppendSuffix(out, d);
+            return out;
+        }
+        case ComplexFormat::kMagDegrees:
+        case ComplexFormat::kMagRadians:
+        {
+            // Pure "a/b" pair: magnitude and phase, NO unit and NO scaling.
+            // A magnitude/phase pair is not a value in the Measurement's unit
+            // the way a real part is, so the unit is dropped entirely.
+            AppendSignificant(out, std::abs(v), options_.significant_digits);
+            out += '/';
+            const double phase = std::arg(v) * ((options_.complex_format ==
+                                                 ComplexFormat::kMagDegrees)
+                                                    ? 180.0 / M_PI
+                                                    : 1.0);
+            AppendSignificant(out, phase, options_.significant_digits);
+            return out;
+        }
+        case ComplexFormat::kDbDegrees:
+        case ComplexFormat::kDbRadians:
+        {
+            // Same: dB magnitude / phase, no unit, no scaling.
+            const double mag = std::abs(v);
+            const double db = (mag > 0.0) ? 20.0 * std::log10(mag) : -999.0;
+            AppendSignificant(out, db, options_.significant_digits);
+            out += '/';
+            const double phase = std::arg(v) * ((options_.complex_format ==
+                                                 ComplexFormat::kDbDegrees)
+                                                    ? 180.0 / M_PI
+                                                    : 1.0);
+            AppendSignificant(out, phase, options_.significant_digits);
+            return out;
+        }
+        }
+        return out;
     }
 
-    std::string MeasurementFormatter::operator()(const std::string& v) const
+    // --- scalar ------------------------------------------------------------
+
+    std::string RenderScalar(double v, const Unit& unit_,
+                             const FormatOptions& options_)
+    {
+        return FormatValue(v, unit_, options_);
+    }
+
+    std::string RenderScalar(int v, const Unit& unit_,
+                             const FormatOptions& options_)
+    {
+        // Integer path: keeps 42 as "42" instead of "42.0000".
+        return FormatValueInt(v, unit_, options_);
+    }
+
+    std::string RenderScalar(const std::complex<double>& v, const Unit& unit_,
+                             const FormatOptions& options_)
+    {
+        return FormatComplex(v, unit_, options_);
+    }
+
+    std::string RenderScalar(const std::string& v, const Unit&,
+                             const FormatOptions&)
     {
         return v;
     }
 
-    std::string MeasurementFormatter::operator()(bool v) const
+    std::string RenderScalar(bool v, const Unit&, const FormatOptions&)
     {
-        (void)unit_;   // boolean never carries a unit
         return v ? "TRUE" : "FALSE";
     }
 
     // -- vector --------------------------------------------------------------
 
-    std::string MeasurementFormatter::operator()(const VecXd& v) const
+    std::string RenderVector(const VecXd& v, const Unit& unit_,
+                             const FormatOptions& options_)
     {
-        std::ostringstream oss;
-        oss << "[";
+        std::string out;
+        out.reserve(static_cast<std::size_t>(v.size()) * 12 + 2);
+        out += '[';
         for (Index i = 0; i < v.size(); ++i)
         {
-            if (i > 0) oss << ",";
-            if (!std::isfinite(v(i))) oss << "<invalid>";
-            else oss << v(i);
+            if (i > 0) out += ',';
+            out += FormatElement(v(i), options_);
         }
-        oss << "]";
-        return with_unit(oss.str());
+        out += ']';
+        return WithUnit(out, unit_, options_);
     }
 
-    std::string MeasurementFormatter::operator()(const VecXi& v) const
+    std::string RenderVector(const VecXi& v, const Unit& unit_,
+                             const FormatOptions& options_)
     {
-        std::ostringstream oss;
-        oss << "[";
+        std::string out;
+        out.reserve(static_cast<std::size_t>(v.size()) * 8 + 2);
+        out += '[';
         for (Index i = 0; i < v.size(); ++i)
         {
-            if (i > 0) oss << ",";
-            oss << v(i);
+            if (i > 0) out += ',';
+            out += FormatElementInt(v(i), options_);
         }
-        oss << "]";
-        return with_unit(oss.str());
+        out += ']';
+        return WithUnit(out, unit_, options_);
     }
 
-    std::string MeasurementFormatter::operator()(const VecXcd& v) const
+    std::string RenderVector(const VecXcd& v, const Unit& unit_,
+                             const FormatOptions& options_)
     {
-        auto bd = unit_.best_display(v.size() > 0 ? v(0).real() : 0.0);
-        std::ostringstream oss;
-        oss << "[";
+        std::string out;
+        out.reserve(static_cast<std::size_t>(v.size()) * 24 + 2);
+        out += '[';
         for (Index i = 0; i < v.size(); ++i)
         {
-            if (i > 0) oss << ",";
-            if (!std::isfinite(v(i).real()) || !std::isfinite(v(i).imag())) {
-                oss << "<invalid>";
-            } else {
-                double r = v(i).real() * bd.scale;
-                double im = v(i).imag() * bd.scale;
-                oss << r;
-                if (im >= 0.0) oss << "+";
-                oss << im << "i";
-            }
+            if (i > 0) out += ',';
+            out += FormatComplex(v(i), unit_, options_);
         }
-        oss << "]";
-        if (bd.name.empty())
-            return oss.str();
-        return oss.str() + " " + bd.name;
+        out += ']';
+        return out;
     }
 
-    std::string MeasurementFormatter::operator()(const VecXs& v) const
+    std::string RenderVector(const VecXs& v, const Unit&,
+                             const FormatOptions&)
     {
-        std::ostringstream oss;
-        oss << "[";
+        std::string out;
+        out += '[';
         for (Index i = 0; i < v.dimension(0); ++i)
         {
-            if (i > 0) oss << ",";
-            oss << v(i);
+            if (i > 0) out += ',';
+            out += v(i);
         }
-        oss << "]";
-        return oss.str();
+        out += ']';
+        return out;
     }
 
     // -- matrix --------------------------------------------------------------
 
-    std::string MeasurementFormatter::operator()(const MatXd& v) const
+    std::string RenderMatrix(const MatXd& v, const Unit& unit_,
+                             const FormatOptions& options_)
     {
-        std::ostringstream oss;
-        oss << "[";
+        std::string out;
+        out.reserve(static_cast<std::size_t>(v.size()) * 12 + 4);
+        out += '[';
         for (Index r = 0; r < v.rows(); ++r)
         {
-            if (r > 0) oss << ",";
-            oss << "[";
+            if (r > 0) out += ',';
+            out += '[';
             for (Index c = 0; c < v.cols(); ++c)
             {
-                if (c > 0) oss << ",";
-                if (!std::isfinite(v(r, c))) oss << "<invalid>";
-                else oss << v(r, c);
+                if (c > 0) out += ',';
+                out += FormatElement(v(r, c), options_);
             }
-            oss << "]";
+            out += ']';
         }
-        oss << "]";
-        return with_unit(oss.str());
+        out += ']';
+        return WithUnit(out, unit_, options_);
     }
 
-    std::string MeasurementFormatter::operator()(const MatXi& v) const
+    std::string RenderMatrix(const MatXi& v, const Unit& unit_,
+                             const FormatOptions& options_)
     {
-        std::ostringstream oss;
-        oss << "[";
+        std::string out;
+        out.reserve(static_cast<std::size_t>(v.size()) * 8 + 4);
+        out += '[';
         for (Index r = 0; r < v.rows(); ++r)
         {
-            if (r > 0) oss << ",";
-            oss << "[";
+            if (r > 0) out += ',';
+            out += '[';
             for (Index c = 0; c < v.cols(); ++c)
             {
-                if (c > 0) oss << ",";
-                oss << v(r, c);
+                if (c > 0) out += ',';
+                out += FormatElementInt(v(r, c), options_);
             }
-            oss << "]";
+            out += ']';
         }
-        oss << "]";
-        return with_unit(oss.str());
+        out += ']';
+        return WithUnit(out, unit_, options_);
     }
 
-    std::string MeasurementFormatter::operator()(const MatXcd& v) const
+    std::string RenderMatrix(const MatXcd& v, const Unit& unit_,
+                             const FormatOptions& options_)
     {
-        auto bd = unit_.best_display(v.size() > 0 ? v(0, 0).real() : 0.0);
-        std::ostringstream oss;
-        oss << "[";
+        std::string out;
+        out.reserve(static_cast<std::size_t>(v.size()) * 24 + 4);
+        out += '[';
         for (Index r = 0; r < v.rows(); ++r)
         {
-            if (r > 0) oss << ",";
-            oss << "[";
+            if (r > 0) out += ',';
+            out += '[';
             for (Index c = 0; c < v.cols(); ++c)
             {
-                if (c > 0) oss << ",";
-                if (!std::isfinite(v(r, c).real()) || !std::isfinite(v(r, c).imag())) {
-                    oss << "<invalid>";
-                } else {
-                    double rv = v(r, c).real() * bd.scale;
-                    double im = v(r, c).imag() * bd.scale;
-                    oss << rv;
-                    if (im >= 0.0) oss << "+";
-                    oss << im << "i";
-                }
+                if (c > 0) out += ',';
+                out += FormatComplex(v(r, c), unit_, options_);
             }
-            oss << "]";
+            out += ']';
         }
-        oss << "]";
-        if (bd.name.empty())
-            return oss.str();
-        return oss.str() + " " + bd.name;
+        out += ']';
+        return out;
     }
 
-    std::string MeasurementFormatter::operator()(const MatXs& v) const
+    std::string RenderMatrix(const MatXs& v, const Unit&,
+                             const FormatOptions&)
     {
-        std::ostringstream oss;
-        oss << "[";
+        std::string out;
+        out += '[';
         for (Index r = 0; r < v.dimension(0); ++r)
         {
-            if (r > 0) oss << ",";
-            oss << "[";
+            if (r > 0) out += ',';
+            out += '[';
             for (Index c = 0; c < v.dimension(1); ++c)
             {
-                if (c > 0) oss << ",";
-                oss << v(r, c);
+                if (c > 0) out += ',';
+                out += v(r, c);
             }
-            oss << "]";
+            out += ']';
         }
-        oss << "]";
-        return oss.str();
+        out += ']';
+        return out;
+    }
+
+    // =====================================================================
+    // FormatDefaults / FormatScope -- the process-wide default options.
+    //
+    // A plain static (NOT thread_local): the options are read-only during
+    // rendering and the unit is a function parameter, so there is no per-call
+    // mutable state and nothing to make thread-local.
+    // =====================================================================
+
+    FormatDefaults& FormatDefaults::Instance()
+    {
+        static FormatDefaults instance;
+        return instance;
+    }
+
+    void FormatDefaults::Set(const FormatOptions& options)
+    {
+        options_ = options;
+    }
+
+    FormatScope::FormatScope(const FormatOptions& options)
+        : saved_(FormatDefaults::Instance().Get())
+    {
+        FormatDefaults::Instance().Set(options);
+    }
+
+    FormatScope::~FormatScope()
+    {
+        FormatDefaults::Instance().Set(saved_);
+    }
+
+    // =====================================================================
+    // Format -- the general entry point.
+    //
+    // Dispatches on the CACHED data_type_ / shape instead of
+    // boost::apply_visitor: Measurement already knows which alternative is
+    // active, so no visitor object is constructed and the call is a direct
+    // (often inlined) function call rather than a 12-way runtime dispatch.
+    // =====================================================================
+
+    std::string Format(const Measurement& m, const FormatOptions& options)
+    {
+        const Unit& unit = m.unit();
+        const Measurement::Storage& storage = m.storage();
+
+        switch (m.data_kind())
+        {
+        case DataKind::kScalar:
+            switch (m.data_type())
+            {
+            case DataType::kReal:
+                return RenderScalar(boost::get<double>(storage), unit, options);
+            case DataType::kInteger:
+                return RenderScalar(boost::get<int>(storage), unit, options);
+            case DataType::kComplex:
+                return RenderScalar(boost::get<std::complex<double>>(storage),
+                                    unit, options);
+            case DataType::kString:
+                return RenderScalar(boost::get<std::string>(storage), unit, options);
+            case DataType::kBoolean:
+                return RenderScalar(boost::get<bool>(storage), unit, options);
+            }
+            return std::string();
+
+        case DataKind::kVector:
+            switch (m.data_type())
+            {
+            case DataType::kReal:
+                return RenderVector(boost::get<VecXd>(storage), unit, options);
+            case DataType::kInteger:
+                return RenderVector(boost::get<VecXi>(storage), unit, options);
+            case DataType::kComplex:
+                return RenderVector(boost::get<VecXcd>(storage), unit, options);
+            case DataType::kString:
+                return RenderVector(boost::get<VecXs>(storage), unit, options);
+            default:
+                break;   // kBoolean is scalar-only
+            }
+            return std::string();
+
+        case DataKind::kMatrix:
+            switch (m.data_type())
+            {
+            case DataType::kReal:
+                return RenderMatrix(boost::get<MatXd>(storage), unit, options);
+            case DataType::kInteger:
+                return RenderMatrix(boost::get<MatXi>(storage), unit, options);
+            case DataType::kComplex:
+                return RenderMatrix(boost::get<MatXcd>(storage), unit, options);
+            case DataType::kString:
+                return RenderMatrix(boost::get<MatXs>(storage), unit, options);
+            default:
+                break;   // kBoolean is scalar-only
+            }
+            return std::string();
+        }
+        return std::string();
     }
 
 // =========================================================================

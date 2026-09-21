@@ -21,6 +21,7 @@ namespace xdataset
 {
 
     class DataFrame;
+    class Measurement;
 
     // =========================================================================
     // Measurement -- a single named value with units (scalar | vector | matrix)
@@ -48,6 +49,190 @@ namespace xdataset
     //   - DataKind, DataType, and shape are derived from the active
     //     variant alternative at construction time and cached.
     // =========================================================================
+
+    // =========================================================================
+    //  Display format configuration
+    // =========================================================================
+
+    /// How a real / integer number is rendered.
+    enum class NumberFormat
+    {
+        /// All digits before the decimal point are shown; no exponent and NO
+        /// unit auto-scaling (the value stays in its own unit).
+        /// 1530000.123 Hz with 6 significant digits -> "1530000 Hz"
+        ///
+        /// This is the DEFAULT mode.
+        kFull,
+        /// Scientific notation, no unit auto-scaling.
+        /// 1000 Hz with 3 significant digits -> "1.00e3 Hz"
+        kScientific,
+        /// Engineering notation: the exponent is forced to a multiple of 3
+        /// and is expressed as an SI prefix on the unit.
+        /// 1000 Hz -> "1 kHz".
+        kEngineering,
+        /// Hexadecimal (base 16), "0x" prefixed.
+        kHex,
+        /// Octal (base 8), "0" prefixed.
+        kOctal,
+        /// Binary (base 2), "0b" prefixed.
+        kBinary
+    };
+
+    /// How a complex number is rendered.
+    ///
+    /// Only kRealImaginary carries a unit (and therefore a scale).  Every
+    /// other mode is a pure "a/b" pair -- magnitude (or dB) and phase -- with
+    /// NO unit and NO scaling, because a magnitude/phase pair is not a value
+    /// in the Measurement's unit the way a real part is.
+    enum class ComplexFormat
+    {
+        /// Real / imaginary, with the unit:  "778-258i mV"
+        kRealImaginary,
+        /// Magnitude / phase in degrees:  "0.819663/-18.3465"
+        kMagDegrees,
+        /// dB magnitude / phase in degrees:  "-1.72729/-18.3465"
+        kDbDegrees,
+        /// Magnitude / phase in radians:  "0.819663/-0.320207"
+        kMagRadians,
+        /// dB magnitude / phase in radians:  "-1.72729/-0.320207"
+        kDbRadians
+    };
+
+    /// Display options applied to every Measurement rendered with them.
+    ///
+    /// A plain 16-byte value type: passed by const reference and never
+    /// mutated.  Rendering is a pure function of (value, unit, options), so
+    /// there is no formatter object and no per-call state to manage.
+    struct FormatOptions
+    {
+        NumberFormat  number_format   = NumberFormat::kFull;
+        ComplexFormat complex_format  = ComplexFormat::kRealImaginary;
+
+        /// Significant digits used by kFull / kScientific / kEngineering.
+        /// Ignored by kHex / kOctal / kBinary (those are exact integer
+        /// representations).  Clamped to [1, 17].
+        int significant_digits = 6;
+
+        /// Whether the unit suffix is appended.  The unit itself is the
+        /// Measurement's own (see Measurement::unit()) -- there is nothing to
+        /// configure about WHICH unit, only whether to show it.
+        ///
+        /// When false the value is rendered bare and is NOT auto-scaled:
+        /// the scale is expressed through the unit prefix, so hiding the unit
+        /// means hiding the scale too (0.002 V -> "0.002", not "2").
+        ///
+        /// Note: scale prefixes (m / M / K / G ...) are not units, but they
+        /// are part of the unit suffix and are shown whenever this is true
+        /// and the mode auto-scales (kEngineering) -- that is what "best unit
+        /// display" means (1000 Hz -> "1 kHz").
+        ///
+        /// When false the value is rendered bare and is NOT auto-scaled --
+        /// EXCEPT in kEngineering, where the 10^3 step is part of the mode
+        /// itself, so the prefix is kept and appended SPICE-style with no
+        /// space: 2.4e9 Hz -> "2.4G".
+        bool show_unit = true;
+    };
+
+    // =========================================================================
+    //  Formatting API
+    // =========================================================================
+    //
+    //  Rendering is a PURE FUNCTION: (value, unit, options) -> string.  There
+    //  is no formatter object, no visitor, and no per-call mutable state, so
+    //  every function below is re-entrant and thread-safe.
+    //
+    //  Three ways to supply the options, all equally cheap (options are
+    //  always passed by const reference -- 16 bytes, never copied):
+    //
+    //    1. Global default -- set once, used by to_string():
+    //         FormatDefaults::Instance().Set(o);
+    //         m.to_string();
+    //
+    //    2. One-off -- pass them explicitly:
+    //         m.to_string(o);
+    //
+    //    3. Scoped override -- RAII, restores on exit (also on exception):
+    //         { FormatScope scope(o);  render_whole_table();  }
+    //
+    //  Hosts that render many values sharing one unit (e.g. a table column)
+    //  can hoist the expensive part out of the loop:
+    //         DisplayScale s = ResolveScale(magnitude, unit, opts);  // once
+    //         FormatWithScale(v, s, opts.number_format, opts.significant_digits);
+    // =========================================================================
+
+    /// How a value must be scaled and which suffix (if any) to append.
+    ///
+    /// Produced by ResolveScale() -- the only expensive step of rendering
+    /// (it may reach Unit::best_display / UnitRegistry::decompose).
+    ///
+    /// The suffix is PRE-FORMATTED: it already carries the leading space for
+    /// a unit (" GHz") or none for a SPICE prefix ("G"), so the caller just
+    /// appends it.
+    struct DisplayScale
+    {
+        double      scale = 1.0;   ///< display_value = raw_value * scale
+        std::string suffix;        ///< " GHz", "G" (SPICE), or ""
+    };
+
+    /// Resolve the display scale + suffix for a value of magnitude @p v.
+    /// Call once per unit (or per column), then reuse via FormatWithScale().
+    XDATASET_API DisplayScale ResolveScale(double v, const Unit& unit,
+                                           const FormatOptions& options);
+
+    /// Render one number using an ALREADY-RESOLVED scale.  Cheap: no unit
+    /// lookup, just the number formatting plus the suffix.
+    XDATASET_API std::string FormatWithScale(double v, const DisplayScale& scale,
+                                             NumberFormat format, int digits);
+
+    /// Render one integer using an already-resolved scale.  An integer never
+    /// gets a decimal point in kFull mode.
+    XDATASET_API std::string FormatWithScale(int v, const DisplayScale& scale,
+                                             NumberFormat format, int digits);
+
+    /// Render a whole Measurement.  This is the general entry point.
+    XDATASET_API std::string Format(const Measurement& m,
+                                    const FormatOptions& options);
+
+    /// The process-wide default options.
+    ///
+    /// Measurement::to_string() (no-argument) renders with these.  Set them
+    /// once at start-up or when the user changes a setting; the hot path only
+    /// reads them.
+    ///
+    /// NOT thread_local: the options are read-only during rendering, and the
+    /// unit is a function parameter, so there is no per-call mutable state.
+    class XDATASET_API FormatDefaults
+    {
+    public:
+        static FormatDefaults& Instance();
+
+        /// Replace the default options (copied in; @p options need not
+        /// outlive this call).
+        void Set(const FormatOptions& options);
+
+        const FormatOptions& Get() const { return options_; }
+
+    private:
+        FormatDefaults() = default;
+        FormatOptions options_;
+    };
+
+    /// RAII override of the default options for the current scope.
+    ///
+    /// Restores the previous options on destruction, so it is exception-safe
+    /// and nestable -- unlike a manual save/restore around a call.
+    class XDATASET_API FormatScope
+    {
+    public:
+        explicit FormatScope(const FormatOptions& options);
+        ~FormatScope();
+
+        FormatScope(const FormatScope&) = delete;
+        FormatScope& operator=(const FormatScope&) = delete;
+
+    private:
+        FormatOptions saved_;
+    };
 
     class XDATASET_API Measurement
     {
@@ -252,8 +437,12 @@ namespace xdataset
 
         // ======== formatting ================================================
 
-        /// Return a human-readable string representation.
+        /// Return a human-readable string representation using the default
+        /// format options (see FormatDefaults).
         std::string to_string() const;
+
+        /// Return a human-readable string representation using @p options.
+        std::string to_string(const FormatOptions& options) const;
 
         // ======== equality ================================================
 
@@ -409,38 +598,6 @@ namespace xdataset
         DataShape            shape_;
         Storage              storage_;
         Unit                 unit_;
-    };
-
-    // =========================================================================
-    // MeasurementFormatter -- boost::static_visitor that renders any stored
-    //                         alternative to a human-readable string.
-    // =========================================================================
-
-    struct XDATASET_API MeasurementFormatter : public boost::static_visitor<std::string>
-    {
-        MeasurementFormatter() = default;
-        explicit MeasurementFormatter(Unit u) : unit_(std::move(u)) {}
-
-        std::string operator()(double v) const;
-        std::string operator()(int v) const;
-        std::string operator()(const std::complex<double>& v) const;
-        std::string operator()(const std::string& v) const;
-        std::string operator()(bool v) const;
-
-        std::string operator()(const VecXd& v) const;
-        std::string operator()(const VecXi& v) const;
-        std::string operator()(const VecXcd& v) const;
-        std::string operator()(const VecXs& v) const;
-
-        std::string operator()(const MatXd& v) const;
-        std::string operator()(const MatXi& v) const;
-        std::string operator()(const MatXcd& v) const;
-        std::string operator()(const MatXs& v) const;
-
-    private:
-        std::string with_unit(const std::string& s) const;
-
-        Unit unit_;
     };
 
     // =========================================================================
